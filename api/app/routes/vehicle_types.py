@@ -4,6 +4,10 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.app.cache.reference_data import (
+    get_cached_vehicle_types,
+    invalidate_vehicle_types,
+)
 from api.app.middleware.auth import require_admin
 from api.app.models.vehicle_type import VehicleType
 from api.app.schemas.common import SuccessResponse
@@ -27,7 +31,16 @@ async def list_vehicle_types(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(require_admin),
 ) -> list[VehicleTypeResponse]:
-    """List all vehicle types."""
+    """List all vehicle types (cached)."""
+    # Only cache unfiltered, unpaginated lists
+    if pagination.skip == 0 and pagination.limit == 100 and not pagination.q:
+        try:
+            cached = await get_cached_vehicle_types()
+            if cached is not None:
+                return [VehicleTypeResponse(**v) for v in cached]
+        except Exception:
+            pass  # Redis unavailable, fall through to DB
+
     stmt = select(VehicleType)
     if pagination.q:
         stmt = stmt.where(
@@ -35,7 +48,17 @@ async def list_vehicle_types(
             | VehicleType.code.ilike(f"%{pagination.q}%")
         )
     result = await paginated_list(db, stmt, skip=pagination.skip, limit=pagination.limit)
-    return [VehicleTypeResponse.model_validate(v) for v in result.items]
+    items = [VehicleTypeResponse.model_validate(v) for v in result.items]
+
+    # Cache the full unfiltered list
+    if pagination.skip == 0 and pagination.limit == 100 and not pagination.q:
+        try:
+            from api.app.cache.reference_data import _set_cached, CACHE_KEYS
+            await _set_cached(CACHE_KEYS["vehicle_types"], [v.model_dump() for v in items])
+        except Exception:
+            pass  # Redis unavailable, ignore
+
+    return items
 
 
 @router.post("", response_model=VehicleTypeResponse, status_code=status.HTTP_201_CREATED)
@@ -49,6 +72,10 @@ async def create_vehicle_type(
     db.add(vt)
     await db.commit()
     await db.refresh(vt)
+    try:
+        await invalidate_vehicle_types()
+    except Exception:
+        pass
     logger.info("vehicle_type_created", id=vt.id, code=vt.code)
     return VehicleTypeResponse.model_validate(vt)
 
@@ -87,6 +114,10 @@ async def update_vehicle_type(
 
     await db.commit()
     await db.refresh(vt)
+    try:
+        await invalidate_vehicle_types()
+    except Exception:
+        pass
     logger.info("vehicle_type_updated", id=vt.id)
     return VehicleTypeResponse.model_validate(vt)
 
@@ -105,5 +136,9 @@ async def delete_vehicle_type(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vehicle type not found")
     await db.delete(vt)
     await db.commit()
+    try:
+        await invalidate_vehicle_types()
+    except Exception:
+        pass
     logger.info("vehicle_type_deleted", id=vt_id)
     return SuccessResponse(message="Vehicle type deleted")

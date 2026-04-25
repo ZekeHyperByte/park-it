@@ -30,7 +30,7 @@ class RedisClient:
     async def disconnect(self) -> None:
         """Close Redis connection."""
         if self._redis is not None:
-            await self._redis.close()
+            await self._redis.aclose()
             self._redis = None
 
     @property
@@ -140,6 +140,42 @@ class RedisClient:
     async def expire(self, key: str, seconds: int) -> bool:
         """Set TTL on a key."""
         return await self.client.expire(key, seconds)
+
+    # ------------------------------------------------------------------
+    # JSON cache helpers
+    # ------------------------------------------------------------------
+
+    async def cache_get_json(self, key: str) -> Any | None:
+        """Get and deserialize JSON value from cache."""
+        import json
+
+        raw = await self.get(key)
+        if raw is None:
+            return None
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+
+    async def cache_set_json(
+        self,
+        key: str,
+        value: Any,
+        ttl: int = 300,
+    ) -> bool:
+        """Serialize and store JSON value in cache with TTL."""
+        import json
+
+        return await self.set(key, json.dumps(value, default=str), ex=ttl)
+
+    async def cache_delete_pattern(self, pattern: str) -> int:
+        """Delete all keys matching a pattern."""
+        keys = []
+        async for key in self.client.scan_iter(match=pattern):
+            keys.append(key)
+        if keys:
+            return await self.delete(*keys)
+        return 0
 
 
 # Global instance
