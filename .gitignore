@@ -62,8 +62,9 @@ htmlcov/
 .pytest_cache/
 
 # Alembic
-alembic/versions/*.py
-!alembic/versions/.gitkeep
+# NOTE: Migration files MUST be committed. Do not ignore them.
+# alembic/versions/*.py
+# !alembic/versions/.gitkeep
 
 # Frontend (Node)
 node_modules/

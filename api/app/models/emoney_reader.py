@@ -14,9 +14,14 @@ class EmoneyReader(Base, IntPKMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
 
+    # Connection type
+    connection_type: Mapped[str] = mapped_column(
+        String(30), default="CONTROLLER_PASSTHROUGH", nullable=False
+    )  # CONTROLLER_PASSTHROUGH, DIRECT_SERIAL, DIRECT_USB
+
     # Serial configuration
     serial_port: Mapped[str] = mapped_column(String(50), nullable=False)
-    baudrate: Mapped[int] = mapped_column(Integer, default=115200, nullable=False)
+    baudrate: Mapped[int] = mapped_column(Integer, default=38400, nullable=False)
 
     # PASSTI credentials
     mid: Mapped[str | None] = mapped_column(

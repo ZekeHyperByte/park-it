@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     settlement_schedule: str = Field(default="0 2 * * *", alias="SETTLEMENT_SCHEDULE")
     settlement_auto_upload: bool = Field(default=False, alias="SETTLEMENT_AUTO_UPLOAD")
 
+    # Telegram
+    telegram_bot_token: str | None = Field(default=None, alias="TELEGRAM_BOT_TOKEN")
+
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_format: str = Field(default="json", alias="LOG_FORMAT")

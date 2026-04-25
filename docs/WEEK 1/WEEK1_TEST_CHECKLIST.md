@@ -17,13 +17,14 @@
 ## Test 1: Docker Compose Infrastructure
 
 **Command:**
+
 ```bash
 docker compose up -d postgres redis
 ```
 
 **Expected Result:**
-- [ ] `parking-postgres` container starts and shows `healthy`
-- [ ] `parking-redis` container starts and shows `healthy`
+- [x] `parking-postgres` container starts and shows `healthy`
+- [x] `parking-redis` container starts and shows `healthy`
 - [ ] PostgreSQL port 5432 is accessible
 - [ ] Redis port 6379 is accessible
 
@@ -45,7 +46,7 @@ alembic upgrade head
 
 **Expected Result:**
 - [ ] Migration runs without errors
-- [ ] `alembic_version` table exists with the latest revision
+- [x] `alembic_version` table exists with the latest revision
 
 **Verify:**
 ```bash
@@ -62,7 +63,7 @@ docker compose exec -e PGPASSWORD=parking_secret postgres psql -U parking -d par
 ```
 
 **Expected Result:**
-- [ ] All 21 tables exist:
+- [x] All 21 tables exist:
   - `abandoned_vehicle_logs`
   - `alembic_version`
   - `area_parkir`
@@ -95,9 +96,9 @@ docker compose exec -e PGPASSWORD=parking_secret postgres psql -U parking -d par
 ```
 
 **Expected Result:**
-- [ ] `uq_active_card` on `parking_transactions`
-- [ ] `idx_unsettled_emoney` on `emoney_transactions`
-- [ ] `idx_pending_correction` on `emoney_transactions`
+- [x] `uq_active_card` on `parking_transactions`
+- [x] `idx_unsettled_emoney` on `emoney_transactions`
+- [x] `idx_pending_correction` on `emoney_transactions`
 
 ---
 

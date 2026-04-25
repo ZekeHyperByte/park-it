@@ -46,6 +46,9 @@ class GateIn(Base, IntPKMixin, TimestampMixin):
     gate_close_duration_ms: Mapped[int] = mapped_column(
         Integer, default=5000, nullable=False
     )
+    relay_mode: Mapped[str] = mapped_column(
+        String(20), default="SINGLE", nullable=False
+    )  # SINGLE, DUAL
 
     # Gate control
     open_command: Mapped[str | None] = mapped_column(String(50), nullable=True)

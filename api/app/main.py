@@ -7,7 +7,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from shared.config import get_settings
 from shared.logging import configure_logging, get_logger
-from api.app.routes import health
 
 logger = get_logger("api")
 
@@ -26,9 +25,14 @@ async def lifespan(app: FastAPI):
         debug=settings.debug,
     )
 
+    # Start WebSocket broadcaster
+    from api.app.websocket.broadcaster import broadcaster
+    await broadcaster.start()
+
     yield
 
     # Shutdown
+    await broadcaster.stop()
     logger.info("api_shutting_down")
 
 
@@ -38,7 +42,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title=settings.app_name,
-        version="0.1.0",
+        version="0.2.0",
         debug=settings.debug,
         lifespan=lifespan,
         docs_url="/api/docs" if settings.debug else None,
@@ -55,7 +59,17 @@ def create_app() -> FastAPI:
     )
 
     # Routers
+    from api.app.routes import auth, gates, health, settings as settings_routes, users
+    from api.app.websocket import handlers as ws_handlers
+
     app.include_router(health.router, prefix="/api")
+    app.include_router(auth.router, prefix="/api")
+    app.include_router(users.router, prefix="/api")
+    app.include_router(gates.router, prefix="/api")
+    app.include_router(settings_routes.router, prefix="/api")
+
+    # WebSocket
+    app.include_router(ws_handlers.router)
 
     return app
 
