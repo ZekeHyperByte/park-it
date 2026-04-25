@@ -49,7 +49,7 @@ async def seed() -> None:
         admin = User(
             username="admin",
             email="admin@eparking.local",
-            password_hash=hash_password("admin"),
+            password_hash=hash_password("admin123"),
             full_name="Administrator",
             role="admin",
             is_active=True,
@@ -57,7 +57,7 @@ async def seed() -> None:
         operator = User(
             username="operator",
             email="operator@eparking.local",
-            password_hash=hash_password("operator"),
+            password_hash=hash_password("operator123"),
             full_name="Operator Satu",
             role="operator",
             is_active=True,
@@ -232,8 +232,8 @@ async def seed() -> None:
         await session.commit()
         print("\nSeed complete!")
         print("\nLogin credentials:")
-        print("  Admin:    admin / admin")
-        print("  Operator: operator / operator")
+        print("  Admin:    admin / admin123")
+        print("  Operator: operator / operator123")
 
 
 if __name__ == "__main__":

@@ -59,7 +59,24 @@ def create_app() -> FastAPI:
     )
 
     # Routers
-    from api.app.routes import auth, gates, health, payments, settings as settings_routes, users
+    from api.app.routes import (
+        abandoned_vehicles,
+        areas,
+        auth,
+        emoney_readers,
+        gates,
+        health,
+        manual_open_logs,
+        member_groups,
+        members,
+        payments,
+        reports,
+        settings as settings_routes,
+        shifts,
+        transactions,
+        users,
+        vehicle_types,
+    )
     from api.app.websocket import handlers as ws_handlers
 
     app.include_router(health.router, prefix="/api")
@@ -68,6 +85,16 @@ def create_app() -> FastAPI:
     app.include_router(gates.router, prefix="/api")
     app.include_router(settings_routes.router, prefix="/api")
     app.include_router(payments.router, prefix="/api")
+    app.include_router(vehicle_types.router, prefix="/api")
+    app.include_router(shifts.router, prefix="/api")
+    app.include_router(areas.router, prefix="/api")
+    app.include_router(emoney_readers.router, prefix="/api")
+    app.include_router(members.router, prefix="/api")
+    app.include_router(member_groups.router, prefix="/api")
+    app.include_router(transactions.router, prefix="/api")
+    app.include_router(manual_open_logs.router, prefix="/api")
+    app.include_router(abandoned_vehicles.router, prefix="/api")
+    app.include_router(reports.router, prefix="/api")
 
     # WebSocket
     app.include_router(ws_handlers.router)
