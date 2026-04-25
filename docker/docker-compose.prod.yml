@@ -1,0 +1,136 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: parking-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-parking}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-parking_secret}
+      POSTGRES_DB: ${DB_NAME:-parking}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-parking} -d ${DB_NAME:-parking}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - parking-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: parking-redis
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-network
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: parking-api
+    restart: always
+    environment:
+      - APP_ENV=production
+      - DEBUG=false
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-parking}
+      - DB_USER=${DB_USER:-parking}
+      - DB_PASSWORD=${DB_PASSWORD:-parking_secret}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - JWT_SECRET=${JWT_SECRET}
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - parking-network
+    command: >
+      gunicorn api.app.main:app
+      -w 4
+      -k uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000
+      --access-logfile -
+      --error-logfile -
+
+  worker-critical:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: parking-worker-critical
+    restart: always
+    environment:
+      - APP_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-parking}
+      - DB_USER=${DB_USER:-parking}
+      - DB_PASSWORD=${DB_PASSWORD:-parking_secret}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - JWT_SECRET=${JWT_SECRET}
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - parking-network
+    command: arq workers.settings.CriticalWorkerSettings
+
+  worker-bg:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: parking-worker-bg
+    restart: always
+    environment:
+      - APP_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-parking}
+      - DB_USER=${DB_USER:-parking}
+      - DB_PASSWORD=${DB_PASSWORD:-parking_secret}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - JWT_SECRET=${JWT_SECRET}
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - parking-network
+    command: arq workers.settings.BackgroundWorkerSettings
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  parking-network:
+    driver: bridge

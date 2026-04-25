@@ -1,0 +1,21 @@
+[Unit]
+Description=E-Parking API (FastAPI + Gunicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=parking
+Group=parking
+WorkingDirectory=/opt/parking-system-v2
+Environment=APP_ENV=production
+Environment=PATH=/opt/parking-system-v2/.venv/bin
+EnvironmentFile=/opt/parking-system-v2/.env
+ExecStart=/opt/parking-system-v2/.venv/bin/gunicorn api.app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 127.0.0.1:8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=parking-api
+
+[Install]
+WantedBy=multi-user.target
