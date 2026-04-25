@@ -4,7 +4,7 @@ Daemon -> FastAPI: parking.events.{gate_id} (Pub/Sub)
 FastAPI -> Daemon: parking.commands.{gate_id} (Redis Streams)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal
 
@@ -72,7 +72,7 @@ class BaseEvent(BaseModel):
 
     event_type: str
     gate_id: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class VehicleDetectedEvent(BaseEvent):
@@ -202,7 +202,7 @@ class BaseCommand(BaseModel):
 
     command_type: str
     gate_id: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class OpenGateCommand(BaseCommand):

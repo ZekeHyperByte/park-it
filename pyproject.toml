@@ -81,7 +81,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["api/tests", "workers/tests", "protocols/tests"]
+testpaths = ["api/tests", "workers/tests", "protocols/tests", "daemons/tests"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["api", "shared", "workers", "daemons", "protocols"]

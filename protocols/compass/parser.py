@@ -39,9 +39,10 @@ def parse_stat(response: bytes) -> dict:
 
     # Parse IN states
     # STAT responses may contain "IN1ON", "IN2ON", etc.
+    # STAT1 = IN2 ON, STAT10 = IN1 ON (must not match STAT10 as STAT1)
     if "IN1ON" in text or "STAT10" in text:
         result["in1"] = True
-    if "IN2ON" in text or "STAT1" in text:
+    if "IN2ON" in text or re.search(r"STAT1(?!0)", text):
         result["in2"] = True
     if "IN3ON" in text:
         result["in3"] = True

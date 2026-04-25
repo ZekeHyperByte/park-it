@@ -104,6 +104,7 @@ def parse_deduct_response(body: bytes) -> dict:
     if len(body) < 40:
         return {"ok": False, "error": "Body too short"}
     return {
+        "ok": True,
         "card_type_code": body[0],
         "card_type": CARD_TYPES.get(body[0], f"Unknown({body[0]:02X})"),
         "mid": body[1:9].hex().upper(),
