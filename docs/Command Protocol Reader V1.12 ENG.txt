@@ -1,0 +1,1093 @@
+COMMAND PROTOCOL PASSTI READER
+Version 1.12
+
+Release No.
+
+Date
+
+Revision Description
+
+V1.1
+V1.2
+V1.3
+V1.4
+
+10/11/2017
+29/11/2017
+08/12/2017
+30/01/2018
+
+V1.5
+V1.6
+
+14/05/2018
+12/06/2018
+
+V1.7
+V1.8
+
+10/09/2018
+10/10/2018
+
+V1.9
+V1.10
+
+16/11/2018
+01/11/2019
+
+V1.11
+
+17/12/2020
+
+V1.12
+
+08/04/2021
+
+First Release
+Add MID & TID in Reader Init response
+New format response transaction log
+Add Mifare command (Read, Write, GetUID)
+Add BNI TapCash
+Add Command Read & Write Data Prepaid Card
+Add Command Display
+Add Command Buzzer
+Add Response Code for BNI Inactive Card Type
+Removing Command Read & Write Data Prepaid Card
+(Only can be used when have an agreement with the banks)
+Add Command GetCardInfo
+Add Debug Log (deduct Process) BRI Card
+Add Response Data QR Payment (Deduct command)
+Add Command GetReaderInfo
+Add Command DisplayText
+Add Response error (01 10 10) when deduct lost contact card with
+different deduct amount
+Remove command Get Card Info
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+2
+
+Contents
+I.
+
+Setting Protocol Serial ......................................................................................................................... 4
+
+II.
+
+Frame Format Protocol ....................................................................................................................... 4
+
+III.
+
+List Command Reader PASSTI ......................................................................................................... 5
+
+A.
+
+Reader INIT ..................................................................................................................................... 5
+
+B.
+
+Check Balance ................................................................................................................................. 5
+
+C.
+
+Deduct............................................................................................................................................. 6
+C.1 Response Deduct Prepaid Card ..................................................................................................... 7
+C.1 Response Deduct QR Payment ...................................................................................................... 7
+
+D.
+
+Cancel Deduct Correction ............................................................................................................... 9
+
+E.
+
+Get Last Transaction ....................................................................................................................... 9
+
+F.
+
+Mifare Command .......................................................................................................................... 10
+F.1. Get Card UID .............................................................................................................................. 10
+F.2. Read Block Mifare ...................................................................................................................... 11
+F.3. Write Block Data Mifare ............................................................................................................. 11
+
+G.
+
+Display & Buzzer Command .......................................................................................................... 12
+
+H.
+
+Get Debug Log BRI ........................................................................................................................ 13
+
+I.
+
+Get Reader Info ............................................................................................................................. 14
+
+IV.
+
+Flow Transaction ........................................................................................................................... 15
+
+V.
+
+Response Code, Status Code, Card Type & QR Payment Type .......................................................... 16
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+3
+
+I.
+
+Setting Protocol Serial
+•
+•
+•
+•
+
+II.
+
+Speed : 38400bps
+Data : 8 bit
+Parity : No
+Stop : 1 bit
+
+Frame Format Protocol
+
+Command Frame
+Name
+STX
+LEN-H
+LEN-L
+CMD
+Data[n]
+Values
+0x02
+0xHH
+0xHH
+0xHH
+Data[n]
+Length.
+1-Byte
+1-Byte
+1-Byte
+3-Bytes n-Byte(s)
+- STX : 0x02
+- Data length = command (it must be 3) + Length of data.
+LEN-H : Higher byte of data length
+LEN-L : Lower byte of data length
+- CMD : Command bytes
+- Data[n] : Data bytes
+- LRC : XORing from LEN-H to Data[n]
+
+LRC
+0xHH
+1-Byte
+
+Response Frame
+Name
+STX
+LEN-H
+LEN-L
+Resp
+Data[n]
+Values
+0x02
+0xHH
+0xHH
+0xHH
+Data[n]
+Length.
+1-Byte
+1-Byte
+1-Byte
+1-Byte
+n-Byte(s)
+- STX : 0x02
+- Data length = response (it must be 1) + Length of data.
+LEN-H : Higher byte of data length
+LEN-L : Lower byte of data length
+- Resp : Response code from reader
+- Data[n] : Data Bytes
+- LRC : XORing from LEN-H to Data[n]
+
+LRC
+0xHH
+1-Byte
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+4
+
+III.
+
+List Command Reader PASSTI
+A. Reader INIT
+Command to activate reader and only need to be execute each time reader is turn on
+COMMAND FORMAT
+CMD
+EF 01 01
+RESPONSE FORMAT
+RESPONSE CODE
+See response code table
+
+PARAMETER
+16Bytes Init Key
+
+RESPONSE DATA
+3Bytes Status Code (See status code table) + 8B MID Reader + TID 4B
+Reader
+
+Contoh
+Init Success:
+CMD : EF 01 01 [758F40D46D95D1641448AA19B9282C05]
+RSP : 00 00 00 00 02 03 45 67 89 0A BC DE 87 65 43 21
+Note: MID = 02 03 45 67 89 0A BC DE, TID = 87 65 43 21
+Init Failed:
+CMD : EF 01 01 [11223344556677889900AABBCCDDEEFF]
+RSP : 00 01 10 03 (command success but init key is incorrect)
+
+B. Check Balance
+Command to check balance for prepaid Card
+COMMAND FORMAT
+CMD
+PARAMETER
+EF 01 02
+[4Bytes Date in BCD ddmmyyyy] + [3Bytes Time in BCD hhnnss 24Hours
+Format] + [2Bytes Reader Waiting Timeout BCD]
+RESPONSE FORMAT
+RESPONSE
+RESPONSE DATA
+See response
+3Bytes Status Code (See status code table) + 1Byte Card Type + 8Byte Card
+code table
+Number + 4 Bytes Card Balance in Hex Integer
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+5
+
+-
+
+Date 6 Bytes BCD, eg:
+0x10 0x12 0x20 0x17 = 10 Desember 2017
+Time 3 Bytes BCD, eg:
+0x12 0x15 0x40 = 12:15:40 PM
+Reader Waiting Timeout, eg:
+0x00 0x10 = 10 seconds
+
+Contoh
+CMD : EF 01 02 [10 12 20 17] [12 15 40] [00 10]
+(Date = 10 Des 2017, time=12:15:40PM, Timeout = 10 seconds)
+RSP : 00 00 00 00 [01] [1A 2B 3C 4D 5E 6F 77 88] [00 01 86 A0]
+(Card Type = 01 (Luminos), Card Number= 1A2B3C4D5E6F7788, Saldo= 0x0186A0 = Rp.
+100.000)
+
+C. Deduct
+Command to deduct transaction process.
+COMMAND FORMAT
+CMD
+PARAMETER
+EF 01 03
+[4Bytes Date in BCD ddmmyyyy] + [3Bytes Time in BCD hhnnss 24Hours
+Format] + [4Bytes Deduct Amount in Hex Integer] + [2Bytes Reader Waiting
+Timeout BCD]
+-
+
+Date 6 Bytes BCD, eg:
+0x10 0x12 0x20 0x17 = 10 Desember 2017
+Time 3 Bytes BCD, eg:
+0x12 0x15 0x40 = 12:15:40 PM
+Deduct Amount, eg:
+0x00 0x00 0x03 0xE8 = 0x3E8 = Rp. 1000
+Reader Waiting Timeout, eg:
+0x00 0x10 = 10 seconds
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+6
+
+C.1 Response Deduct Prepaid Card
+RESPONSE FORMAT
+RESPONSE
+DATA
+See response
+3Bytes Status Code (See status code table) +
+code table
+[1Bytes Card Type] +
+[8Bytes MID Reader] +
+[4Bytes TID Reader] +
+[7Bytes DateTime in BCD ddmmyyyyhhnnss 24Hours Format] +
+[8Bytes Card No] +
+[4Bytes Deduct Amount in Hex Integer] +
+[4Bytes Card Remain Balance in Hex Integer] +
+[4Bytes Trans Counter per day] +
+nBytes Card Log transaction
+- 4 Bytes Card balance after deduct transaction succeed
+
+C.1 Response Deduct QR Payment
+RESPONSE FORMAT
+RESPONSE
+DATA
+See response
+3Bytes Status Code (See status code table) +
+code table
+[1Bytes Card Type] +
+[8Bytes MID Reader] +
+[4Bytes TID Reader] +
+[7Bytes DateTime in BCD ddmmyyyyhhnnss 24Hours Format] +
+[1Bytes QR Payment Type] +
+[4Bytes Deduct Amount in Hex Integer] +
+[22Bytes Order ID Hex] +
+[36Bytes Trx ID] +
+[1Bytes Length RFU] +
+[nBytes RFU]
+See Appendix for the example.
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+7
+
+Note :
+- This is some possibilities condition that can be happened when the deduct process was
+failed
+a. Normal process to Card Failed
+Deduct process failed because insufficient balance, card is broken, card not
+detected, etc.
+b. Lost contact
+Condition that happened when prepaid card is remove in the middle of the deduct
+process.
+In this condition, reader will response with certain error code. When the application
+got that error code then application needs to do the deduct process again with the
+previous prepaid card (reader won’t do deduct process if the card is not the
+previous card)
+Note : if lost contact happened, reader will not do any deduct process except with
+the previous prepaid card.
+Normal condition
+When application do the second deduct process after got the lost contact error code
+(with previous card), reader automatically will do the deduct correction (in this
+process, reader won’t deduct the prepaid card again but continue the deduct
+process until it’s complete).
+Certain condition (card is broken / not detected after lost contact happened)
+When lost contact happened and user want to skip the deduct correction process
+(do normal deduct transaction with other prepaid card), application need to call
+“Cancel Deduct Correction”.
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+8
+
+D. Cancel Deduct Correction
+Command to cancel deduct correction. When lost contact happened, basically reader will
+automatically save and flagging the transaction. Reader will force user to deduct with the
+previous prepaid card until deduction process complete.
+User can use this command to cancel that process so reader can do deduct process normally
+COMMAND FORMAT
+CMD
+EF 01 04
+RESPONSE FORMAT
+RESPONSE CODE
+See response code table
+
+PARAMETER
+-
+
+RESPONSE DATA
+3Bytes Status Code (See status code table) + 1Byte Card Type + 8Byte
+Card Number
+
+example
+If lost contact happened :
+CMD : EF 01 04
+RSP : 00 00 00 00 [01] [1A 2B 3C 4D 5E 6F 77 88]
+(Card Type = 01 (Luminos), Card Number= 1A2B3C4D5E6F7788)
+This are the information of the card that indicated lost contact
+If lost contact not occurred :
+CMD : EF 01 04
+RSP : 00 00 00 00
+
+E. Get Last Transaction
+Command to get last transaction log from reader
+Note :
+• This command is additional protection to prevent double deduct if there is connection
+problem (disconnect / not responding between reader and host)
+• This command only be use if reader not responding / application don’t get any response
+until timeout when do the deduct process
+• If the previous transaction was succeed then this command will response success plus
+data (same like response data from deduct command)
+• If the previous transaction was failed, this command will only response success (without
+data)
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+9
+
+COMMAND FORMAT
+CMD
+PARAMETER
+EF 01 05
+RESPONSE FORMAT
+RESPONSE
+DATA
+See response
+3Bytes Status Code (See status code table) +
+code table
+[1Bytes Card Type] +
+[8Bytes MID Reader] +
+[4Bytes TID Reader] +
+[7Bytes DateTime in BCD ddmmyyyyhhnnss 24Hours Format] +
+[8Bytes Card No] +
+[4Bytes Deduct Amount in Hex Integer] +
+[4Bytes Card Remain Balance in Hex Integer] +
+[4Bytes Trans Counter per day] +
+nBytes Card Log transaction
+See Appendix for the example
+
+F.
+
+Mifare Command
+Command for Mifare Card Only
+
+F.1. Get Card UID
+Command to get MIfare Card UID (support card type A and Mifare card)
+COMMAND FORMAT
+CMD
+PARAMETER
+EF 01 07
+00 + [2Bytes Reader Waiting Timeout BCD]
+RESPONSE FORMAT
+RESPONSE
+DATA
+See response
+3Bytes Status Code (See status code table) + [Card Type 1B] + [7Bytes card
+code table
+UID]
+Card Type = 0x41 (‘A’) for card Type A, or 0x4D (‘M’) for Mifare Card
+7Bytes card UID = if UID less than 7Bytes then will automatically left padding with 0.
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+10
+
+F.2. Read Block Mifare
+Command to read 1 block of Mifare data (support card type A and Mifare card)
+COMMAND FORMAT
+CMD
+PARAMETER
+EF 01 07
+01 + [1Byte Block Address] + [1Byte Key Type] + [6Bytes Login Key] + [2Bytes
+Reader Waiting Timeout BCD]
+Block Address (Hex Integer) = 0x00 to 0x03F (block 0 to block 63)
+Key type (Hex Integer) = 0x0A (key A) or 0x0B (key B)
+Login Key (Hex Integer) = eg: FFFFFFFFFFFF (Default Mifare key)
+RESPONSE FORMAT
+RESPONSE
+DATA
+See response
+3Bytes Status Code (See status code table) + [16Bytes card data]
+code table
+
+F.3. Write Block Data Mifare
+Command to write 1 block of data to mifare card
+Step to write data:
+1. Must call command read first (return must success)
+2. Can only write the same block or block in same sector with the read command.
+3. Make sure Mifare card is not remove from reader (from read command until write
+command)
+COMMAND FORMAT
+CMD GET
+PARAMETER
+EF 01 07
+02 + [1Byte Block Address] + [16Bytes Data to Write] + [2Bytes Reader Waiting
+Timeout BCD]
+Block Address (Hex Integer) = 0x00 to 0x03F (block 0 to block 63)
+RESPONSE FORMAT
+RESPONSE
+DATA
+See response
+3Bytes Status Code (See status code table) + [16Bytes card data]
+code table
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+11
+
+G.
+
+Display & Buzzer Command
+Command to display text to reader or to ring the buzzer
+
+G.1. Set to Main Display
+Command to reset display (will display the main display)
+COMMAND FORMAT
+CMD
+PARAMETER
+EF 01 09
+00
+RESPONSE FORMAT
+RESPONSE
+DATA
+See response
+3Bytes Status Code (See status code table)
+code table
+
+G.2. Display text
+Command to display text / character
+COMMAND FORMAT
+CMD
+PARAMETER
+EF 01 09
+03 + TLV data
+TLV Data
+Tag Value
+D1
+Line Number
+D2
+Text to Display
+
+D3
+
+Size
+
+D4
+
+Colour
+
+Desc
+Number of Line
+Text to display on reader
+Note :
+- max char is base on response command GetReaderInfo
+- Text must be set to max char per line (can be padding with
+space if needed)
+Size of char
+01 = Small
+02 = Medium
+03 = Large
+Text Colour
+01 = BLACK
+02 = WHITE
+03 = RED
+04 = GREEN
+05 = BLUE
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+12
+
+RESPONSE FORMAT
+RESPONSE
+DATA
+See response
+3Bytes Status Code (See status code table)
+code table
+
+G.3. Buzzer
+Command to ring the buzzer reader (both success or failed)
+COMMAND FORMAT
+CMD
+PARAMETER
+EF 01 09
+02 + [1Byte buzzer flag]
+Buzzer Flag = 0x00 = success, other is failed buzzerl.
+RESPONSE FORMAT
+RESPONSE
+DATA
+See response
+3Bytes Status Code (See status code table)
+code table
+
+H.
+
+Get Debug Log BRI
+Command to get debug log deduct transaction using BRI Card (note : only hit this command
+after deduct BRI Card success)
+Note : Debug log data will not be saved in the reader, if the reader was off (power off) then
+debug log data will be erased.
+COMMAND FORMAT
+CMD
+PARAMETER
+EF 01 0B
+RESPONSE FORMAT
+RESPONSE
+DATA
+See response
+3Bytes Status Code (See status code table) +
+code table
+nBytes Debug Log transaction BRI
+Debug log info :
+• 43544C5F533A = "CTL_S:" (Send to Contactless)
+• 43544C5F523A = "CTL_R:" (Received from Contactless)
+• 53414D5F533A = "SAM_S:" (Send to SAM)
+• 53414D5F523A = "SAM_R:" (Received from SAM)
+• 42414E4B5F4C4F473A = "BANK_LOG:" + 83Bytes Data String
+• Others data is APDU and RAPDU in hexadecimal
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+13
+
+I.
+
+Get Reader Info
+Command to get Card Information like card no and card type
+COMMAND FORMAT
+CMD
+PARAMETER
+EF 01 0C
+RESPONSE FORMAT
+RESPONSE
+DATA
+See response
+3Bytes Status Code (See status code table) + [Device Type 1B] + [Reader SN
+code table
+Digital 20B] + [Reader Version 3B] + [Display Info]
+Display Info Format
+Tag
+A1
+A2
+A3
+
+Length
+1 Byte
+1 Byte
+1 Byte
+
+Value
+No Of Line
+Char per Line
+Support Size
+
+A4
+
+1 Byte
+
+Support Colour
+
+Desc
+Max line number
+Max Char each Line
+Whether Reader is supported text size or not
+00 = Not Support
+01 = Support
+Whether reader is supported text colour or not
+00 = Not Support
+01 = Support
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+14
+
+IV.
+
+Flow Transaction
+START
+
+Get Last
+Transaction
+
+Save
+Data Response
+
+Compare Data
+response
+
+F
+(Timeout)
+
+Deduct
+Failed
+(011005 / 011006)
+
+Deduct
+
+Data Equal
+
+Response
+to PC
+
+Deduct
+Success
+
+Data
+Not Equal
+
+Save Data Trans
+
+S
+
+Check
+response
+
+Deduct Failed
+
+END
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+15
+
+V.
+
+Response Code, Status Code, Card Type & QR Payment Type
+
+Response Code (1 Byte Hexa)
+00
+02
+Status Code
+(3 Bytes Hexa)
+00 00 00
+01 10 01
+01 10 02
+01 10 03
+01 10 04
+
+01 10 05
+01 10 06
+01 10 07
+02 [2 Bytes SAM
+error code]
+03 [2 Bytes CTL
+error code]
+01 10 09
+01 10 10
+
+Definition
+Command success / command accepted
+Command failed (invalid format, wrong parameter, wrong length, etc)
+
+Additional Data
+
+Definition
+
+Depend on Function
+
+Command execution success
+General error
+Reader waiting timeout
+Reader initialization failed (Incorrect key)
+Not enough card balance
+
+1Byte Card Type +
+8 Bytes Card Number + 4Bytes Card
+Balance remaining
+1Byte Card Type +
+8 Bytes Card Number
+1Byte Expected Card Type + 8 Bytes
+Expected Card Number
+-
+
+BNI Card Status
+1Byte Expected Card Type + 8 Bytes
+Expected Card Number + 4 Bytes
+Expected Deduct Amount
+
+Card Type Code (1 Byte Hexa)
+01
+02
+03
+04
+05
+06
+07
+08
+09
+
+Reader found lost contact on card transaction /
+interrupted transaction
+Reader expected card from previous transaction
+(for auto correction purpose)
+Deduct Interval less than n second (default 2 sec)
+Last 2 Bytes return error code from SAM
+Last 2 Bytes return error code from Contactless
+Card
+BNI Inactive Card
+Reader expected same deduct amount from
+previous transaction (for auto correction
+purpose)
+
+Definition
+Luminos Prepaid Card
+MANDIRI eMoney Card
+BRI BRIZZI Card
+BNI Tapcash Card
+BCA FLAZZ Card
+DKI JakCard
+NOBU Card
+MEGA MegaCash Card
+QR Payment
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+16
+
+Appendix
+1. Reader Init
+Sukses:
+=>EF0101758F40D46D95D1641448AA19B9282C05
+<=0000000002034567890ABCDE87654321 (MID = 02 03 45 67 89 0A BC DE, TID = 87 65 43 21)
+Gagal (Salah Pin)
+=>EF010111223344556677889900AABBCCDDEEFF
+<=00011003
+2. Check Balance
+=>EF0102101220171215400001 (Date/Time = 10 Des 2017, 12:15:40PM, Reader Timeout 1 detik)
+<=000000000157120171019000040007A0F6 (Card Type 01, No kartu 5712017101900004, Saldo
+0007A0F6 = Rp. 499.958)
+3. Deduct Rp. 1 (Prepaid Card)
+=>EF010310122017121550000000010001
+(Date/Time = 10 Des 2017, 12:15:50PM, Deduct Rp. 1, Reader Timeout 1 detik)
+<=000000000102034567890ABCDE87654321101220171215505710120620170005000000010001D0
+CC00000001CDDDF8D374178432ECDC02FA9E616476DC7D3341B24FCDA12352546FF45B5ADA79F23
+87FB6800990EBDAD1EDBCDD3CBA5998E7A746048523759750178AE62DA5355C9CB17AF5F34DFF35
+865FAF960AF4194C5F2B622CCABC9BB09538B076B7F56344ACC65BC7B9B4
+Detail Response:
+01 = Card Type
+02034567890ABCDE = MID Reader
+87654321 = TID Reader
+10122017121550 = Date/Time (10 Des 2017, 12:15:50PM)
+5710120620170005 = Nomor kartu
+00000001 = Deduct Amounthex (Rp. 1)
+0001D0CC = Sisa Saldo hex (Rp. 118.988)
+00000001 = Transaction Number
+Next data is transaction log:
+CDDDF8D374178432ECDC02FA9E616476DC7D3341B24FCDA12352546FF45B5ADA79F2387FB68
+00990EBDAD1EDBCDD3CBA5998E7A746048523759750178AE62DA5355C9CB17AF5F34DFF3586
+5FAF960AF4194C5F2B622CCABC9BB09538B076B7F56344ACC65BC7B9B4
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+17
+
+4. Deduct Rp 1 (QR Payment)
+=> EF010314112019121927000000010010
+(Date/Time = 14 Nov 2019 12:19:27, Deduct Rp. 1, Reader Timeout 10 detik)
+<=0000000009D0190357109000015719000214112019121927010000000135333639323836393533
+36392019111412193030303735346134623038662D363265332D343036302D386565642D3830353
+3323865633430316400
+Detail Response:
+09 = Card Type
+D019035710900001 = MID Reader
+57190002 = TID Reader
+14112019121927 = Date/Time (14 Nov 2019, 12:19:27)
+01 = QR Payment Type (Gopay)
+00000001 = Deduct Amount hex (Rp. 1)
+35333639323836393533363920191114121930303037 = Order ID Hex
+(5369286953692019111412190007)
+35346134623038662D363265332D343036302D386565642D383035333238656334303164 = Trx
+ID hex (54a4b08f-62e3-4060-8eed-805328ec401d)
+
+5. Get Last Transaction Log
+=>EF0105
+<=000000000102034567890ABCDE87654321101220171215505710120620170005000000010001D0
+CC00000001CDDDF8D374178432ECDC02FA9E616476DC7D3341B24FCDA12352546FF45B5ADA79F2
+387FB6800990EBDAD1EDBCDD3CBA5998E7A746048523759750178AE62DA5355C9CB17AF5F34DFF
+35865FAF960AF4194C5F2B622CCABC9BB09538B076B7F56344ACC65BC7B9B4
+Return data is same with response format from deduct
+6. Error deduct when deduct process executed within interval reader (default 2 second)
+=>EF010310122017121540000000010001
+<=00011007
+This error code will occur when application execute next command deduct within deduct interval
+reader
+This feature is to protect from double deduct
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+18
+
+7. Deduct with insufficient balance
+=>EF010310122017121501000927C00001
+<=000110040157120171019000040007A0F5
+Return error with additional data (Card type, card no and remain balance)
+8. Deduct when lost contact
+=>EF010310122017121505000000010001
+<=00011005015712017101900004
+Return error with additional data (Card type and card no)
+9. Error deduct when do deduct correction with other card
+=>EF010310122017121505000000010001
+<=00011006015712017101900004
+This error code occur when reader do second deduct (after got lost contact) with another card
+Reader will response error code with additional data (Expected Card Type and Expected Card
+Number).
+10. Command cancel correction
+=>EF0104
+<=00000000015712017101900004
+Reader will response error code with additional data (Expected Card Type and Expected Card
+Number)
+11. Command Mifare
+Get UID
+=>EF0107000001
+<=00000000410000006F5A04A7 (card Type ‘A’, UID = 0000006F5A04A7)
+Read Mifare
+(Block 16, key type A, key FFFFFFFFFFFF, reader timeout 1sec)
+=>EF010701100AFFFFFFFFFFFF0001
+<=0000000000000000000000000000000000000000
+Write Mifare
+(Block 16, write data 11223344556677889900AABBCCDDEEFF, reader timeout 1sec)
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+19
+
+=>EF0107021011223344556677889900AABBCCDDEEFF0001
+<=0000000011223344556677889900AABBCCDDEEFF
+Read Mifare
+(Block 16, key type A, key FFFFFFFFFFFF, reader timeout 1sec)
+=>EF010701100AFFFFFFFFFFFF0001
+<=0000000011223344556677889900AABBCCDDEEFF
+12. Debug Log BRI
+=>EF010B
+<=0000000043544C5F533A5A01000043544C5F523A0043544C5F533ABD0000000017000043544C5F
+523A00425249601350060150029202071431129901993036000043544C5F533ABD01000000200000
+43544C5F523A00020714616100000000000000000000000000000000000000000000000000000043
+544C5F533A5A03000043544C5F523A0043544C5F533A0A0043544C5F523AAF3759E04942356D7A5
+3414D5F533A00A4040C09A0000000000000001153414D5F523A900053414D5F533A80B000002060
+1350060150029204945622541F80FF00000300800000003759E04942356D7A53414D5F523A000000
+000000000000000000000000008C076FC88AAE2C8D5B931A38DB929A9C900043544C5F533AAF8C0
+76FC88AAE2C8D5B931A38DB929A9C43544C5F523A005D5D130F4F0FEA4143544C5F533ABD03000
+00007000043544C5F523A001911140000000443544C5F533A6C0043544C5F523A0098E20E0043544
+C5F533ADC000100000043544C5F523A0053414D5F533A80B4000058601350060150029204945622
+541F80FF00000300800000005D5D130F4F0FEA413630313335303036303135303032393230303030
+3030303130303134313131393134353333343132333435363030303030313138FFFFFFFF53414D5F5
+23AD11103C7900043544C5F533A3B010000002000001234567890123456313233343536373814111
+9145334EB0100000EE2980EE29743544C5F523A0043544C5F533A3D0300000007000019111400000
+00543544C5F523A0043544C5F533AC743544C5F523A0042414E4B5F4C4F473A36303133353030363
+03135303032393231343131313931343533333430303030303030313030303030303031313832333
+435363738393031323334353631323334353637384431313130334337313233343536
+Note:
+•
+•
+•
+•
+•
+•
+
+43544C5F533A = "CTL_S:" (Send to Contactless)
+43544C5F523A = "CTL_R:" (Received from Contactless)
+53414D5F533A = "SAM_S:" (Send to SAM)
+53414D5F523A = "SAM_R:" (Received from SAM)
+42414E4B5F4C4F473A = "BANK_LOG:" + 83Bytes Data String
+Others data is APDU and RAPDU in hexadecimal
+
+Parsing: 00000000 (respon code + status code)
+CTL_S:5A010000
+CTL_R:00
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+20
+
+CTL_S:BD00000000170000
+CTL_R:004252496013500601500292020714311299019930360000
+CTL_S:BD01000000200000
+CTL_R:000207146161000000000000000000000000000000000000000000000000000000
+CTL_S:5A030000
+CTL_R:00
+CTL_S:0A00
+CTL_R:AF3759E04942356D7A
+SAM_S:00A4040C09A00000000000000011
+SAM_R:9000
+SAM_S:80B0000020601350060150029204945622541F80FF00000300800000003759E04942356D7A
+SAM_R:000000000000000000000000000000008C076FC88AAE2C8D5B931A38DB929A9C9000
+CTL_S:AF8C076FC88AAE2C8D5B931A38DB929A9C
+CTL_R:005D5D130F4F0FEA41
+CTL_S:BD03000000070000
+CTL_R:0019111400000004
+CTL_S:6C00
+CTL_R:0098E20E00
+CTL_S:DC0001000000
+CTL_R:00
+SAM_S:80B4000058601350060150029204945622541F80FF00000300800000005D5D130F4F0FEA41
+36303133353030363031353030323932303030303030303130303134313131393134353333343132
+333435363030303030313138
+SAM_R:D11103C79000
+CTL_S:3B0100000020000012345678901234563132333435363738141119145334EB0100000EE2980
+EE297
+CTL_R:00
+CTL_S:3D0300000007000019111400000005
+CTL_R:00
+CTL_S:C7
+CTL_R:00
+BANK_LOG:
+36303133353030363031353030323932313431313139313435333334303030303030303130303030
+30303031313832333435363738393031323334353631323334353637384431313130334337313233
+343536
+("601350060150029214111914533400000001000000011823456789012345612345678D11103C712
+3456")
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+21
+
+13. Error code when continue deduct for previously lost contact card but with different amount
+parameter
+=> Deduct Command with different amount from previous
+<=0001101002603298102499180400000001
+Status Code : 011010
+Expected Card Type: 02
+Expected Card Number: 6032981024991804
+Expected Deduct Amount: 00000001 (Rp. 1)
+Display on Reader:
+PEMBAYARAN GAGAL, MOHON GUNAKAN TARIF SEBELUMNYA.
+
+PT Softorb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No.8 Cengkareng Timur – Jakarta Barat 11730
+Ph. +62 21 29668601/02/03, Fax +62 21 54350246
+This is confidential document, not to be duplicated or distributed without prior written consent from PT Softorb Technology Indonesia
+
+22
+
+

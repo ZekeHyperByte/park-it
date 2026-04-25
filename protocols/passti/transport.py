@@ -5,6 +5,7 @@ Supports two connection modes:
 2. DirectSerialTransport - Reader connected directly to PC via USB/Serial
 """
 
+import time
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -52,7 +53,11 @@ class ControllerPassthroughTransport(EmoneyReaderTransport):
         self._sock = shared_socket
 
     async def send_recv(self, frame: bytes, timeout: float = 10.0) -> dict[str, Any]:
-        """Send frame via controller passthrough and read response."""
+        """Send frame via controller passthrough and read response.
+
+        Uses PASSTI frame length from header instead of searching for \\xa9,
+        because \\xa9 bytes can appear inside encrypted transaction log data.
+        """
         import socket
 
         # Build controller passthrough command: \xa6 QR5 <frame> \xa9
@@ -65,41 +70,45 @@ class ControllerPassthroughTransport(EmoneyReaderTransport):
 
         buffer = b""
         qt_data = None
+        expected_qt_len = None
 
         try:
-            self._sock.settimeout(timeout + 2)
-
-            while True:
+            start = time.time()
+            while time.time() - start < timeout + 2:
                 try:
-                    chunk = self._sock.recv(2048)
-                    if not chunk:
-                        break
-                    buffer += chunk
+                    self._sock.settimeout(0.5)
+                    chunk = self._sock.recv(4096)
+                    if chunk:
+                        buffer += chunk
                 except socket.timeout:
-                    break
+                    pass
 
-                # Scan for QT response
+                # Find \xa6QT header
                 idx = buffer.find(b"\xa6QT")
-                if idx != -1:
-                    footer_idx = buffer.find(b"\xa9", idx + 3)
-                    if footer_idx != -1:
-                        qt_data = buffer[idx + 3 : footer_idx]
-                        break
+                if idx == -1:
+                    continue
 
-                # Also accept plain QT response
-                idx = buffer.find(b"QT")
-                if idx != -1 and (idx == 0 or buffer[idx - 1 : idx] != b"\xa6"):
-                    end_idx = buffer.find(b"\xa6", idx + 2)
-                    if end_idx == -1:
-                        end_idx = len(buffer)
-                    qt_data = buffer[idx + 2 : end_idx]
+                # Calculate expected frame length from PASSTI header
+                qt_start = idx + 3
+                if expected_qt_len is None and len(buffer) >= qt_start + 3:
+                    if buffer[qt_start] == 0x02:  # STX
+                        payload_len = (buffer[qt_start + 1] << 8) | buffer[qt_start + 2]
+                        expected_qt_len = 3 + payload_len + 1
+
+                # Check if we have complete frame
+                if expected_qt_len and len(buffer) >= qt_start + expected_qt_len:
+                    qt_data = buffer[qt_start : qt_start + expected_qt_len]
                     break
 
         except Exception as e:
             return {"ok": False, "error": f"Communication error: {e}"}
 
         if qt_data is None:
-            return {"ok": False, "error": "No QT response from controller serial2"}
+            if len(buffer) == 0:
+                return {"ok": False, "error": "No response from controller"}
+            if b"\xa6QT" not in buffer:
+                return {"ok": False, "error": "No card detected (timeout)", "status": (0x01, 0x10, 0x02)}
+            return {"ok": False, "error": "Incomplete QT response"}
 
         # Parse the PASSTI response from qt_data
         from protocols.passti.frame import parse_response

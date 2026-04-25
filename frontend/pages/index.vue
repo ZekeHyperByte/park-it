@@ -36,13 +36,29 @@
             <span>Transaksi Aktif</span>
           </template>
 
+          <!-- Barcode lookup -->
+          <div class="mb-3">
+            <el-input
+              v-model="barcodeInput"
+              placeholder="Scan barcode atau masukkan plat nomor..."
+              clearable
+              @keyup.enter="onBarcodeLookup"
+            >
+              <template #append>
+                <el-button @click="onBarcodeLookup">
+                  <el-icon><Search /></el-icon>
+                </el-button>
+              </template>
+            </el-input>
+          </div>
+
           <div v-if="gateStore.currentTransaction" class="transaction-detail">
             <el-descriptions :column="2" border>
-              <el-descriptions-item label="Barcode">{{ gateStore.currentTransaction.barcode }}</el-descriptions-item>
+              <el-descriptions-item label="Barcode">{{ gateStore.currentTransaction.barcode || '—' }}</el-descriptions-item>
               <el-descriptions-item label="Plat Nomor">{{ gateStore.currentTransaction.plate_number || '—' }}</el-descriptions-item>
-              <el-descriptions-item label="Jenis">{{ gateStore.currentTransaction.vehicle_type }}</el-descriptions-item>
-              <el-descriptions-item label="Waktu Masuk">{{ gateStore.currentTransaction.entry_time }}</el-descriptions-item>
-              <el-descriptions-item label="Durasi">{{ gateStore.currentTransaction.duration }}</el-descriptions-item>
+              <el-descriptions-item label="Jenis">{{ vehicleTypeName }}</el-descriptions-item>
+              <el-descriptions-item label="Waktu Masuk">{{ formatDateTime(gateStore.currentTransaction.entry_time) }}</el-descriptions-item>
+              <el-descriptions-item label="Durasi">{{ durationText }}</el-descriptions-item>
               <el-descriptions-item label="Tarif">
                 <strong class="ep-red">Rp {{ formatNumber(gateStore.currentTransaction.tariff) }}</strong>
               </el-descriptions-item>
@@ -94,11 +110,12 @@
               type="primary"
               size="large"
               class="w-full payment-btn"
-              :disabled="!gateStore.canPayCash"
+              :disabled="!gateStore.canPayCash || gateStore.isLoading"
+              :loading="gateStore.isLoading && activeMethod === 'cash'"
               @click="openCashModal"
             >
               <el-icon class="mr-2"><Money /></el-icon>
-              Bayar Tunai
+              Bayar Tunai (F1)
             </el-button>
           </div>
 
@@ -108,11 +125,12 @@
               type="success"
               size="large"
               class="w-full payment-btn"
-              :disabled="!gateStore.canPayRfid"
+              :disabled="!gateStore.canPayRfid || gateStore.isLoading"
+              :loading="gateStore.isLoading && activeMethod === 'rfid'"
               @click="startRfidPayment"
             >
               <el-icon class="mr-2"><Postcard /></el-icon>
-              Bayar RFID Member
+              Bayar RFID Member (F2)
             </el-button>
           </div>
 
@@ -122,11 +140,12 @@
               type="warning"
               size="large"
               class="w-full payment-btn"
-              :disabled="!gateStore.canPayEmoney"
+              :disabled="!gateStore.canPayEmoney || gateStore.isLoading"
+              :loading="gateStore.isLoading && activeMethod === 'emoney'"
               @click="startEmoneyPayment"
             >
               <el-icon class="mr-2"><CreditCard /></el-icon>
-              Bayar E-Money
+              Bayar E-Money (F3)
             </el-button>
           </div>
 
@@ -156,6 +175,7 @@
               :step="1000"
               style="width: 100%"
               size="large"
+              @keyup.enter="confirmCashPayment"
             />
           </el-form-item>
           <el-form-item label="Kembalian">
@@ -169,7 +189,32 @@
       </div>
       <template #footer>
         <el-button @click="cashModalVisible = false">Batal</el-button>
-        <el-button type="primary" @click="confirmCashPayment">Konfirmasi</el-button>
+        <el-button type="primary" :loading="gateStore.isLoading" @click="confirmCashPayment">
+          Konfirmasi (Enter)
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- RFID Card Input Modal -->
+    <el-dialog
+      v-model="rfidModalVisible"
+      title="Bayar RFID Member"
+      width="400px"
+      :close-on-click-modal="false"
+    >
+      <p class="mb-2">Tempelkan atau masukkan nomor kartu member:</p>
+      <el-input
+        v-model="rfidCardNumber"
+        placeholder="Nomor kartu RFID"
+        size="large"
+        clearable
+        @keyup.enter="confirmRfidPayment"
+      />
+      <template #footer>
+        <el-button @click="rfidModalVisible = false">Batal</el-button>
+        <el-button type="success" :loading="gateStore.isLoading" @click="confirmRfidPayment">
+          Konfirmasi
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -177,7 +222,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { Ticket, Picture, Money, Postcard, CreditCard } from '@element-plus/icons-vue'
+import { Ticket, Picture, Money, Postcard, CreditCard, Search } from '@element-plus/icons-vue'
 
 definePageMeta({
   middleware: 'auth',
@@ -191,6 +236,10 @@ const { $ws } = useNuxtApp()
 // Local state
 const cashModalVisible = ref(false)
 const cashReceived = ref(0)
+const rfidModalVisible = ref(false)
+const rfidCardNumber = ref('')
+const barcodeInput = ref('')
+const activeMethod = ref(null)
 let unsubscribeWs = null
 
 // Computed
@@ -200,17 +249,37 @@ const selectedGate = computed(() =>
 
 const wsStatusText = computed(() => {
   if (!gateStore.selectedGateOutId) return 'No Gate'
-  return $ws.isConnected(`gate-out-${gateStore.selectedGateOutId}`) ? 'Connected' : 'Disconnected'
+  const gateCode = selectedGate.value?.code || `gate-out-${gateStore.selectedGateOutId}`
+  return $ws.isConnected(gateCode) ? 'Connected' : 'Disconnected'
 })
 
 const wsStatusType = computed(() => {
   if (!gateStore.selectedGateOutId) return 'info'
-  return $ws.isConnected(`gate-out-${gateStore.selectedGateOutId}`) ? 'success' : 'danger'
+  const gateCode = selectedGate.value?.code || `gate-out-${gateStore.selectedGateOutId}`
+  return $ws.isConnected(gateCode) ? 'success' : 'danger'
 })
 
 const changeAmount = computed(() => {
   const tariff = gateStore.currentTransaction?.tariff || 0
   return Math.max(0, cashReceived.value - tariff)
+})
+
+const vehicleTypeName = computed(() => {
+  const vtId = gateStore.currentTransaction?.vehicle_type_id
+  if (!vtId) return '—'
+  const vt = websiteStore.vehicleTypes?.find((v) => v.id === vtId)
+  return vt?.name || '—'
+})
+
+const durationText = computed(() => {
+  const entryTime = gateStore.currentTransaction?.entry_time
+  if (!entryTime) return '—'
+  const entry = new Date(entryTime)
+  const now = new Date()
+  const diffMs = now - entry
+  const diffH = Math.floor(diffMs / 3600000)
+  const diffM = Math.floor((diffMs % 3600000) / 60000)
+  return `${diffH}j ${diffM}m`
 })
 
 // Methods
@@ -219,14 +288,20 @@ function formatNumber(n) {
   return Number(n).toLocaleString('id-ID')
 }
 
+function formatDateTime(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return d.toLocaleString('id-ID')
+}
+
 function onGateChange(gateId) {
-  // Unsubscribe from previous gate
   if (unsubscribeWs) {
     unsubscribeWs()
     unsubscribeWs = null
   }
 
   gateStore.clearTransaction()
+  barcodeInput.value = ''
 
   if (!gateId) return
 
@@ -235,7 +310,6 @@ function onGateChange(gateId) {
 
   const gateCode = gate.code || `gate-out-${gateId}`
 
-  // Subscribe to WebSocket for this gate
   unsubscribeWs = $ws.on(gateCode, (event) => {
     gateStore.handleWsEvent(event)
   })
@@ -243,37 +317,108 @@ function onGateChange(gateId) {
   gateStore.setWsConnected($ws.isConnected(gateCode))
 }
 
+async function onBarcodeLookup() {
+  if (!barcodeInput.value.trim()) return
+  const found = await gateStore.lookupTransaction({
+    barcode: barcodeInput.value.trim(),
+    plateNumber: barcodeInput.value.trim(),
+  })
+  if (!found) {
+    ElMessage.warning('Transaksi tidak ditemukan')
+  }
+}
+
 function openCashModal() {
   cashReceived.value = gateStore.currentTransaction?.tariff || 0
+  activeMethod.value = 'cash'
   cashModalVisible.value = true
 }
 
 async function confirmCashPayment() {
-  try {
-    const { fetchApi } = useApi()
-    await fetchApi('/api/payments/cash', {
-      method: 'POST',
-      body: JSON.stringify({
-        transaction_id: gateStore.currentTransaction?.id,
-        amount: gateStore.currentTransaction?.tariff,
-        received: cashReceived.value,
-      }),
-    })
-    ElMessage.success('Pembayaran tunai berhasil')
+  if (!selectedGate.value) return
+  const gateCode = selectedGate.value.code || `gate-out-${selectedGate.value.id}`
+  const success = await gateStore.confirmCashPayment({
+    gateId: gateCode,
+    gateOutId: selectedGate.value.id,
+    paidAmount: cashReceived.value,
+  })
+  if (success) {
     cashModalVisible.value = false
-    gateStore.clearTransaction()
-  } catch (err) {
-    ElMessage.error(err.message || 'Pembayaran gagal')
+    barcodeInput.value = ''
   }
+  activeMethod.value = null
 }
 
 function startRfidPayment() {
-  ElMessage.info('Menunggu kartu RFID...')
+  activeMethod.value = 'rfid'
+  rfidCardNumber.value = ''
+  rfidModalVisible.value = true
+}
+
+async function confirmRfidPayment() {
+  if (!rfidCardNumber.value.trim() || !selectedGate.value) {
+    ElMessage.warning('Masukkan nomor kartu RFID')
+    return
+  }
+  const gateCode = selectedGate.value.code || `gate-out-${selectedGate.value.id}`
+  const success = await gateStore.processRfidPayment({
+    gateId: gateCode,
+    gateOutId: selectedGate.value.id,
+    cardNumber: rfidCardNumber.value.trim(),
+  })
+  if (success) {
+    rfidModalVisible.value = false
+    rfidCardNumber.value = ''
+    barcodeInput.value = ''
+  }
+  activeMethod.value = null
 }
 
 function startEmoneyPayment() {
-  gateStore.setEmoneyState('WAITING_CARD')
-  ElMessage.info('Menunggu tap kartu e-money...')
+  activeMethod.value = 'emoney'
+  const tx = gateStore.currentTransaction
+  if (!tx?.card_number) {
+    ElMessage.warning('Transaksi tidak memiliki nomor kartu e-money')
+    activeMethod.value = null
+    return
+  }
+  if (!selectedGate.value) return
+  const gateCode = selectedGate.value.code || `gate-out-${selectedGate.value.id}`
+  gateStore.startEmoneyDeduct({
+    gateId: gateCode,
+    gateOutId: selectedGate.value.id,
+    cardNumber: tx.card_number,
+  })
+}
+
+// Keyboard shortcuts
+function onKeydown(e) {
+  // F1 = Cash
+  if (e.key === 'F1') {
+    e.preventDefault()
+    if (gateStore.canPayCash && !gateStore.isLoading) {
+      openCashModal()
+    }
+  }
+  // F2 = RFID
+  if (e.key === 'F2') {
+    e.preventDefault()
+    if (gateStore.canPayRfid && !gateStore.isLoading) {
+      startRfidPayment()
+    }
+  }
+  // F3 = E-Money
+  if (e.key === 'F3') {
+    e.preventDefault()
+    if (gateStore.canPayEmoney && !gateStore.isLoading) {
+      startEmoneyPayment()
+    }
+  }
+  // Escape = cancel modals
+  if (e.key === 'Escape') {
+    cashModalVisible.value = false
+    rfidModalVisible.value = false
+  }
 }
 
 // Lifecycle
@@ -283,12 +428,14 @@ onMounted(async () => {
     gateStore.setSelectedGateOutId(websiteStore.activeGateOuts[0].id)
     onGateChange(websiteStore.activeGateOuts[0].id)
   }
+  window.addEventListener('keydown', onKeydown)
 })
 
 onUnmounted(() => {
   if (unsubscribeWs) {
     unsubscribeWs()
   }
+  window.removeEventListener('keydown', onKeydown)
 })
 </script>
 
@@ -346,5 +493,9 @@ onUnmounted(() => {
   height: 100%;
   background: #f5f7fa;
   color: #909399;
+}
+
+.ep-red {
+  color: #f56c6c;
 }
 </style>

@@ -18,6 +18,7 @@ export const useGateStore = defineStore('gate', () => {
   const waitingSeconds = ref(0)
   const selectedGateOutId = ref(null)
   const alertMessage = ref(null)
+  const isLoading = ref(false)
 
   // Getters
   const isWaitingPayment = computed(() => paymentState.value === 'WAITING_PAYMENT')
@@ -70,12 +71,143 @@ export const useGateStore = defineStore('gate', () => {
   }
 
   /**
+   * Look up an active transaction by barcode, card, or plate.
+   */
+  async function lookupTransaction({ barcode, cardNumber, plateNumber }) {
+    isLoading.value = true
+    try {
+      const { fetchApi } = useApi()
+      const res = await fetchApi('/api/payments/lookup', {
+        method: 'POST',
+        body: JSON.stringify({
+          barcode,
+          card_number: cardNumber,
+          plate_number: plateNumber,
+        }),
+      })
+      if (res.found && res.transaction) {
+        currentTransaction.value = {
+          ...res.transaction,
+          tariff: res.fee,
+        }
+        return true
+      }
+      return false
+    } catch (err) {
+      console.error('lookupTransaction error:', err)
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /**
+   * Confirm cash payment.
+   */
+  async function confirmCashPayment({ gateId, gateOutId, paidAmount }) {
+    isLoading.value = true
+    try {
+      const { fetchApi } = useApi()
+      const res = await fetchApi('/api/payments/cash', {
+        method: 'POST',
+        body: JSON.stringify({
+          gate_id: gateId,
+          gate_out_id: gateOutId,
+          barcode: currentTransaction.value?.barcode,
+          plate_number: currentTransaction.value?.plate_number,
+          paid_amount: paidAmount,
+        }),
+      })
+      if (res.success) {
+        ElMessage.success(res.message)
+        clearTransaction()
+        return true
+      } else {
+        ElMessage.error(res.message)
+        return false
+      }
+    } catch (err) {
+      ElMessage.error(err.message || 'Pembayaran tunai gagal')
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /**
+   * Process RFID payment.
+   */
+  async function processRfidPayment({ gateId, gateOutId, cardNumber }) {
+    isLoading.value = true
+    try {
+      const { fetchApi } = useApi()
+      const res = await fetchApi('/api/payments/rfid', {
+        method: 'POST',
+        body: JSON.stringify({
+          gate_id: gateId,
+          gate_out_id: gateOutId,
+          card_number: cardNumber,
+        }),
+      })
+      if (res.success) {
+        ElMessage.success(res.message)
+        clearTransaction()
+        return true
+      } else {
+        ElMessage.error(res.message)
+        return false
+      }
+    } catch (err) {
+      ElMessage.error(err.message || 'Pembayaran RFID gagal')
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /**
+   * Initiate e-money deduct.
+   */
+  async function startEmoneyDeduct({ gateId, gateOutId, cardNumber }) {
+    isLoading.value = true
+    try {
+      const { fetchApi } = useApi()
+      const res = await fetchApi('/api/payments/emoney/deduct', {
+        method: 'POST',
+        body: JSON.stringify({
+          gate_id: gateId,
+          gate_out_id: gateOutId,
+          card_number: cardNumber,
+        }),
+      })
+      if (res.success) {
+        emoneyPaymentState.value = 'PROCESSING'
+        return true
+      } else {
+        emoneyPaymentState.value = 'FAILED'
+        ElMessage.error(res.message)
+        return false
+      }
+    } catch (err) {
+      ElMessage.error(err.message || 'E-money deduct gagal')
+      emoneyPaymentState.value = 'FAILED'
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /**
    * Handle incoming WebSocket event.
    */
   function handleWsEvent(event) {
     switch (event.type) {
       case 'vehicle_detected':
         paymentState.value = 'VEHICLE_PRESENT'
+        // Try to lookup transaction if card number is available
+        if (event.card_number) {
+          lookupTransaction({ cardNumber: event.card_number })
+        }
         break
       case 'gate_closed':
         paymentState.value = 'WAITING_PAYMENT'
@@ -92,6 +224,8 @@ export const useGateStore = defineStore('gate', () => {
       case 'deduct_result':
         if (event.status === 'SUCCESS') {
           emoneyPaymentState.value = 'SUCCESS'
+          // Auto-clear after 3 seconds
+          setTimeout(() => clearTransaction(), 3000)
         } else if (event.status === 'LOST_CONTACT') {
           emoneyPaymentState.value = 'LOST_CONTACT'
         } else if (event.status === 'WRONG_CARD') {
@@ -103,7 +237,10 @@ export const useGateStore = defineStore('gate', () => {
         }
         break
       case 'rfid_card_read':
-        // RFID exit handled server-side; POS gets notified via transaction update
+        // Auto-process RFID if transaction exists
+        if (event.card_number && currentTransaction.value) {
+          // RFID handled server-side; POS gets notified
+        }
         break
       default:
         break
@@ -119,6 +256,7 @@ export const useGateStore = defineStore('gate', () => {
     waitingSeconds,
     selectedGateOutId,
     alertMessage,
+    isLoading,
     isWaitingPayment,
     isTimeout,
     canPayCash,
@@ -133,6 +271,10 @@ export const useGateStore = defineStore('gate', () => {
     setWaitingSeconds,
     setSelectedGateOutId,
     setAlertMessage,
+    lookupTransaction,
+    confirmCashPayment,
+    processRfidPayment,
+    startEmoneyDeduct,
     handleWsEvent,
   }
 })

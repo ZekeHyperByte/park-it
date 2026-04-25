@@ -59,7 +59,7 @@ def create_app() -> FastAPI:
     )
 
     # Routers
-    from api.app.routes import auth, gates, health, settings as settings_routes, users
+    from api.app.routes import auth, gates, health, payments, settings as settings_routes, users
     from api.app.websocket import handlers as ws_handlers
 
     app.include_router(health.router, prefix="/api")
@@ -67,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(users.router, prefix="/api")
     app.include_router(gates.router, prefix="/api")
     app.include_router(settings_routes.router, prefix="/api")
+    app.include_router(payments.router, prefix="/api")
 
     # WebSocket
     app.include_router(ws_handlers.router)
