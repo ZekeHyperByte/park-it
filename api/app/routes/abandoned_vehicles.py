@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.middleware.auth import require_operator
 from api.app.models.abandoned_vehicle_log import AbandonedVehicleLog
+from api.app.schemas.abandoned_vehicle import AbandonedVehicleLogListItem
 from api.app.utils.pagination import PaginatedList
 from api.app.utils.pagination import PaginationParams, paginated_list
 from api.database import get_db
@@ -25,4 +26,5 @@ async def list_abandoned_vehicle_logs(
     """List abandoned vehicle logs."""
     stmt = select(AbandonedVehicleLog).order_by(AbandonedVehicleLog.created_at.desc())
     result = await paginated_list(db, stmt, skip=pagination.skip, limit=pagination.limit)
+    result.items = [AbandonedVehicleLogListItem.model_validate(item) for item in result.items]
     return result

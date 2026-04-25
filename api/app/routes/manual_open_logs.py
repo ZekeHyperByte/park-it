@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.middleware.auth import require_operator
 from api.app.models.manual_open_log import ManualOpenLog
+from api.app.schemas.manual_open_log import ManualOpenLogListItem
 from api.app.utils.pagination import PaginatedList
 from api.app.utils.pagination import PaginationParams, paginated_list
 from api.database import get_db
@@ -25,4 +26,5 @@ async def list_manual_open_logs(
     """List manual open logs."""
     stmt = select(ManualOpenLog).order_by(ManualOpenLog.created_at.desc())
     result = await paginated_list(db, stmt, skip=pagination.skip, limit=pagination.limit)
+    result.items = [ManualOpenLogListItem.model_validate(item) for item in result.items]
     return result
