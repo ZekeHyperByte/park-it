@@ -95,9 +95,11 @@ const props = defineProps({
   showActions: { type: Boolean, default: true },
   showPagination: { type: Boolean, default: true },
   pageSize: { type: Number, default: 10 },
+  serverPagination: { type: Boolean, default: false },
+  totalItems: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['add', 'edit', 'delete', 'page-change', 'search'])
+const emit = defineEmits(['add', 'edit', 'delete', 'page-change', 'size-change', 'search'])
 
 const searchQuery = ref('')
 const currentPage = ref(1)
@@ -117,11 +119,17 @@ function handleSearch() {
 
 function handlePageChange(page) {
   currentPage.value = page
+  if (props.serverPagination) {
+    emit('page-change', page, currentPageSize.value)
+  }
 }
 
 function handleSizeChange(size) {
   currentPageSize.value = size
   currentPage.value = 1
+  if (props.serverPagination) {
+    emit('size-change', 1, size)
+  }
 }
 
 function handleSort({ prop, order }) {
@@ -160,9 +168,12 @@ const filteredData = computed(() => {
   return result
 })
 
-const total = computed(() => filteredData.value.length)
+const total = computed(() => props.serverPagination ? props.totalItems : filteredData.value.length)
 
 const displayedData = computed(() => {
+  if (props.serverPagination) {
+    return props.data
+  }
   const start = (currentPage.value - 1) * currentPageSize.value
   return filteredData.value.slice(start, start + currentPageSize.value)
 })

@@ -75,6 +75,18 @@
           style="width: 100%"
         />
 
+        <!-- Date picker -->
+        <el-date-picker
+          v-else-if="field.type === 'date'"
+          v-model="formData[field.prop]"
+          type="date"
+          :placeholder="field.placeholder || ''"
+          :disabled="field.disabled"
+          format="YYYY-MM-DD"
+          value-format="YYYY-MM-DD"
+          style="width: 100%"
+        />
+
         <!-- Password -->
         <el-input
           v-else-if="field.type === 'password'"

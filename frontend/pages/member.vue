@@ -68,9 +68,14 @@ definePageMeta({
 const { fetchApi } = useApi()
 const memberCrud = useCrud('/api/members')
 const groupCrud = useCrud('/api/member-groups')
+const vehicleTypeCrud = useCrud('/api/vehicle-types')
 
 const activeTab = ref('members')
 const submitting = ref(false)
+
+// Reference data for dropdowns
+const vehicleTypes = ref([])
+const memberGroups = ref([])
 
 // Members
 const members = ref([])
@@ -87,23 +92,32 @@ const memberColumns = [
   { prop: 'is_active', label: 'Aktif', type: 'boolean', width: 80 },
   { prop: 'valid_until', label: 'Berlaku Sampai', width: 140 },
 ]
-const memberFields = [
+const memberFields = computed(() => [
   { prop: 'name', label: 'Nama', type: 'text', required: true },
   { prop: 'card_number', label: 'Nomor Kartu', type: 'text', required: true },
   { prop: 'phone', label: 'Telepon', type: 'text' },
   { prop: 'email', label: 'Email', type: 'text' },
   { prop: 'address', label: 'Alamat', type: 'textarea' },
   { prop: 'plate_number', label: 'Nomor Plat', type: 'text' },
-  { prop: 'vehicle_type_id', label: 'Jenis Kendaraan (ID)', type: 'number' },
-  { prop: 'member_group_id', label: 'Grup (ID)', type: 'number' },
+  {
+    prop: 'vehicle_type_id',
+    label: 'Jenis Kendaraan',
+    type: 'select',
+    options: vehicleTypes.value.map((vt) => ({ label: vt.name, value: vt.id })),
+  },
+  {
+    prop: 'member_group_id',
+    label: 'Grup Member',
+    type: 'select',
+    options: memberGroups.value.map((g) => ({ label: g.name, value: g.id })),
+  },
   { prop: 'is_active', label: 'Aktif', type: 'boolean' },
-  { prop: 'valid_from', label: 'Berlaku Dari', type: 'text', placeholder: 'YYYY-MM-DD' },
-  { prop: 'valid_until', label: 'Berlaku Sampai', type: 'text', placeholder: 'YYYY-MM-DD' },
+  { prop: 'valid_from', label: 'Berlaku Dari', type: 'date' },
+  { prop: 'valid_until', label: 'Berlaku Sampai', type: 'date' },
   { prop: 'notes', label: 'Catatan', type: 'textarea' },
-]
+])
 
 // Member Groups
-const memberGroups = ref([])
 const loadingGroups = ref(false)
 const groupModalVisible = ref(false)
 const groupEditing = ref(false)
@@ -130,7 +144,16 @@ const deleteAction = ref(null)
 onMounted(() => {
   loadMembers()
   loadGroups()
+  loadVehicleTypes()
 })
+
+async function loadVehicleTypes() {
+  try {
+    vehicleTypes.value = await vehicleTypeCrud.list()
+  } catch (err) {
+    ElMessage.error('Gagal memuat jenis kendaraan')
+  }
+}
 
 // Members
 async function loadMembers() {

@@ -114,10 +114,23 @@ definePageMeta({
 const { fetchApi } = useApi()
 
 const activeTab = ref('summary')
-const dateRange = ref(null)
+
+// Default date range: start of current month to today
+const today = new Date()
+const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+const dateRange = ref([
+  firstDayOfMonth.toISOString().split('T')[0],
+  today.toISOString().split('T')[0],
+])
+
 const loading = ref(false)
 const summaryReport = ref(null)
 const emoneyReport = ref(null)
+
+// Auto-load on mount with default range
+onMounted(() => {
+  loadReports()
+})
 
 async function loadReports() {
   if (!dateRange.value || dateRange.value.length !== 2) {

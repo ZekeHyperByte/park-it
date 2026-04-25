@@ -37,6 +37,10 @@
           :show-add="false"
           :show-edit="false"
           :show-delete="false"
+          server-pagination
+          :total-items="transactionTotal"
+          @page-change="handleTransactionPageChange"
+          @size-change="handleTransactionSizeChange"
         />
       </el-tab-pane>
 
@@ -85,6 +89,9 @@ const statusFilter = ref('')
 
 // Transactions
 const transactions = ref([])
+const transactionTotal = ref(0)
+const transactionPage = ref(1)
+const transactionPageSize = ref(20)
 const transactionColumns = [
   { prop: 'barcode', label: 'Barcode', width: 140, sortable: true },
   { prop: 'plate_number', label: 'Plat', width: 120, sortable: true },
@@ -127,7 +134,10 @@ onMounted(() => {
 async function loadTransactions() {
   loadingTransactions.value = true
   try {
-    const params = {}
+    const params = {
+      skip: (transactionPage.value - 1) * transactionPageSize.value,
+      limit: transactionPageSize.value,
+    }
     if (dateRange.value && dateRange.value.length === 2) {
       params.date_from = dateRange.value[0]
       params.date_to = dateRange.value[1]
@@ -137,14 +147,32 @@ async function loadTransactions() {
     }
     const qs = new URLSearchParams()
     for (const [k, v] of Object.entries(params)) {
-      if (v) qs.append(k, v)
+      if (v !== undefined && v !== null && v !== '') qs.append(k, v)
     }
-    transactions.value = await fetchApi(`/api/transactions?${qs.toString()}`)
+    const result = await fetchApi(`/api/transactions?${qs.toString()}`)
+    transactions.value = result
+    // Note: API returns list only; for true server pagination we need total count.
+    // Using result length as fallback until API provides total.
+    transactionTotal.value = result.length === transactionPageSize.value
+      ? (transactionPage.value * transactionPageSize.value) + 1
+      : (transactionPage.value - 1) * transactionPageSize.value + result.length
   } catch (err) {
     ElMessage.error('Gagal memuat transaksi')
   } finally {
     loadingTransactions.value = false
   }
+}
+
+function handleTransactionPageChange(page, size) {
+  transactionPage.value = page
+  transactionPageSize.value = size
+  loadTransactions()
+}
+
+function handleTransactionSizeChange(page, size) {
+  transactionPage.value = page
+  transactionPageSize.value = size
+  loadTransactions()
 }
 
 async function loadManualOpens() {
