@@ -20,7 +20,7 @@ class GateIn(Base, IntPKMixin, TimestampMixin):
     # Protocol / hardware
     protocol: Mapped[str] = mapped_column(
         String(20), default="compass", nullable=False
-    )  # compass, enet
+    )  # compass, enet, serial
     controller_host: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )
@@ -65,7 +65,13 @@ class GateIn(Base, IntPKMixin, TimestampMixin):
     printer_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     printer_type: Mapped[str | None] = mapped_column(
         String(20), nullable=True
-    )  # escpos, etc.
+    )  # CONTROLLER_PASSTHROUGH, NETWORK, SERIAL
+    printer_ip_address: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # For NETWORK mode
+    printer_device: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # For SERIAL mode (e.g. /dev/ttyUSB1)
 
     # Camera
     camera_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

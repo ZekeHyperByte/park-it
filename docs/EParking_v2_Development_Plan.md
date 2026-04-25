@@ -455,13 +455,16 @@ structlog>=24.0.0
 
 ## Open Items
 
-| Item | Question | Impact |
-|---|---|---|
-| UHF long-range readers | Still in use in v2, or replaced by PASSTI? | Separate daemon + protocol needed if yes |
-| RTSP streaming | Is live camera stream-to-canvas needed? | rtsp-relay sidecar needed |
-| Telegram notifications | Does client use Telegram gate alerts from v1? | ARQ background job if yes |
-| Audio track numbers | Confirm tracks for "Saldo Tidak Cukup" and "Gunakan Kartu Sebelumnya" | play_audio payload |
-| Controller type per gate | Document 1-relay vs 2-relay per gate in config | Protocol layer only, no business logic change |
+| Item | Question | Impact | Status |
+|---|---|---|---|
+| UHF long-range readers | Still in use in v2, or replaced by PASSTI? | Separate daemon + protocol needed if yes | **Resolved** — Both integrated (Wiegand X) and standalone supported |
+| RTSP streaming | Is live camera stream-to-canvas needed? | rtsp-relay sidecar needed | Open |
+| Telegram notifications | Does client use Telegram gate alerts from v1? | ARQ background job if yes | **Resolved** — Implemented in Week 2 |
+| Audio track numbers | Confirm tracks for "Saldo Tidak Cukup" and "Gunakan Kartu Sebelumnya" | play_audio payload | **Resolved** — 12 audio assets documented in Week 2 |
+| Controller type per gate | Document 1-relay vs 2-relay per gate in config | Protocol layer only, no business logic change | **Resolved** — `relay_mode` enum (SINGLE/DUAL) added in Week 2 |
+| ENET controllers | Still deployed alongside Compass? | Full ENET daemon needed if yes | **Resolved** — ENET protocol + transport implemented in Week 4.5 |
+| Serial controllers | RS-232 controllers still in use? | Serial daemon needed if yes | **Resolved** — Serial protocol + transport implemented in Week 4.5 |
+| Network printers | Some gates use network printers instead of controller passthrough? | Print worker needs network mode | **Resolved** — All 3 print modes (passthrough/network/serial) implemented in Week 4.5 |
 
 ---
 
@@ -489,3 +492,9 @@ structlog>=24.0.0
 | JWT library | PyJWT[crypto] — not python-jose |
 | Docker networking | Bridge (not host) for daemons |
 | Nginx WS timeout | 3600s |
+| Controller protocols | Compass, ENET, Serial — all supported, configurable per gate |
+| UHF readers | Both integrated (Wiegand X channel in gate-out daemon) and standalone daemon |
+| Printing | Controller passthrough + Network (python-escpos) + Serial — configurable per gate |
+| Protocol abstraction | `protocols.factory.create_transport()` — daemons don't know which protocol |
+| Serial audio | External MP3 playback (not controller-integrated) — daemon layer |
+| ENET RFID prefix | `W1` parsed and normalized to same decimal card number as Compass `W` |
