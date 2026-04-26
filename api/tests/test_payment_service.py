@@ -230,3 +230,88 @@ class TestProcessEmoneyResult:
         )
         assert result["success"] is False
         assert result["status"] == "INSUFFICIENT_BALANCE"
+
+    @patch("api.app.services.payment.publish_command", new_callable=AsyncMock)
+    async def test_lost_contact_intermediate(self, mock_publish, db_session: AsyncSession, active_emoney_transaction: ParkingTransaction):
+        """LOST_CONTACT should keep transaction in PENDING and publish display/audio."""
+        result = await process_emoney_result(
+            db_session,
+            gate_id="gate-out-1",
+            gate_out_id=None,
+            card_number="EMONEY01",
+            status=DeductStatus.LOST_CONTACT,
+            deduct_amount=0,
+            balance_before=50000,
+            balance_after=50000,
+            transaction_counter=0,
+            raw_response_hex="EF0105...",
+        )
+        assert result["success"] is False
+        assert result["is_intermediate"] is True
+        assert result["status"] == "LOST_CONTACT"
+        # Transaction should NOT be reset (keep current payment method for retry)
+        assert result["transaction"].payment_method == "EMONEY"
+        # Should publish display_text + play_audio for retry prompt
+        assert mock_publish.call_count == 2
+
+    @patch("api.app.services.payment.publish_command", new_callable=AsyncMock)
+    async def test_correction_verified(self, mock_publish, db_session: AsyncSession, active_emoney_transaction: ParkingTransaction):
+        """CORRECTION_VERIFIED should be treated as success."""
+        result = await process_emoney_result(
+            db_session,
+            gate_id="gate-out-1",
+            gate_out_id=None,
+            card_number="EMONEY01",
+            status=DeductStatus.CORRECTION_VERIFIED,
+            deduct_amount=5000,
+            balance_before=50000,
+            balance_after=45000,
+            transaction_counter=43,
+            raw_response_hex="EF0105...",
+        )
+        assert result["success"] is True
+        assert result["transaction"].status == "COMPLETED"
+        assert result["transaction"].payment_method == "EMONEY"
+        # Should publish open_gate + print_receipt + play_audio
+        assert mock_publish.call_count == 3
+
+    @patch("api.app.services.payment.publish_command", new_callable=AsyncMock)
+    async def test_correction_failed(self, mock_publish, db_session: AsyncSession, active_emoney_transaction: ParkingTransaction):
+        """CORRECTION_FAILED should reset transaction for other payment methods."""
+        result = await process_emoney_result(
+            db_session,
+            gate_id="gate-out-1",
+            gate_out_id=None,
+            card_number="EMONEY01",
+            status=DeductStatus.CORRECTION_FAILED,
+            deduct_amount=0,
+            balance_before=50000,
+            balance_after=50000,
+            transaction_counter=0,
+            raw_response_hex="EF0106...",
+        )
+        assert result["success"] is False
+        assert result["transaction"].payment_method is None
+        assert result["transaction"].fee is None
+        # Should not publish any commands
+        assert mock_publish.call_count == 0
+
+    @patch("api.app.services.payment.publish_command", new_callable=AsyncMock)
+    async def test_timeout(self, mock_publish, db_session: AsyncSession, active_emoney_transaction: ParkingTransaction):
+        """TIMEOUT should reset transaction for other payment methods."""
+        result = await process_emoney_result(
+            db_session,
+            gate_id="gate-out-1",
+            gate_out_id=None,
+            card_number="EMONEY01",
+            status=DeductStatus.TIMEOUT,
+            deduct_amount=0,
+            balance_before=50000,
+            balance_after=50000,
+            transaction_counter=0,
+            raw_response_hex="",
+        )
+        assert result["success"] is False
+        assert result["transaction"].payment_method is None
+        # Should not publish any commands
+        assert mock_publish.call_count == 0

@@ -5,6 +5,7 @@ Import all models here so Alembic autogenerate can discover them.
 
 from api.app.models.abandoned_vehicle_log import AbandonedVehicleLog
 from api.app.models.area_parkir import AreaParkir
+from api.app.models.audit_log import AuditLog
 from api.app.models.emoney_reader import EmoneyReader
 from api.app.models.emoney_settlement import EmoneySettlement
 from api.app.models.emoney_transaction import EmoneyTransaction
@@ -27,6 +28,7 @@ from api.app.models.vehicle_type import VehicleType
 __all__ = [
     "AbandonedVehicleLog",
     "AreaParkir",
+    "AuditLog",
     "EmoneyReader",
     "EmoneySettlement",
     "EmoneyTransaction",

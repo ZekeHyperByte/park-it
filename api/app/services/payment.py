@@ -21,6 +21,7 @@ from api.app.services.transaction import (
 )
 from shared.events import (
     DeductStatus,
+    DisplayTextCommand,
     OpenGateCommand,
     PlayAudioCommand,
     PrintReceiptCommand,
@@ -325,7 +326,15 @@ async def process_emoney_result(
     await db.flush()
     await db.refresh(emoney_tx)
 
-    success = status == DeductStatus.SUCCESS
+    # Determine outcome based on status
+    success = status in (DeductStatus.SUCCESS, DeductStatus.CORRECTION_VERIFIED)
+    is_intermediate = status == DeductStatus.LOST_CONTACT
+    is_terminal_failure = status in (
+        DeductStatus.FAILED,
+        DeductStatus.WRONG_CARD,
+        DeductStatus.INSUFFICIENT_BALANCE,
+        DeductStatus.CORRECTION_FAILED,
+    )
 
     if success:
         shift = await get_current_shift(db)
@@ -368,8 +377,30 @@ async def process_emoney_result(
             emoney_transaction_id=emoney_tx.id,
             fee=deduct_amount,
             gate_id=gate_id,
+            status=status.value,
         )
-    else:
+
+    elif is_intermediate:
+        # LOST_CONTACT: keep transaction in PENDING, prompt user to retry same card
+        # Do NOT reset payment_method — the daemon will auto-retry
+        logger.warning(
+            "emoney_lost_contact",
+            transaction_id=tx.id,
+            emoney_transaction_id=emoney_tx.id,
+            gate_id=gate_id,
+        )
+
+        # Notify operator and driver
+        await publish_command(
+            DisplayTextCommand(
+                gate_id=gate_id,
+                line1="Proses Koreksi",
+                line2="Tempel Kartu Lagi",
+            )
+        )
+        await publish_command(PlayAudioCommand(gate_id=gate_id, track=7))
+
+    elif is_terminal_failure:
         # Reset payment method so other methods can be tried
         tx.payment_method = None
         tx.fee = None
@@ -383,9 +414,24 @@ async def process_emoney_result(
             gate_id=gate_id,
         )
 
+    elif status == DeductStatus.TIMEOUT:
+        # TIMEOUT: daemon should have run GetLastTransaction internally
+        # If daemon still sends TIMEOUT, treat as terminal failure
+        tx.payment_method = None
+        tx.fee = None
+        await db.flush()
+
+        logger.warning(
+            "emoney_payment_timeout",
+            transaction_id=tx.id,
+            emoney_transaction_id=emoney_tx.id,
+            gate_id=gate_id,
+        )
+
     return {
         "transaction": tx,
         "emoney_transaction_id": emoney_tx.id,
         "success": success,
         "status": status.value,
+        "is_intermediate": is_intermediate,
     }

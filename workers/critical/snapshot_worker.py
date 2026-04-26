@@ -1,6 +1,5 @@
 """Critical snapshot worker job."""
 
-import os
 from datetime import datetime
 from pathlib import Path
 
@@ -22,11 +21,13 @@ async def take_snapshot(
     transaction_id: int | None = None,
     snapshot_type: str = "entry",
 ) -> dict:
-    """Download camera snapshot and save locally.
+    """Download or capture camera snapshot and save locally.
+
+    Supports both HTTP snapshot URLs and RTSP streams.
 
     Args:
         gate_id: Gate identifier
-        camera_url: HTTP URL to camera snapshot (e.g. http://cam1/snapshot.jpg)
+        camera_url: HTTP URL or RTSP URL (e.g. http://cam1/snapshot.jpg, rtsp://cam1/stream)
         transaction_id: Optional parking transaction ID to link snapshot
         snapshot_type: 'entry' or 'exit'
     """
@@ -38,14 +39,16 @@ async def take_snapshot(
         snapshot_type=snapshot_type,
     )
 
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(camera_url)
-            response.raise_for_status()
-            image_data = response.content
-    except Exception as e:
-        logger.error("snapshot_download_failed", error=str(e), camera_url=camera_url)
-        return {"status": "error", "message": f"Download failed: {e}"}
+    # Determine capture method based on URL scheme
+    is_rtsp = camera_url.lower().startswith("rtsp://")
+
+    if is_rtsp:
+        image_data = await _capture_rtsp(camera_url)
+    else:
+        image_data = await _download_http(camera_url)
+
+    if image_data is None:
+        return {"status": "error", "message": "Snapshot capture failed"}
 
     # Generate filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -61,10 +64,32 @@ async def take_snapshot(
 
     logger.info("snapshot_saved", filepath=str(filepath), size=len(image_data))
 
-    # TODO: Create Snapshot database record in Week 3 when DB session is available in workers
     return {
         "status": "success",
         "filepath": str(filepath),
         "filename": filename,
         "size": len(image_data),
     }
+
+
+async def _download_http(camera_url: str) -> bytes | None:
+    """Download snapshot via HTTP."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(camera_url)
+            response.raise_for_status()
+            return response.content
+    except Exception as e:
+        logger.error("snapshot_download_failed", error=str(e), camera_url=camera_url)
+        return None
+
+
+async def _capture_rtsp(camera_url: str) -> bytes | None:
+    """Capture frame from RTSP stream."""
+    from workers.critical.rtsp_snapshot import capture_rtsp_frame_to_bytes
+
+    try:
+        return await capture_rtsp_frame_to_bytes(camera_url)
+    except Exception as e:
+        logger.error("rtsp_capture_failed", error=str(e), camera_url=camera_url)
+        return None

@@ -28,8 +28,12 @@ async def client(db_session: AsyncSession):
 
     app.dependency_overrides[require_admin] = mock_require_admin
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        yield ac
+    # Patch Redis cache to avoid cross-test cache pollution
+    from unittest.mock import patch
+    with patch("api.app.routes.vehicle_types.get_cached_vehicle_types", return_value=None), \
+         patch("api.app.routes.vehicle_types.invalidate_vehicle_types"):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            yield ac
 
     app.dependency_overrides.clear()
 

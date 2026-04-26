@@ -59,6 +59,11 @@ def create_app() -> FastAPI:
     async def metrics() -> Response:
         return get_metrics_response()
 
+    # Rate limiting
+    from api.app.middleware.rate_limit import RateLimitMiddleware
+
+    app.add_middleware(RateLimitMiddleware)
+
     # CORS
     app.add_middleware(
         CORSMiddleware,
@@ -72,6 +77,7 @@ def create_app() -> FastAPI:
     from api.app.routes import (
         abandoned_vehicles,
         areas,
+        audit_logs,
         auth,
         emoney_readers,
         gates,
@@ -107,6 +113,7 @@ def create_app() -> FastAPI:
     app.include_router(abandoned_vehicles.router, prefix="/api")
     app.include_router(reports.router, prefix="/api")
     app.include_router(settlements.router, prefix="/api")
+    app.include_router(audit_logs.router, prefix="/api")
 
     # WebSocket
     app.include_router(ws_handlers.router)
