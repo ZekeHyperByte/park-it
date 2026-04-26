@@ -82,6 +82,10 @@ class GateInDaemon(BaseDaemon):
         await self._connect_controller()
         await super().run()
 
+    async def _on_started(self) -> None:
+        """Start controller polling after base sets _running=True."""
+        await self._start_polling()
+
     async def stop(self) -> None:
         """Graceful stop with controller disconnect."""
         await super().stop()
@@ -106,8 +110,9 @@ class GateInDaemon(BaseDaemon):
         try:
             self.controller = CompassTransport(host, port)
             self.controller.connect(timeout=5.0)
-            # Create PASSTI passthrough transport sharing the socket
-            self.passti_transport = ControllerPassthroughTransport(self.controller._sock)
+            # Create PASSTI passthrough transport only when e-money mode is enabled
+            if self.gate_mode == GateMode.EMONEY.value:
+                self.passti_transport = ControllerPassthroughTransport(self.controller._sock)
             logger.info("controller_connected", gate_id=self.gate_id, host=host, port=port)
         except Exception as e:
             logger.error("controller_connect_failed", gate_id=self.gate_id, error=str(e))

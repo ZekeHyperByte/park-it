@@ -83,11 +83,15 @@ class BaseDaemon(ABC):
             consumer_group=self._consumer_group,
         )
 
+        # Allow subclasses to start additional tasks before base tasks
+        self._tasks = []
+        await self._on_started()
+
         # Start concurrent tasks
-        self._tasks = [
+        self._tasks.extend([
             asyncio.create_task(self._consume_commands(), name="consume"),
             asyncio.create_task(self._heartbeat(), name="heartbeat"),
-        ]
+        ])
 
         # Setup signal handlers for graceful shutdown
         loop = asyncio.get_running_loop()
@@ -127,6 +131,14 @@ class BaseDaemon(ABC):
         """Programmatic stop (for testing)."""
         self._running = False
         self._shutdown_event.set()
+
+    async def _on_started(self) -> None:
+        """Hook called after _running is set to True but before main tasks start.
+
+        Subclasses can override this to start additional background tasks
+        (e.g., controller polling) that will be cancelled alongside base tasks.
+        """
+        pass
 
     # ------------------------------------------------------------------
     # Redis Streams — Command Consumption
