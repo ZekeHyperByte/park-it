@@ -1,0 +1,270 @@
+FORMAT FILE SETTLEMENT MULTIBANK
+I.
+
+File Settlement Structure
+
+File name : 2018010310470002034567890ABCDE8765432101101.txt
+
+➢ Settlement File Name
+No Name
+1
+Settlement date
+
+2
+3
+4
+5
+
+MID
+TID
+Version
+Batch No
+
+5
+
+Extensions file
+
+Length Description
+14
+yyyyMMddHHmmss
+
+16
+8
+2
+3
+
+Merchant ID (Left Pad “0”)
+Terminal ID
+01
+Running no for every
+settlement file created
+(1 file contain 1 batch no
+for 1 terminal)
+.txt
+
+Remark
+yyyy = settlement year
+MM = settlement month (01-12)
+dd = settlement day (01-31)
+HH = settlement 24Hour (00-23)
+mm = settlement minute
+ss = settlement second
+
+Batch no should be reset to 1 every
+day
+
+Structure data file settlement :
+0020000000002
+=> Header Format
+0102034567890ABCDE87654321101220171215505710120620170005000000010001D0CC00000001CD
+DDF8D374178432ECDC02FA9E616476DC7D3341B24FCDA12352546FF45B5ADA79F2387FB6800990EBD
+AD1EDBCDD3CBA5998E7A746048523759750178AE62DA5355C9CB17AF5F34DFF35865FAF960AF4194C
+5F2B622CCABC9BB09538B076B7F56344ACC65BC7B9B4
+=> format data transaction
+0502034567890ABCDE87654321101220171215505710120620170005000000010001D0CC00000001CD
+DDF8D374178432ECDC02FA9E616476DC7D3341B24FCDA12352546FF45B5ADA79F2387FB6800990EBD
+AD1EDBCDD3CBA5998E7A746048523759750178AE62DA5355C9CB17AF5F34DFF35865FAF960AF4194C
+5F2B622CCABC9BB09538B076B7F56344ACC65BC7B9B4
+=> format data transaction
+
+PT SoftOrb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No. 8 Cengkareng Timur – Jakarta Barat 11730
+Ph. (+62-21) 2902 0549, 2902 0554, 5435 0146 Fax (+62 -21) 5435 0246
+w w w . s o f t o r b . c o .id
+This is confidential document, not to be duplicated or distributed withour prior written consent from SoftOrb Technology Indonesia
+
+1
+
+➢ Settlement Header Format
+No Name
+1
+Trx Count
+2
+3
+
+Trx Amount
+Line Feed
+
+Length Description
+3
+Total Transaction
+10
+
+Remark
+Max 999 (>999 create new file
+settlement with increasing batch No)
+
+Total Amount Transaction
+New line (LF)
+
+➢ Settlement data Transaction
+No Name
+1
+Transaction Log
+
+Length
+
+Description
+Response Data transaction
+from reader
+
+2
+
+Line Feed
+
+II.
+
+Response File Settlement Structure
+
+Remark
+Response data from command
+deduct (start from cardtype until
+CardLog Transaction)
+Please refer to document “Command
+Protocol Reader Parkir” in command
+deduct section
+Note : Cardtype 09 (QR Payment)
+doesn’t need to settled
+
+New line (LF)
+
+File Name : 2018010310470002034567890ABCDE8765432101101.OK
+
+➢ Response File Name
+No Name
+1
+Settlement date
+
+2
+3
+4
+5
+
+MID
+TID
+Version
+Batch No
+
+6
+
+Extension File
+
+Length Description
+14
+yyyyMMddHHmmss
+
+16
+8
+2
+3
+
+Merchant ID (Left Pad “0”)
+Terminal ID
+01
+Running no for every
+settlement file created
+(1 file contain 1 batch no
+for 1 terminal)
+.OK (contain data valid)
+.NOK (contain data invalid)
+
+Remark
+yyyy = settlement year
+MM = settlement month (01-12)
+dd = settlement day (01-31)
+HH = settlement 24Hour (00-23)
+mm = settlement minute
+ss = settlement second
+
+Batch no should be reset to 1 every
+day
+
+PT SoftOrb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No. 8 Cengkareng Timur – Jakarta Barat 11730
+Ph. (+62-21) 2902 0549, 2902 0554, 5435 0146 Fax (+62 -21) 5435 0246
+w w w . s o f t o r b . c o .id
+This is confidential document, not to be duplicated or distributed withour prior written consent from SoftOrb Technology Indonesia
+
+2
+
+Structure Response File settlement
+01002
+=> Response Transaction Header
+0102034567890ABCDE87654321101220171215505710120620170005000000010001D0CC00000001CD
+DDF8D374178432ECDC02FA9E616476DC7D3341B24FCDA12352546FF45B5ADA79F2387FB6800990EBD
+AD1EDBCDD3CBA5998E7A746048523759750178AE62DA5355C9CB17AF5F34DFF35865FAF960AF4194C
+5F2B622CCABC9BB09538B076B7F56344ACC65BC7B9B400
+=> Response Transaction Data
+0502034567890ABCDE87654321101220171215505710120620170005000000010001D0CC00000001CD
+DDF8D374178432ECDC02FA9E616476DC7D3341B24FCDA12352546FF45B5ADA79F2387FB6800990EBD
+AD1EDBCDD3CBA5998E7A746048523759750178AE62DA5355C9CB17AF5F34DFF35865FAF960AF4194C
+5F2B622CCABC9BB09538B076B7F56344ACC65BC7B9B400
+=> Response Transaction Data
+
+➢ Response Transaction Header
+No Name
+1
+Trx Type
+2
+Trx Count
+3
+
+Line Feed
+
+Length Description
+2
+Transaction Type
+3
+Total data transaction
+settlement exclude header
+New line (LF)
+
+Remark
+01 = Debit/Purchase
+
+➢ Response Transaction Data
+No Name
+1
+Settlement
+transaction
+2
+Status
+
+3
+
+Line Feed
+
+Length Description
+n
+Settlement Data
+Transaction
+2
+Status
+
+Remark
+
+00 : Accepted
+01 : invalid Format
+02 : Duplicate Data
+03 : Transaction count not match with
+data transaction
+04 : Transaction amount not match
+with data transaction
+05 : Invalid Merchant Terminal
+07 : Data Corrupt
+08 : Invalid Device SN
+09 : Invalid Bank Log
+10 : Invalid Filename Format
+11 : Invalid Header Format
+
+New line (LF)
+
+PT SoftOrb Technology Indonesia
+Komplek Mutiara Taman Palem Blok A11 No. 8 Cengkareng Timur – Jakarta Barat 11730
+Ph. (+62-21) 2902 0549, 2902 0554, 5435 0146 Fax (+62 -21) 5435 0246
+w w w . s o f t o r b . c o .id
+This is confidential document, not to be duplicated or distributed withour prior written consent from SoftOrb Technology Indonesia
+
+3
+
+
