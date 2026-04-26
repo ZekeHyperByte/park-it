@@ -76,6 +76,35 @@ class Settings(BaseSettings):
     # Telegram
     telegram_bot_token: str | None = Field(default=None, alias="TELEGRAM_BOT_TOKEN")
 
+    # ── ANPR (Automatic Number Plate Recognition) ─────────────────────
+    anpr_enabled: bool = Field(default=False, alias="ANPR_ENABLED")
+    anpr_model: str = Field(default="paddleocr", alias="ANPR_MODEL")
+    anpr_confidence_threshold: float = Field(
+        default=0.8, alias="ANPR_CONFIDENCE_THRESHOLD"
+    )
+
+    # ── Vehicle Detection ─────────────────────────────────────────────
+    vehicle_detection_enabled: bool = Field(
+        default=False, alias="VEHICLE_DETECTION_ENABLED"
+    )
+    vehicle_detection_model: str = Field(
+        default="yolov8n", alias="VEHICLE_DETECTION_MODEL"
+    )
+    vehicle_detection_confidence_threshold: float = Field(
+        default=0.7, alias="VEHICLE_DETECTION_CONFIDENCE_THRESHOLD"
+    )
+
+    # ── Printer Paper Counter ─────────────────────────────────────────
+    printer_paper_counter_enabled: bool = Field(
+        default=False, alias="PRINTER_PAPER_COUNTER_ENABLED"
+    )
+    printer_paper_warning_threshold: int = Field(
+        default=50, alias="PRINTER_PAPER_WARNING_THRESHOLD"
+    )
+    printer_paper_critical_threshold: int = Field(
+        default=10, alias="PRINTER_PAPER_CRITICAL_THRESHOLD"
+    )
+
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_format: str = Field(default="json", alias="LOG_FORMAT")

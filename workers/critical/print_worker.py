@@ -12,9 +12,94 @@ from typing import Any
 
 from arq import Retry
 
+from shared.config import get_settings
 from shared.logging import get_logger
 
 logger = get_logger("print_worker")
+
+
+# ---------------------------------------------------------------------------
+# Paper Counter Helpers
+# ---------------------------------------------------------------------------
+
+async def _check_paper_available(gate_id: str) -> tuple[bool, int | None]:
+    """Check if paper is available for the given gate.
+
+    Returns:
+        (can_print, printer_id) — can_print is False when paper counter
+        is enabled and remaining count is 0.
+    """
+    settings = get_settings()
+    if not settings.printer_paper_counter_enabled:
+        return True, None
+
+    try:
+        from sqlalchemy import select
+        from api.app.database import async_session_factory
+        from api.app.models.printer import Printer
+
+        async with async_session_factory() as db:
+            result = await db.execute(
+                select(Printer).where(
+                    Printer.gate_id == gate_id,
+                    Printer.is_active == True,  # noqa: E712
+                )
+            )
+            printer = result.scalar_one_or_none()
+            if printer is None:
+                logger.warning("no_printer_found", gate_id=gate_id)
+                return True, None  # No printer record = no tracking
+
+            if printer.paper_remaining <= 0:
+                logger.warning(
+                    "paper_empty_skip_print",
+                    gate_id=gate_id,
+                    printer_id=printer.id,
+                )
+                return False, printer.id
+
+            return True, printer.id
+    except Exception as e:
+        logger.error("paper_check_failed", gate_id=gate_id, error=str(e))
+        return True, None  # Fail open: allow print if check fails
+
+
+async def _decrement_paper_counter(printer_id: int) -> None:
+    """Decrement paper counter after a successful print."""
+    settings = get_settings()
+    if not settings.printer_paper_counter_enabled or printer_id is None:
+        return
+
+    try:
+        from api.app.database import async_session_factory
+        from api.app.models.printer import Printer
+
+        async with async_session_factory() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(
+                select(Printer).where(Printer.id == printer_id)
+            )
+            printer = result.scalar_one_or_none()
+            if printer and printer.paper_remaining > 0:
+                printer.paper_remaining -= 1
+                await db.commit()
+
+                # Check thresholds
+                if printer.paper_remaining <= settings.printer_paper_critical_threshold:
+                    logger.warning(
+                        "paper_critical",
+                        printer_id=printer_id,
+                        remaining=printer.paper_remaining,
+                    )
+                elif printer.paper_remaining <= settings.printer_paper_warning_threshold:
+                    logger.warning(
+                        "paper_warning",
+                        printer_id=printer_id,
+                        remaining=printer.paper_remaining,
+                    )
+    except Exception as e:
+        logger.error("paper_decrement_failed", printer_id=printer_id, error=str(e))
 
 
 def _build_escpos_ticket(
@@ -104,6 +189,15 @@ async def print_ticket(
     print_config = print_config or {}
     mode = print_config.get("mode", "CONTROLLER_PASSTHROUGH")
 
+    # Paper counter check
+    can_print, printer_id = await _check_paper_available(gate_id)
+    if not can_print:
+        return {
+            "status": "skipped",
+            "message": "Paper empty — display barcode on LED instead",
+            "barcode": barcode,
+        }
+
     logger.info(
         "print_ticket_job",
         gate_id=gate_id,
@@ -129,6 +223,9 @@ async def print_ticket(
         else:
             raise ValueError(f"Unknown print mode: {mode}")
 
+        # Decrement paper counter on success
+        await _decrement_paper_counter(printer_id)
+
         return {"status": "success", "message": "Ticket printed"}
     except Exception as e:
         logger.error("print_ticket_failed", gate_id=gate_id, error=str(e))
@@ -153,6 +250,14 @@ async def print_receipt(
     print_config = print_config or {}
     mode = print_config.get("mode", "CONTROLLER_PASSTHROUGH")
 
+    # Paper counter check
+    can_print, printer_id = await _check_paper_available(gate_id)
+    if not can_print:
+        return {
+            "status": "skipped",
+            "message": "Paper empty — receipt not printed",
+        }
+
     logger.info(
         "print_receipt_job",
         gate_id=gate_id,
@@ -174,6 +279,9 @@ async def print_receipt(
             _print_via_serial(escpos_data, print_config)
         else:
             raise ValueError(f"Unknown print mode: {mode}")
+
+        # Decrement paper counter on success
+        await _decrement_paper_counter(printer_id)
 
         return {"status": "success", "message": "Receipt printed"}
     except Exception as e:

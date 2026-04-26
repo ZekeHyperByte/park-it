@@ -18,6 +18,7 @@ from api.app.models.member_group import MemberGroup
 from api.app.models.member_renewal import MemberRenewal
 from api.app.models.operator_alert import OperatorAlert
 from api.app.models.parking_transaction import ParkingTransaction
+from api.app.models.printer import Printer
 from api.app.models.setting import Setting
 from api.app.models.shift import Shift
 from api.app.models.shift_emoney_snapshot import ShiftEmoneySnapshot
@@ -41,6 +42,7 @@ __all__ = [
     "MemberRenewal",
     "OperatorAlert",
     "ParkingTransaction",
+    "Printer",
     "Setting",
     "Shift",
     "ShiftEmoneySnapshot",

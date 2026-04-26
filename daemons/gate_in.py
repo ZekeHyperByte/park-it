@@ -257,7 +257,12 @@ class GateInDaemon(BaseDaemon):
             )
 
     async def _on_ticket_button_pressed(self) -> None:
-        """Ticket button pressed in CASH mode."""
+        """Ticket button pressed in CASH mode.
+
+        IMPORTANT: Cash entry uses PRINT-FIRST flow.
+        The ticket IS the transaction identifier for cash customers.
+        Gate only opens after ticket is printed (or fallback to LED barcode).
+        """
         await self._transition(STATE_PROCESSING)
         await self.publish_event(
             TicketButtonPressedEvent(
@@ -265,7 +270,11 @@ class GateInDaemon(BaseDaemon):
                 gate_id=self.gate_id,
             )
         )
-        # FastAPI will create transaction and send print_ticket + open_gate commands
+        # FastAPI will create transaction and send print_ticket_then_open command
+        # The print_ticket_then_open command handler will:
+        #   1. Print the ticket (blocking)
+        #   2. If print OK → open gate
+        #   3. If print FAIL → display barcode on LED → alert operator → open gate
 
     async def _on_rfid_card_read(self, card_number: str, channel: str) -> None:
         """RFID/UHF card read."""
@@ -396,6 +405,11 @@ class GateInDaemon(BaseDaemon):
                 gate_name = command_data.get("gate_name", self.config.get("name", ""))
                 await self._cmd_print_ticket(barcode, gate_name)
 
+            elif command_type == "print_ticket_then_open":
+                barcode = command_data.get("barcode", "")
+                gate_name = command_data.get("gate_name", self.config.get("name", ""))
+                await self._cmd_print_ticket_then_open(barcode, gate_name)
+
             elif command_type == "check_balance":
                 threshold = int(command_data.get("minimum_threshold", 10000))
                 await self._cmd_check_balance(threshold)
@@ -442,11 +456,106 @@ class GateInDaemon(BaseDaemon):
             await self._cmd_play_audio(11)
 
     async def _cmd_print_ticket(self, barcode: str, gate_name: str) -> None:
-        """Print entry ticket."""
-        # Ticket printing is handled by ARQ critical worker
-        # The daemon just confirms it received the command
-        # In a real implementation, this might trigger a local printer via escpos
+        """Print entry ticket via ARQ critical worker.
+
+        For cash entry, this is called as print_ticket_then_open which
+        enforces print-first ordering. See _cmd_print_ticket_then_open.
+        """
         logger.info("print_ticket_commanded", gate_id=self.gate_id, barcode=barcode)
+
+        try:
+            from shared.redis import get_arq_redis
+            arq_redis = await get_arq_redis()
+            await arq_redis.enqueue_job(
+                "print_ticket",
+                gate_id=self.gate_id,
+                barcode=barcode,
+                gate_name=gate_name,
+            )
+        except Exception as e:
+            logger.error("print_ticket_enqueue_failed", gate_id=self.gate_id, error=str(e))
+
+    async def _cmd_print_ticket_then_open(self, barcode: str, gate_name: str) -> None:
+        """Print-first flow for CASH entry.
+
+        1. Attempt to print the ticket (blocking)
+        2. If print succeeds → open gate
+        3. If print fails → display barcode on LED → alert operator → open gate
+
+        The gate ALWAYS opens eventually — we never trap a vehicle.
+        But for cash, we try to print first because the ticket is the identifier.
+        """
+        logger.info(
+            "print_ticket_then_open",
+            gate_id=self.gate_id,
+            barcode=barcode,
+        )
+
+        print_success = False
+
+        try:
+            # Attempt synchronous print via controller passthrough
+            from protocols.compass.protocol import cmd_pr4
+
+            timestamp_str = ""
+            try:
+                from datetime import datetime
+                timestamp_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            except Exception:
+                pass
+
+            # Build ESC/POS ticket data inline (same as print_worker)
+            escpos_lines = [
+                b"\x1b\x61\x01",  # Center align
+                b"TIKET PARKIR\n",
+                b"\x1b\x61\x00",  # Left align
+                f"GATE    : {gate_name}\n".encode(),
+                f"TANGGAL : {timestamp_str}\n".encode(),
+                b"\x1b\x61\x01",  # Center align
+                b"\x1d\x68\x64",  # Barcode height 100
+                b"\x1d\x48\x02",  # Text below barcode
+                b"\x1d\x6b\x45",  # CODE39
+                bytes([len(barcode)]) + barcode.encode() + b"\x00",
+                b"\n\x1d\x56\x41",  # Full cut
+            ]
+            escpos_data = b"".join(escpos_lines)
+
+            # Send to printer via controller
+            await self._send_controller_command(cmd_pr4(escpos_data))
+
+            # Wait briefly for printer to process
+            await asyncio.sleep(1.5)
+            print_success = True
+            logger.info("cash_ticket_printed", gate_id=self.gate_id, barcode=barcode)
+
+        except Exception as e:
+            logger.error(
+                "cash_ticket_print_failed",
+                gate_id=self.gate_id,
+                barcode=barcode,
+                error=str(e),
+            )
+
+        if not print_success:
+            # Fallback: display barcode on LED
+            await self._send_controller_command(
+                cmd_ds("CATAT NOMOR:", barcode)
+            )
+            # Alert operator
+            await self.publish_event(
+                BaseEvent(
+                    event_type="print_failed_alert",
+                    gate_id=self.gate_id,
+                )
+            )
+            # Hold for 3 seconds so driver can see/photograph barcode
+            await asyncio.sleep(3)
+        else:
+            # Play "ambil tiket" audio
+            await self._cmd_play_audio(2)
+
+        # Gate ALWAYS opens (never trap a vehicle)
+        await self._cmd_open_gate()
 
     async def _cmd_check_balance(self, minimum_threshold: int) -> None:
         """Check PASSTI balance and transition based on result."""

@@ -91,6 +91,7 @@ def create_app() -> FastAPI:
         member_groups,
         members,
         payments,
+        printers,
         reports,
         settlements,
         settings as settings_routes,
@@ -119,6 +120,7 @@ def create_app() -> FastAPI:
     app.include_router(reports.router, prefix="/api")
     app.include_router(settlements.router, prefix="/api")
     app.include_router(audit_logs.router, prefix="/api")
+    app.include_router(printers.router, prefix="/api")
 
     # WebSocket
     app.include_router(ws_handlers.router)
