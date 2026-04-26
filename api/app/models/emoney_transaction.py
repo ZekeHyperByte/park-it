@@ -26,6 +26,11 @@ class EmoneyTransaction(Base, IntPKMixin, TimestampMixin):
         BigInteger, ForeignKey("parking_transactions.id"), nullable=True, index=True
     )
 
+    # Link to e-money reader (for settlement grouping)
+    emoney_reader_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("emoney_readers.id"), nullable=True, index=True
+    )
+
     # Card info
     card_number: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     card_type: Mapped[str | None] = mapped_column(String(50), nullable=True)

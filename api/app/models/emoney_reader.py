@@ -42,5 +42,11 @@ class EmoneyReader(Base, IntPKMixin, TimestampMixin):
     # Firmware / version
     firmware_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    # SFTP settlement upload config
+    sftp_host: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sftp_username: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sftp_key_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sftp_remote_path: Mapped[str | None] = mapped_column(String(255), nullable=True, default="/")
+
     def __repr__(self) -> str:
         return f"<EmoneyReader(id={self.id}, name={self.name}, port={self.serial_port})>"

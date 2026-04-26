@@ -1,23 +1,150 @@
 """Background settlement worker job."""
 
-from datetime import datetime, timedelta
+import hashlib
+import os
+from datetime import date, datetime, timezone
+
+from sqlalchemy import select
 
 from shared.logging import get_logger
+from workers.background.settlement_file import generate_filename, build_settlement_content
 
 logger = get_logger("settlement_worker")
 
+# Settlement files storage path
+SETTLEMENT_DIR = os.environ.get("SETTLEMENT_DIR", "/var/lib/parking/settlements")
+
 
 async def generate_settlement_file(ctx) -> dict:
-    """Generate daily settlement file from successful e-money transactions.
+    """Generate daily settlement files from successful e-money transactions.
 
-    Stub implementation — full logic in Week 5.
+    Groups unsettled transactions by emoney_reader_id, generates one file
+    per reader (MID/TID), stores file locally, creates EmoneySettlement record.
     """
     logger.info("generate_settlement_job_start")
 
-    # TODO: Query unsettled transactions from database
-    # TODO: Build settlement file per Format File Settlement Multibank v1.3 spec
-    # TODO: Upload via SFTP/API to acquirer
-    # TODO: Wait for response file (.OK or .NOK)
-    # TODO: Update transaction statuses
+    from api.database import AsyncSessionLocal
+    from api.app.models.emoney_transaction import EmoneyTransaction
+    from api.app.models.emoney_reader import EmoneyReader
+    from api.app.models.emoney_settlement import EmoneySettlement
 
-    return {"status": "success", "message": "Settlement file generated (stub)"}
+    os.makedirs(SETTLEMENT_DIR, exist_ok=True)
+
+    files_generated = 0
+    total_transactions = 0
+
+    async with AsyncSessionLocal() as db:
+        # Find all readers with unsettled SUCCESS transactions
+        reader_ids_result = await db.execute(
+            select(EmoneyTransaction.emoney_reader_id)
+            .where(
+                EmoneyTransaction.settlement_batch_id.is_(None),
+                EmoneyTransaction.status == "SUCCESS",
+                EmoneyTransaction.emoney_reader_id.isnot(None),
+            )
+            .distinct()
+        )
+        reader_ids = [r[0] for r in reader_ids_result.all()]
+
+        if not reader_ids:
+            logger.info("generate_settlement_no_transactions")
+            return {"status": "success", "files_generated": 0, "total_transactions": 0}
+
+        for reader_id in reader_ids:
+            # Get reader details
+            reader = await db.get(EmoneyReader, reader_id)
+            if not reader or not reader.mid or not reader.tid:
+                logger.warning("generate_settlement_skip_no_mid_tid", reader_id=reader_id)
+                continue
+
+            # Get unsettled transactions for this reader
+            tx_result = await db.execute(
+                select(EmoneyTransaction)
+                .where(
+                    EmoneyTransaction.settlement_batch_id.is_(None),
+                    EmoneyTransaction.status == "SUCCESS",
+                    EmoneyTransaction.emoney_reader_id == reader_id,
+                )
+                .order_by(EmoneyTransaction.created_at)
+            )
+            transactions = tx_result.scalars().all()
+
+            if not transactions:
+                continue
+
+            # Get next batch number from Redis (resets daily)
+            redis = ctx.get("redis")
+            batch_number = 1
+            if redis:
+                try:
+                    batch_key = f"settlement:batch:{reader_id}:{date.today().isoformat()}"
+                    current = await redis.get(batch_key)
+                    if current:
+                        batch_number = int(current) + 1
+                    await redis.set(batch_key, str(batch_number), ex=86400)
+                except Exception:
+                    pass
+
+            now = datetime.now(timezone.utc)
+            total_amount = sum(tx.amount_deducted for tx in transactions)
+
+            filename = generate_filename(
+                settlement_datetime=now,
+                mid=reader.mid,
+                tid=reader.tid,
+                batch_number=batch_number,
+            )
+
+            tx_dicts = [{"raw_response_hex": tx.raw_response_hex or ""} for tx in transactions]
+            content = build_settlement_content(tx_dicts, total_amount)
+
+            # Write file
+            file_path = os.path.join(SETTLEMENT_DIR, filename)
+            with open(file_path, "w", encoding="ascii") as f:
+                f.write(content)
+
+            # Compute hash
+            file_hash = hashlib.sha256(content.encode("ascii")).hexdigest()
+
+            # Create settlement record
+            settlement = EmoneySettlement(
+                filename=filename,
+                file_path=file_path,
+                batch_date=date.today(),
+                batch_number=batch_number,
+                total_transactions=len(transactions),
+                total_amount=total_amount,
+                status="GENERATED",
+                file_content_hash=file_hash,
+            )
+            db.add(settlement)
+            await db.flush()  # Get settlement.id
+
+            # Link transactions to settlement
+            for tx in transactions:
+                tx.settlement_batch_id = settlement.id
+
+            await db.commit()
+
+            files_generated += 1
+            total_transactions += len(transactions)
+
+            logger.info(
+                "generate_settlement_file_created",
+                filename=filename,
+                reader_id=reader_id,
+                transactions=len(transactions),
+                amount=total_amount,
+            )
+
+    logger.info(
+        "generate_settlement_job_complete",
+        files_generated=files_generated,
+        total_transactions=total_transactions,
+    )
+
+    return {
+        "status": "success",
+        "files_generated": files_generated,
+        "total_transactions": total_transactions,
+    }
