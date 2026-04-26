@@ -39,6 +39,23 @@
           :show-delete="false"
         />
       </el-tab-pane>
+
+      <!-- Settlement Status -->
+      <el-tab-pane label="Settlement" name="settlement">
+        <div class="mb-3">
+          <el-button type="primary" @click="triggerSettlement" :loading="triggering">
+            Generate & Upload
+          </el-button>
+        </div>
+        <DataTable
+          :data="settlements"
+          :columns="settlementColumns"
+          :loading="loadingSettlements"
+          :show-add="false"
+          :show-edit="false"
+          :show-delete="false"
+        />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -54,6 +71,19 @@ const activeTab = ref('unresolved')
 const loadingUnresolved = ref(false)
 const loadingActive = ref(false)
 const loadingAlerts = ref(false)
+const loadingSettlements = ref(false)
+const triggering = ref(false)
+const settlements = ref([])
+
+const settlementColumns = [
+  { prop: 'filename', label: 'Filename', width: 300 },
+  { prop: 'batch_date', label: 'Tanggal', width: 120 },
+  { prop: 'batch_number', label: 'Batch', width: 80 },
+  { prop: 'total_transactions', label: 'Transaksi', width: 100 },
+  { prop: 'total_amount', label: 'Jumlah (Rp)', width: 130, formatter: (v) => v?.toLocaleString('id-ID') },
+  { prop: 'status', label: 'Status', width: 120, type: 'enum' },
+  { prop: 'created_at', label: 'Dibuat', width: 160, formatter: (v) => v ? new Date(v).toLocaleString('id-ID') : '-' },
+]
 
 // Unresolved E-Money
 const unresolvedEmoney = ref([])
@@ -92,6 +122,7 @@ onMounted(() => {
   loadUnresolved()
   loadActive()
   loadAlerts()
+  loadSettlements()
 })
 
 async function loadUnresolved() {
@@ -154,6 +185,31 @@ async function loadAlerts() {
     ElMessage.error('Gagal memuat alert')
   } finally {
     loadingAlerts.value = false
+  }
+}
+
+async function loadSettlements() {
+  loadingSettlements.value = true
+  try {
+    const data = await fetchApi('/api/settlements?limit=50')
+    settlements.value = data || []
+  } catch (err) {
+    ElMessage.error('Gagal memuat settlement')
+  } finally {
+    loadingSettlements.value = false
+  }
+}
+
+async function triggerSettlement() {
+  triggering.value = true
+  try {
+    const result = await fetchApi('/api/settlements/trigger', { method: 'POST' })
+    ElMessage.success(`Settlement generated: ${result.files_generated} file(s), ${result.total_transactions} transaction(s)`)
+    await loadSettlements()
+  } catch (err) {
+    ElMessage.error('Gagal trigger settlement')
+  } finally {
+    triggering.value = false
   }
 }
 </script>
