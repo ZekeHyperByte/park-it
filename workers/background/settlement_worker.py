@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
 
 from sqlalchemy import select
@@ -15,11 +16,15 @@ logger = get_logger("settlement_worker")
 SETTLEMENT_DIR = os.environ.get("SETTLEMENT_DIR", "/var/lib/parking/settlements")
 
 
-async def generate_settlement_file(ctx) -> dict:
+async def generate_settlement_file(ctx, db=None) -> dict:
     """Generate daily settlement files from successful e-money transactions.
 
     Groups unsettled transactions by emoney_reader_id, generates one file
     per reader (MID/TID), stores file locally, creates EmoneySettlement record.
+
+    Args:
+        ctx: ARQ context dict (may contain redis client)
+        db: Optional async DB session for testing. If None, creates a new session.
     """
     logger.info("generate_settlement_job_start")
 
@@ -33,7 +38,15 @@ async def generate_settlement_file(ctx) -> dict:
     files_generated = 0
     total_transactions = 0
 
-    async with AsyncSessionLocal() as db:
+    @asynccontextmanager
+    async def _session():
+        if db is not None:
+            yield db
+        else:
+            async with AsyncSessionLocal() as session:
+                yield session
+
+    async with _session() as db:
         # Find all readers with unsettled SUCCESS transactions
         reader_ids_result = await db.execute(
             select(EmoneyTransaction.emoney_reader_id)
