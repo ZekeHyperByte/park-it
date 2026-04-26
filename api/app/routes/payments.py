@@ -24,6 +24,7 @@ from api.app.services.transaction import calculate_transaction_fee, find_active_
 from api.database import get_db
 from shared.events import DeductStatus
 from shared.logging import get_logger
+from api.app.middleware.metrics import payment_attempts_total, payment_success_total
 
 logger = get_logger("payment_routes")
 
@@ -44,6 +45,7 @@ async def cash_payment(
     user: dict = Depends(require_operator),
 ) -> PaymentResponse:
     """Process cash payment and open gate."""
+    payment_attempts_total.labels(method="cash").inc()
     try:
         result = await process_cash_payment(
             db,
@@ -54,6 +56,7 @@ async def cash_payment(
             paid_amount=payment.paid_amount,
             operator_id=_get_operator_id(user),
         )
+        payment_success_total.labels(method="cash").inc()
         return PaymentResponse(
             success=True,
             message="Payment successful",
@@ -78,6 +81,7 @@ async def rfid_payment(
     user: dict = Depends(require_operator),
 ) -> PaymentResponse:
     """Process RFID member payment and open gate."""
+    payment_attempts_total.labels(method="rfid").inc()
     try:
         result = await process_rfid_payment(
             db,
@@ -86,6 +90,7 @@ async def rfid_payment(
             card_number=payment.card_number,
             operator_id=_get_operator_id(user),
         )
+        payment_success_total.labels(method="rfid").inc()
         return PaymentResponse(
             success=True,
             message="RFID payment successful",
@@ -110,6 +115,7 @@ async def emoney_deduct(
     user: dict = Depends(require_operator),
 ) -> PaymentResponse:
     """Initiate e-money deduct. Daemon will publish result via Pub/Sub."""
+    payment_attempts_total.labels(method="emoney").inc()
     try:
         result = await process_emoney_deduct(
             db,
@@ -119,6 +125,7 @@ async def emoney_deduct(
             expected_transaction_counter=payment.expected_transaction_counter,
             operator_id=_get_operator_id(user),
         )
+        payment_success_total.labels(method="emoney").inc()
         return PaymentResponse(
             success=True,
             message="E-money deduct initiated",

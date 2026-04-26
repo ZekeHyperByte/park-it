@@ -2,7 +2,7 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from shared.config import get_settings
@@ -48,6 +48,16 @@ def create_app() -> FastAPI:
         docs_url="/api/docs" if settings.debug else None,
         redoc_url="/api/redoc" if settings.debug else None,
     )
+
+    # Metrics middleware (before CORS so all requests are tracked)
+    from api.app.middleware.metrics import get_metrics_response, metrics_middleware
+
+    app.middleware("http")(metrics_middleware)
+
+    # Metrics endpoint
+    @app.get("/metrics")
+    async def metrics() -> Response:
+        return get_metrics_response()
 
     # CORS
     app.add_middleware(

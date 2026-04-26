@@ -49,6 +49,8 @@ dependencies = [
     # Utils
     "python-multipart>=0.0.12",
     "email-validator>=2.2.0",
+    # Metrics
+    "prometheus-client>=0.21.0",
 ]
 
 [project.optional-dependencies]
@@ -81,7 +83,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["api/tests", "workers/tests", "protocols/tests", "daemons/tests"]
+testpaths = ["api/tests", "workers/tests", "protocols/tests", "daemons/tests", "tests/e2e"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["api", "shared", "workers", "daemons", "protocols"]

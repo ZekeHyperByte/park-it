@@ -10,6 +10,16 @@ from sqlalchemy import select
 from shared.logging import get_logger
 from workers.background.settlement_file import generate_filename, build_settlement_content
 
+# Deferred import to avoid circular dependency at module load time
+_settlement_counter = None
+
+def _get_settlement_counter():
+    global _settlement_counter
+    if _settlement_counter is None:
+        from api.app.middleware.metrics import settlement_files_generated_total
+        _settlement_counter = settlement_files_generated_total
+    return _settlement_counter
+
 logger = get_logger("settlement_worker")
 
 # Settlement files storage path
@@ -141,6 +151,12 @@ async def generate_settlement_file(ctx, db=None) -> dict:
 
             files_generated += 1
             total_transactions += len(transactions)
+
+            # Increment Prometheus counter
+            try:
+                _get_settlement_counter().inc()
+            except Exception:
+                pass
 
             logger.info(
                 "generate_settlement_file_created",
