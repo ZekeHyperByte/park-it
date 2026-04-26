@@ -64,6 +64,11 @@ def create_app() -> FastAPI:
 
     app.add_middleware(RateLimitMiddleware)
 
+    # Security headers (defense in depth — also set at nginx layer)
+    from api.app.middleware.security_headers import SecurityHeadersMiddleware
+
+    app.add_middleware(SecurityHeadersMiddleware, enable_hsts=settings.app_env == "production")
+
     # CORS
     app.add_middleware(
         CORSMiddleware,
