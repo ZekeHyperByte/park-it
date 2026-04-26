@@ -71,6 +71,7 @@ def create_app() -> FastAPI:
         members,
         payments,
         reports,
+        settlements,
         settings as settings_routes,
         shifts,
         transactions,
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(manual_open_logs.router, prefix="/api")
     app.include_router(abandoned_vehicles.router, prefix="/api")
     app.include_router(reports.router, prefix="/api")
+    app.include_router(settlements.router, prefix="/api")
 
     # WebSocket
     app.include_router(ws_handlers.router)
