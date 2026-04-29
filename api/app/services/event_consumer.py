@@ -77,6 +77,8 @@ class EventConsumer:
 
         if event_type == "passti_card_tap":
             await self._handle_passti_card_tap(payload)
+        elif event_type == "emoney_print_decision":
+            await self._handle_emoney_print_decision(payload)
         elif event_type == "deduct_result":
             await self._handle_deduct_result(payload)
         else:
@@ -98,6 +100,42 @@ class EventConsumer:
             card_number=card_number,
             card_type=card_type,
         )
+
+    async def _handle_emoney_print_decision(self, event: dict) -> None:
+        """Handle print decision at entry gate — create transaction and open gate."""
+        from sqlalchemy import select
+
+        from api.app.models import Gate
+        from api.app.services.gate_command import publish_command
+        from api.app.services.transaction import create_entry_transaction
+        from api.database import AsyncSessionLocal
+        from shared.events import OpenGateCommand
+
+        gate_code = event.get("gate_id", "")
+        card_number = event.get("card_number", "")
+
+        logger.info("entry_emoney_decision", gate_id=gate_code, card_number=card_number)
+
+        async with AsyncSessionLocal() as db:
+            try:
+                result = await db.execute(select(Gate).where(Gate.code == gate_code))
+                gate = result.scalar_one_or_none()
+                if gate is None:
+                    logger.error("entry_emoney_gate_not_found", gate_id=gate_code)
+                    return
+
+                tx = await create_entry_transaction(
+                    db,
+                    gate_in_id=gate.id,
+                    card_number=card_number,
+                    payment_method="EMONEY",
+                )
+                await db.commit()
+
+                await publish_command(OpenGateCommand(gate_id=gate_code))
+                logger.info("entry_emoney_gate_opened", gate_id=gate_code, transaction_id=tx.id)
+            except Exception as e:
+                logger.error("entry_emoney_decision_error", gate_id=gate_code, error=str(e))
 
     async def _handle_deduct_result(self, payload: dict) -> None:
         """Handle deduct_result event by processing the e-money payment."""

@@ -116,6 +116,16 @@ class VehiclePassedEvent(BaseEvent):
     event_type: Literal["vehicle_passed"] = "vehicle_passed"
 
 
+class EmoneyPrintDecisionEvent(BaseEvent):
+    """Driver made print decision at entry gate (e-money mode)."""
+
+    event_type: Literal["emoney_print_decision"] = "emoney_print_decision"
+    printed: bool
+    card_number: str
+    card_type: str
+    balance: int
+
+
 class GateOpenedEvent(BaseEvent):
     """Gate has opened."""
 
@@ -183,6 +193,7 @@ RedisEvent = (
     | PasstiCardTapEvent
     | TicketButtonPressedEvent
     | VehiclePassedEvent
+    | EmoneyPrintDecisionEvent
     | GateOpenedEvent
     | DeductResultEvent
     | CancelCorrectionResultEvent

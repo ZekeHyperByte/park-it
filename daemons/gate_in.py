@@ -1,6 +1,6 @@
 """Gate-in daemon implementing the full entry state machine.
 
-Modes: CASH, RFID, EMONEY
+Auto-detects all input methods concurrently (button, RFID, e-money).
 States: IDLE → VEHICLE_PRESENT → GATE_CLOSED → method branch → OPENING → IDLE
 
 The daemon polls the Compass controller for sensor inputs, publishes events
@@ -28,6 +28,7 @@ from protocols.passti.frame import parse_response
 from protocols.passti.transport import ControllerPassthroughTransport
 from shared.events import (
     BaseEvent,
+    EmoneyPrintDecisionEvent,
     GateClosedEvent,
     GateMode,
     GateOpenedEvent,
@@ -66,7 +67,12 @@ class GateInDaemon(BaseDaemon):
 
     def __init__(self, gate_id: str, config: dict[str, Any]) -> None:
         super().__init__(gate_id, config)
-        self.gate_mode: str = config.get("gate_mode", "CASH")
+        # Read hardware config for peripheral enablement
+        self.hw = config.get("hardware_config", {})
+        self.has_rfid = self.hw.get("rfid", {}).get("enabled", False)
+        self.has_ticket_printer = self.hw.get("ticket_printer", {}).get("enabled", False)
+        self.has_emoney = self.hw.get("emoney", {}).get("enabled", False)
+
         self.controller: CompassTransport | None = None
         self.passti_transport: ControllerPassthroughTransport | None = None
         self._controller_lock = asyncio.Lock()
@@ -110,8 +116,8 @@ class GateInDaemon(BaseDaemon):
         try:
             self.controller = CompassTransport(host, port)
             self.controller.connect(timeout=5.0)
-            # Create PASSTI passthrough transport only when e-money mode is enabled
-            if self.gate_mode == GateMode.EMONEY.value:
+            # Create PASSTI passthrough transport only when e-money is enabled
+            if self.has_emoney:
                 self.passti_transport = ControllerPassthroughTransport(self.controller._sock)
             logger.info("controller_connected", gate_id=self.gate_id, host=host, port=port)
         except Exception as e:
@@ -179,15 +185,15 @@ class GateInDaemon(BaseDaemon):
 
         elif self.state == STATE_WAITING_CARD:
             # Check for RFID (W channel)
-            if parsed["wiegand_w"]:
+            if self.has_rfid and parsed["wiegand_w"]:
                 await self._on_rfid_card_read(parsed["wiegand_w"], "W")
                 return
             # Check for UHF (X channel)
-            if parsed["wiegand_x"]:
+            if self.has_rfid and parsed["wiegand_x"]:
                 await self._on_rfid_card_read(parsed["wiegand_x"], "X")
                 return
-            # Check for PASSTI tap (EMONEY mode)
-            if self.gate_mode == GateMode.EMONEY.value:
+            # Check for PASSTI tap (EMONEY enabled)
+            if self.has_emoney:
                 await self._check_passti_tap()
 
         elif self.state == STATE_WAITING_PRINT_DECISION:
@@ -226,7 +232,7 @@ class GateInDaemon(BaseDaemon):
             await self._on_gate_closed()
 
     async def _on_gate_closed(self) -> None:
-        """Gate has closed — branch to method-specific flow."""
+        """Gate has closed — auto-detect all enabled input methods."""
         await self._transition(STATE_GATE_CLOSED)
         await self.publish_event(
             GateClosedEvent(
@@ -237,23 +243,29 @@ class GateInDaemon(BaseDaemon):
         # Reset display
         await self._send_controller_command(cmd_dsu())
 
-        # Branch based on gate mode
-        if self.gate_mode == GateMode.CASH.value:
+        # Build display message based on enabled methods
+        methods = []
+        if self.has_rfid:
+            methods.append("RFID")
+        if self.has_emoney:
+            methods.append("E-Money")
+        if not self.has_rfid and not self.has_emoney:
+            # Pure cash mode
             await self._transition(STATE_WAITING_BUTTON)
             await self._send_controller_command(
                 cmd_ds("Selamat Datang", "Ambil Tiket")
             )
+            return
 
-        elif self.gate_mode == GateMode.RFID.value:
-            await self._transition(STATE_WAITING_CARD)
+        # Multi-method mode: wait for any card tap
+        await self._transition(STATE_WAITING_CARD)
+        if len(methods) == 1:
             await self._send_controller_command(
-                cmd_ds("Tempelkan Kartu", "Member RFID")
+                cmd_ds(f"Tempelkan Kartu", methods[0])
             )
-
-        elif self.gate_mode == GateMode.EMONEY.value:
-            await self._transition(STATE_WAITING_CARD)
+        else:
             await self._send_controller_command(
-                cmd_ds("Tempelkan Kartu", "E-Money")
+                cmd_ds("Tempelkan Kartu", " / ".join(methods))
             )
 
     async def _on_ticket_button_pressed(self) -> None:
@@ -278,7 +290,7 @@ class GateInDaemon(BaseDaemon):
 
     async def _on_rfid_card_read(self, card_number: str, channel: str) -> None:
         """RFID/UHF card read."""
-        await self._transition(STATE_VALIDATING if self.gate_mode == GateMode.RFID.value else STATE_PROCESSING)
+        await self._transition(STATE_VALIDATING)
         await self.publish_event(
             RfidCardReadEvent(
                 event_type="rfid_card_read",
@@ -290,7 +302,7 @@ class GateInDaemon(BaseDaemon):
         # FastAPI validates member and sends open_gate command
 
     async def _check_passti_tap(self) -> None:
-        """Check for PASSTI card tap in EMONEY mode."""
+        """Check for PASSTI card tap when e-money is enabled."""
         if not self.passti_transport:
             return
         try:
@@ -309,9 +321,12 @@ class GateInDaemon(BaseDaemon):
             logger.debug("passti_poll_no_card", gate_id=self.gate_id, error=str(e))
 
     async def _on_passti_card_tap(self, card_number: str, card_type_code: int, balance: int) -> None:
-        """PASSTI card tapped in EMONEY mode."""
+        """PASSTI card tapped in e-money mode."""
         await self._transition(STATE_CHECKING_BALANCE)
         card_type = self._card_type_name(card_type_code)
+        self.state_data["passti_card_number"] = card_number
+        self.state_data["passti_card_type"] = card_type
+        self.state_data["passti_balance"] = balance
         await self.publish_event(
             PasstiCardTapEvent(
                 event_type="passti_card_tap",
@@ -324,7 +339,7 @@ class GateInDaemon(BaseDaemon):
         # (either display insufficient balance, or proceed to print decision)
 
     async def _start_print_decision_timer(self, timeout: float) -> None:
-        """Start timer for print decision in EMONEY mode."""
+        """Start timer for print decision in e-money mode."""
         async def timer() -> None:
             await asyncio.sleep(timeout)
             if self.state == STATE_WAITING_PRINT_DECISION:
@@ -338,7 +353,22 @@ class GateInDaemon(BaseDaemon):
             self._print_decision_timer.cancel()
         self.state_data["ticket_printed"] = printed
         await self._transition(STATE_PROCESSING)
-        # FastAPI will create transaction and send open_gate command
+
+        # Publish event so API can create transaction
+        card_number = self.state_data.get("passti_card_number", "")
+        card_type = self.state_data.get("passti_card_type", "")
+        balance = self.state_data.get("passti_balance", 0)
+
+        await self.publish_event(
+            EmoneyPrintDecisionEvent(
+                event_type="emoney_print_decision",
+                gate_id=self.gate_id,
+                printed=printed,
+                card_number=card_number,
+                card_type=card_type,
+                balance=balance,
+            )
+        )
 
     async def _on_vehicle_passed(self) -> None:
         """Vehicle has passed through gate."""
@@ -585,7 +615,7 @@ class GateInDaemon(BaseDaemon):
                         await self._send_controller_command(
                             cmd_ds("Cetak Tiket?", "Tekan Tombol")
                         )
-                        timeout = self.config.get("print_decision_timeout_seconds", 10)
+                        timeout = self.hw.get("emoney", {}).get("print_decision_timeout_seconds", 10)
                         await self._start_print_decision_timer(timeout)
                 else:
                     await self._send_controller_command(cmd_ds("Kartu Error", "Coba Lagi"))
