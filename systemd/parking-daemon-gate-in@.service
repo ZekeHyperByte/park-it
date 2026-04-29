@@ -11,7 +11,7 @@ WorkingDirectory=/opt/parking-system-v2
 Environment=APP_ENV=production
 Environment=PATH=/opt/parking-system-v2/.venv/bin
 EnvironmentFile=/opt/parking-system-v2/.env
-ExecStart=/opt/parking-system-v2/.venv/bin/python -m daemons.gate_in --gate-id %i
+ExecStart=/opt/parking-system-v2/.venv/bin/python -m daemons.cli --gate-id %i
 Restart=always
 RestartSec=10
 StandardOutput=journal

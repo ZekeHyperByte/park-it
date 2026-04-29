@@ -7,6 +7,8 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-04-25',
 
   // Runtime config
+  // NOTE: In production, set NUXT_PUBLIC_API_BASE_URL="" for relative URLs
+  // through nginx. The default below is for development only.
   runtimeConfig: {
     public: {
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || 'http://localhost:8000',

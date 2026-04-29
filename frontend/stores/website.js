@@ -26,7 +26,7 @@ export const useWebsiteStore = defineStore('website', () => {
 
   async function fetchGateIns() {
     try {
-      const data = await fetchApi('/api/gates/in')
+      const data = await fetchApi('/api/gates?direction=IN')
       gateIns.value = data || []
     } catch (err) {
       error.value = err.message
@@ -35,7 +35,7 @@ export const useWebsiteStore = defineStore('website', () => {
 
   async function fetchGateOuts() {
     try {
-      const data = await fetchApi('/api/gates/out')
+      const data = await fetchApi('/api/gates?direction=OUT')
       gateOuts.value = data || []
     } catch (err) {
       error.value = err.message

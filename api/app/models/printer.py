@@ -31,6 +31,11 @@ class Printer(Base, IntPKMixin, TimestampMixin):
     serial_device: Mapped[str | None] = mapped_column(String(100), nullable=True)
     baudrate: Mapped[int] = mapped_column(Integer, default=9600, nullable=False)
 
+    # Location (backward compat: gate_id/gate_type during transition)
+    pos_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("pos.id"), nullable=True
+    )  # For receipt printers at booth
+
     # Paper counter
     paper_remaining: Mapped[int] = mapped_column(
         Integer, default=300, nullable=False

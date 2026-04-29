@@ -1,0 +1,15 @@
+[Unit]
+Description=Parking Booth Bridge — Serial to WebSocket
+After=network.target
+
+[Service]
+Type=simple
+User=parking
+WorkingDirectory=/opt/parking
+Environment=PYTHONPATH=/opt/parking
+ExecStart=/opt/parking/.venv/bin/python -m booth_bridge.main --config /etc/parking/booth.json
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

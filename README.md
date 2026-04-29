@@ -172,6 +172,8 @@ mypy .
 
 ## Deployment
 
+### Single Server
+
 ```bash
 # Production Docker Compose
 docker compose -f docker/docker-compose.prod.yml up -d
@@ -184,6 +186,19 @@ sudo systemctl start parking-worker-critical
 sudo systemctl start parking-worker-bg
 ```
 
+### Multi-PC (Server + Booths)
+
+For installations with multiple gate-outs across separate booth PCs:
+
+```bash
+# See full guide for server + booth PC setup
+cat docs/BOOTH_DEPLOYMENT.md
+```
+
+**Quick reference:**
+- **Server PC**: API, database, Redis, frontend, nginx
+- **Booth PC(s)**: Booth bridge (serial devices) + Chrome POS
+
 See `docs/` for full runbook, checklist, and training materials.
 
 ## Documentation
@@ -192,6 +207,8 @@ See `docs/` for full runbook, checklist, and training materials.
 |----------|-------------|
 | `docs/EParking_v2_Development_Plan.md` | Architecture, data models, design decisions |
 | `docs/GATE_FLOW_SPEC.md` | Gate entry/exit flow specifications |
+| `docs/BOOTH_DEPLOYMENT.md` | Multi-PC deployment (server + booth PCs) |
+| `docs/DEVELOPMENT_TESTING_GUIDE.md` | Pre-deployment testing procedures |
 | `docs/OPERATIONS_RUNBOOK.md` | Day-to-day operations guide |
 | `docs/ONCALL_RUNBOOK.md` | On-call incident response |
 | `docs/GO_LIVE_CHECKLIST.md` | Production go-live checklist |

@@ -97,10 +97,18 @@ Expected: All checks PASS or WARN (no FAIL)
 - [ ] Heartbeat events published every 30s
 - [ ] Redis consumer groups created (`XINFO GROUPS parking.commands.*`)
 
-#### 8. Hardware Integration
+#### 8. Booth Bridge (per booth PC)
+- [ ] Booth bridge service running (`systemctl status booth-bridge`)
+- [ ] Serial devices detected (`ls -la /dev/ttyUSB*`)
+- [ ] WebSocket accepts connections on localhost:5678
+- [ ] POS page auto-detects booth by IP
+- [ ] POS locks to assigned gate (dropdown hidden for operators)
+
+#### 9. Hardware Integration
 - [ ] Controller responds to STAT command
-- [ ] PASSTI reader responds to INIT
-- [ ] Printer prints test ticket
+- [ ] PASSTI reader responds to INIT (via booth bridge)
+- [ ] Printer prints test ticket (via booth bridge)
+- [ ] Barcode scanner inputs to POS field
 - [ ] Camera captures test snapshot
 - [ ] Gate opens/closes via daemon command
 

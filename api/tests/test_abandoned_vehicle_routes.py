@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.main import app
 from api.app.models.abandoned_vehicle_log import AbandonedVehicleLog
-from api.app.models.gate_out import GateOut
+from api.app.models.gate import Gate
 from api.database import get_db
 
 
@@ -33,10 +33,11 @@ async def client(db_session: AsyncSession):
 
 
 @pytest_asyncio.fixture
-async def sample_gate_out(db_session: AsyncSession) -> GateOut:
-    gate = GateOut(
+async def sample_gate_out(db_session: AsyncSession) -> Gate:
+    gate = Gate(
         name="Exit Gate",
         code="EXIT01",
+        direction="OUT",
         protocol="compass",
         is_active=True,
     )
@@ -47,7 +48,7 @@ async def sample_gate_out(db_session: AsyncSession) -> GateOut:
 
 
 @pytest_asyncio.fixture
-async def sample_abandoned_log(db_session: AsyncSession, sample_gate_out: GateOut) -> AbandonedVehicleLog:
+async def sample_abandoned_log(db_session: AsyncSession, sample_gate_out: Gate) -> AbandonedVehicleLog:
     log = AbandonedVehicleLog(
         gate_out_id=sample_gate_out.id,
         parking_transaction_id=None,

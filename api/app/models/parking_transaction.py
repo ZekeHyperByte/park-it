@@ -36,12 +36,12 @@ class ParkingTransaction(Base, IntPKMixin, TimestampMixin):
         BigInteger, ForeignKey("vehicle_types.id"), nullable=True
     )
 
-    # Gate references
+    # Gate references (unified gates table)
     gate_in_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("gate_ins.id"), nullable=True
+        BigInteger, ForeignKey("gates.id"), nullable=True
     )
     gate_out_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("gate_outs.id"), nullable=True
+        BigInteger, ForeignKey("gates.id"), nullable=True
     )
 
     # Timestamps
@@ -100,8 +100,8 @@ class ParkingTransaction(Base, IntPKMixin, TimestampMixin):
     vehicle_type: Mapped["VehicleType | None"] = relationship(
         "VehicleType", lazy="selectin"
     )
-    gate_in: Mapped["GateIn | None"] = relationship("GateIn", lazy="selectin")
-    gate_out: Mapped["GateOut | None"] = relationship("GateOut", lazy="selectin")
+    gate_in: Mapped["Gate | None"] = relationship("Gate", foreign_keys=[gate_in_id], lazy="selectin")
+    gate_out: Mapped["Gate | None"] = relationship("Gate", foreign_keys=[gate_out_id], lazy="selectin")
     member: Mapped["Member | None"] = relationship("Member", lazy="selectin")
     shift: Mapped["Shift | None"] = relationship("Shift", lazy="selectin")
     operator: Mapped["User | None"] = relationship("User", lazy="selectin")

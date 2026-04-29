@@ -4,6 +4,44 @@
     <p class="text-secondary mb-3">Kelola konfigurasi sistem parkir.</p>
 
     <el-tabs v-model="activeTab" type="border-card">
+      <!-- Site Info -->
+      <el-tab-pane label="Site Info" name="site-info">
+        <el-form :model="siteConfig" label-width="120px">
+          <el-form-item label="Site Name">
+            <el-input v-model="siteConfig.name" placeholder="Parking Mall ABC" />
+          </el-form-item>
+          <el-form-item label="Address">
+            <el-input v-model="siteConfig.address" type="textarea" rows="2" />
+          </el-form-item>
+          <el-form-item label="City">
+            <el-input v-model="siteConfig.city" />
+          </el-form-item>
+          <el-form-item label="Phone">
+            <el-input v-model="siteConfig.phone" />
+          </el-form-item>
+          <el-form-item label="Email">
+            <el-input v-model="siteConfig.email" />
+          </el-form-item>
+          <el-form-item label="Tax ID (NPWP)">
+            <el-input v-model="siteConfig.tax_id" />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="saveSiteConfig">Save</el-button>
+          </el-form-item>
+        </el-form>
+
+        <el-divider />
+
+        <h4>Receipt Preview</h4>
+        <el-card class="receipt-preview">
+          <div class="text-center">
+            <h3>{{ siteConfig.name || 'E-Parking' }}</h3>
+            <p class="text-small">{{ siteConfig.address }}</p>
+            <p class="text-small">{{ siteConfig.city }} | {{ siteConfig.phone }}</p>
+          </div>
+        </el-card>
+      </el-tab-pane>
+
       <!-- General Settings -->
       <el-tab-pane label="Umum" name="general">
         <el-table :data="settings" stripe style="width: 100%">
@@ -117,6 +155,16 @@ const areaCrud = useCrud('/api/areas')
 const activeTab = ref('general')
 const submitting = ref(false)
 
+// Site Config
+const siteConfig = ref({
+  name: '',
+  address: '',
+  city: '',
+  phone: '',
+  email: '',
+  tax_id: '',
+})
+
 // Settings
 const settings = ref([])
 
@@ -200,11 +248,35 @@ const deleteAction = ref(null)
 
 // Load data
 onMounted(() => {
+  loadSiteConfig()
   loadSettings()
   loadVehicleTypes()
   loadShifts()
   loadAreas()
 })
+
+async function loadSiteConfig() {
+  try {
+    const { data } = await fetchApi('/api/site-config')
+    siteConfig.value = data
+  } catch (e) {
+    if (e.response?.status !== 404) {
+      console.error('Failed to load site config', e)
+    }
+  }
+}
+
+async function saveSiteConfig() {
+  try {
+    await fetchApi('/api/site-config', {
+      method: 'PUT',
+      body: JSON.stringify(siteConfig.value),
+    })
+    ElMessage.success('Site config saved')
+  } catch (e) {
+    ElMessage.error('Failed to save site config')
+  }
+}
 
 async function loadSettings() {
   try {

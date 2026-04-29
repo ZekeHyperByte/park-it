@@ -48,9 +48,19 @@ FastAPI Backend (Gunicorn + Uvicorn)
 | Background Worker | `parking-worker-bg.service` | `parking` | Settlement, cleanup, alerts |
 | Gate-In Daemon | `parking-daemon-gate-in@{id}.service` | `parking` | Entry gate control |
 | Gate-Out Daemon | `parking-daemon-gate-out@{id}.service` | `parking` | Exit gate control |
+| Booth Bridge | `booth-bridge.service` | `parking` | Serial device WebSocket bridge |
 | PostgreSQL | `postgresql.service` | `postgres` | Database |
 | Redis | `redis-server.service` | `redis` | Cache + message broker |
 | Nginx | `nginx.service` | `root` | Reverse proxy + static files |
+
+### Multi-PC Architecture
+
+For installations with multiple gate-outs (booths), see the dedicated [Booth Deployment Guide](BOOTH_DEPLOYMENT.md). The typical setup is:
+
+- **Server PC**: API, database, Redis, frontend, optionally Booth 1
+- **Booth PC 2..N**: Booth bridge + Chrome POS for additional gate-outs
+
+Each booth PC runs `booth-bridge.service` to expose its local serial devices (e-money reader, receipt printer, barcode scanner) via WebSocket to the POS web app.
 
 ---
 
@@ -235,16 +245,27 @@ Key metrics:
 ### E-Money Reader Not Responding
 
 1. Check reader power and serial cable
-2. Run diagnostic: `python scripts/emoney_diagnostic.py`
-3. Verify init key is correct
-4. Check for SAM module errors in logs
+2. Verify booth bridge is running: `sudo systemctl status booth-bridge`
+3. Check serial device path in `/etc/parking/booth.json`
+4. Run diagnostic: `python scripts/emoney_diagnostic.py`
+5. Verify init key is correct
+6. Check for SAM module errors in logs: `sudo journalctl -u booth-bridge -f`
+
+### Booth Bridge Issues
+
+1. Check service status: `sudo systemctl status booth-bridge`
+2. Verify config: `cat /etc/parking/booth.json`
+3. Check serial permissions: `ls -la /dev/ttyUSB*` (should be `dialout` group)
+4. Test WebSocket: `curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" http://localhost:5678/`
+5. Review logs: `sudo journalctl -u booth-bridge -n 50`
 
 ### Payment Timeout
 
-1. Check POS WebSocket connection
-2. Verify operator has correct gate selected
-3. Check network latency between POS and API
-4. Review `timeout_alert` events in notification page
+1. Check POS WebSocket connection to API
+2. Check booth bridge WebSocket connection (`localhost:5678`)
+3. Verify operator has correct gate selected (or auto-detected)
+4. Check network latency between POS and API
+5. Review `timeout_alert` events in notification page
 
 ### Database Connection Errors
 

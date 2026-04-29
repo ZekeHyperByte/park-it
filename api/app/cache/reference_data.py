@@ -8,8 +8,7 @@ DEFAULT_TTL = 300  # 5 minutes
 
 # Cache key prefixes
 CACHE_KEYS = {
-    "gate_ins": "cache:gate_ins",
-    "gate_outs": "cache:gate_outs",
+    "gates": "cache:gates",
     "vehicle_types": "cache:vehicle_types",
     "members": "cache:members",
     "settings": "cache:settings",
@@ -38,22 +37,13 @@ async def _invalidate(key: str) -> None:
     await redis_client.delete(key)
 
 
-# Gate Ins
-async def get_cached_gate_ins() -> list[dict] | None:
-    return await _get_cached(CACHE_KEYS["gate_ins"])
+# Gates (unified)
+async def get_cached_gates() -> list[dict] | None:
+    return await _get_cached(CACHE_KEYS["gates"])
 
 
-async def invalidate_gate_ins() -> None:
-    await _invalidate(CACHE_KEYS["gate_ins"])
-
-
-# Gate Outs
-async def get_cached_gate_outs() -> list[dict] | None:
-    return await _get_cached(CACHE_KEYS["gate_outs"])
-
-
-async def invalidate_gate_outs() -> None:
-    await _invalidate(CACHE_KEYS["gate_outs"])
+async def invalidate_gates() -> None:
+    await _invalidate(CACHE_KEYS["gates"])
 
 
 # Vehicle Types

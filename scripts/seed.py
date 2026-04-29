@@ -16,8 +16,7 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy import select
 
 from api.app.models.area_parkir import AreaParkir
-from api.app.models.gate_in import GateIn
-from api.app.models.gate_out import GateOut
+from api.app.models.gate import Gate
 from api.app.models.member import Member
 from api.app.models.member_group import MemberGroup
 from api.app.models.shift import Shift
@@ -171,29 +170,30 @@ async def seed() -> None:
         await session.flush()
         print(f"  Created member: {member.name} (card={member.card_number})")
 
-        # Gate-in
-        gate_in = GateIn(
+        # Gate-in (unified Gate model)
+        gate_in = Gate(
             name="Gate Masuk Utama",
             code="GIN01",
+            direction="IN",
             area_parkir_id=area.id,
             protocol="compass",
             controller_host="192.168.1.101",
             controller_port=5000,
-            gate_mode="CASH",
-            emoney_minimum_balance=10000,
-            print_decision_timeout_seconds=10,
             has_close_sensor=True,
             gate_close_duration_ms=5000,
-            open_command="TRIG1",
-            pulse_duration_ms=1000,
             gate_open_timeout_s=30,
             sensor_stuck_s=300,
-            audio_module="compass",
-            led_display="compass",
-            printer_name="Printer-Gate-In",
-            printer_type="escpos",
-            camera_url="rtsp://192.168.1.201/stream",
-            camera_name="CAM-IN01",
+            hardware_config={
+                "gate_mode": "CASH",
+                "emoney_minimum_balance": 10000,
+                "print_decision_timeout_seconds": 10,
+                "open_command": "TRIG1",
+                "pulse_duration_ms": 1000,
+                "ticket_printer": {"enabled": True, "printer_name": "Printer-Gate-In"},
+                "camera": {"enabled": True, "camera_url": "rtsp://192.168.1.201/stream"},
+                "audio": {"enabled": True, "module": "compass"},
+                "led": {"enabled": True, "module": "compass"},
+            },
             is_active=True,
             is_online=False,
         )
@@ -201,27 +201,28 @@ async def seed() -> None:
         await session.flush()
         print(f"  Created gate-in: {gate_in.name}")
 
-        # Gate-out
-        gate_out = GateOut(
+        # Gate-out (unified Gate model)
+        gate_out = Gate(
             name="Gate Keluar Utama",
             code="GOUT01",
+            direction="OUT",
             area_parkir_id=area.id,
             protocol="compass",
             controller_host="192.168.1.102",
             controller_port=5000,
-            payment_timeout_seconds=120,
             has_close_sensor=True,
             gate_close_duration_ms=5000,
-            open_command="TRIG1",
-            pulse_duration_ms=1000,
             gate_open_timeout_s=30,
             sensor_stuck_s=300,
-            audio_module="compass",
-            led_display="compass",
-            printer_name="Printer-Gate-Out",
-            printer_type="escpos",
-            camera_url="rtsp://192.168.1.202/stream",
-            camera_name="CAM-OUT01",
+            hardware_config={
+                "payment_timeout_seconds": 120,
+                "open_command": "TRIG1",
+                "pulse_duration_ms": 1000,
+                "receipt_printer": {"enabled": True, "printer_name": "Printer-Gate-Out"},
+                "camera": {"enabled": True, "camera_url": "rtsp://192.168.1.202/stream"},
+                "audio": {"enabled": True, "module": "compass"},
+                "led": {"enabled": True, "module": "compass"},
+            },
             is_active=True,
             is_online=False,
         )

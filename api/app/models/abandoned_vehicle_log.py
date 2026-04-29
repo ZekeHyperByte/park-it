@@ -12,7 +12,7 @@ class AbandonedVehicleLog(Base, IntPKMixin, TimestampMixin):
     __tablename__ = "abandoned_vehicle_logs"
 
     gate_out_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("gate_outs.id"), nullable=False, index=True
+        BigInteger, ForeignKey("gates.id"), nullable=False, index=True
     )
     parking_transaction_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("parking_transactions.id"), nullable=True, index=True

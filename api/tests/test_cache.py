@@ -60,13 +60,13 @@ class TestMemberCache:
     async def test_invalidate_all_clears_everything(self):
         await cache._set_cached(cache.CACHE_KEYS["vehicle_types"], [{"id": 1}])
         await cache._set_cached(cache.CACHE_KEYS["members"], [{"id": 2}])
-        await cache._set_cached(cache.CACHE_KEYS["gate_ins"], [{"id": 3}])
+        await cache._set_cached(cache.CACHE_KEYS["gates"], [{"id": 3}])
 
         await cache.invalidate_all_reference_data()
 
         assert await cache.get_cached_vehicle_types() is None
         assert await cache.get_cached_members() is None
-        assert await cache.get_cached_gate_ins() is None
+        assert await cache.get_cached_gates() is None
 
 
 class TestCacheTTL:
