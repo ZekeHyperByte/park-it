@@ -7,7 +7,7 @@ from api.app.middleware.api_key import require_api_key
 app = FastAPI()
 
 @app.get("/internal/test")
-async def test_endpoint(api_key: str = Depends(require_api_key)):
+async def _test_endpoint(api_key: str = Depends(require_api_key)):
     return {"ok": True}
 
 @pytest.mark.anyio
