@@ -6,12 +6,17 @@
         <h1 class="pos-title">Point of Sale — Gate Out</h1>
         <p class="pos-subtitle">
           Gate: <strong>{{ selectedGate?.name || '—' }}</strong>
-          &nbsp;|&nbsp; Status:
+          &nbsp;|&nbsp; Gate WS:
           <el-tag :type="wsStatusType" size="small">{{ wsStatusText }}</el-tag>
+          &nbsp;|&nbsp; Booth:
+          <el-tag :type="gateStore.boothConnected ? 'success' : 'danger'" size="small">
+            {{ gateStore.boothConnected ? 'Connected' : 'Disconnected' }}
+          </el-tag>
         </p>
       </el-col>
       <el-col :span="8" class="text-right">
         <el-select
+          v-if="gateSelectorVisible"
           v-model="gateStore.selectedGateOutId"
           placeholder="Pilih Gate Out"
           style="width: 220px"
@@ -24,6 +29,9 @@
             :value="g.id"
           />
         </el-select>
+        <el-tag v-else type="info" size="large">
+          {{ selectedGate?.name || '—' }}
+        </el-tag>
       </el-col>
     </el-row>
 
@@ -232,6 +240,7 @@ const authStore = useAuthStore()
 const websiteStore = useWebsiteStore()
 const gateStore = useGateStore()
 const { $ws } = useNuxtApp()
+const { fetchApi } = useApi()
 
 // Local state
 const cashModalVisible = ref(false)
@@ -241,6 +250,13 @@ const rfidCardNumber = ref('')
 const barcodeInput = ref('')
 const activeMethod = ref(null)
 let unsubscribeWs = null
+let boothWs = null
+let boothWsReconnectTimer = null
+
+// Booth auto-detection
+const currentPos = ref(null)
+const isAdmin = computed(() => authStore.user?.role === 'admin')
+const gateSelectorVisible = computed(() => isAdmin.value || !currentPos.value?.default_gate_id)
 
 // Computed
 const selectedGate = computed(() =>
@@ -374,6 +390,86 @@ async function confirmRfidPayment() {
   activeMethod.value = null
 }
 
+function connectBooth() {
+  if (boothWs) {
+    try { boothWs.close() } catch (e) { /* ignore */ }
+  }
+  boothWs = new WebSocket('ws://localhost:5678/')
+  boothWs.onopen = () => {
+    console.log('Booth bridge connected')
+    gateStore.setBoothConnected(true)
+    if (boothWsReconnectTimer) {
+      clearTimeout(boothWsReconnectTimer)
+      boothWsReconnectTimer = null
+    }
+  }
+  boothWs.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      handleBoothMessage(data)
+    } catch (e) {
+      console.error('Booth message parse error:', e)
+    }
+  }
+  boothWs.onerror = () => {
+    gateStore.setBoothConnected(false)
+  }
+  boothWs.onclose = () => {
+    gateStore.setBoothConnected(false)
+    // Auto-reconnect after 3s
+    if (!boothWsReconnectTimer) {
+      boothWsReconnectTimer = setTimeout(() => {
+        boothWsReconnectTimer = null
+        connectBooth()
+      }, 3000)
+    }
+  }
+}
+
+function disconnectBooth() {
+  if (boothWsReconnectTimer) {
+    clearTimeout(boothWsReconnectTimer)
+    boothWsReconnectTimer = null
+  }
+  if (boothWs) {
+    try { boothWs.close() } catch (e) { /* ignore */ }
+    boothWs = null
+  }
+  gateStore.setBoothConnected(false)
+}
+
+function handleBoothMessage(data) {
+  if (data.action === 'emoney_deduct_result') {
+    if (data.status === 'SUCCESS') {
+      gateStore.setEmoneyState('SUCCESS')
+      if (selectedGate.value) {
+        const gateCode = selectedGate.value.code || `gate-out-${selectedGate.value.id}`
+        gateStore.confirmEmoneyPayment({
+          gateId: gateCode,
+          gateOutId: selectedGate.value.id,
+          deductAmount: data.deduct_amount,
+          balanceAfter: data.balance_after,
+          transactionCounter: data.transaction_counter,
+          rawResponseHex: data.raw_response_hex,
+        })
+      }
+    } else if (data.status === 'LOST_CONTACT') {
+      gateStore.setEmoneyState('LOST_CONTACT')
+      ElMessage.warning('Tap kartu lagi untuk koreksi')
+    } else if (data.status === 'INSUFFICIENT_BALANCE') {
+      gateStore.setEmoneyState('INSUFFICIENT')
+      ElMessage.warning('Saldo tidak cukup')
+    } else if (data.status === 'WRONG_CARD') {
+      gateStore.setEmoneyState('WRONG_CARD')
+      ElMessage.error('Kartu tidak sesuai')
+    } else {
+      gateStore.setEmoneyState('FAILED')
+      ElMessage.error(data.error || 'E-Money gagal')
+    }
+    activeMethod.value = null
+  }
+}
+
 function startEmoneyPayment() {
   activeMethod.value = 'emoney'
   const tx = gateStore.currentTransaction
@@ -383,6 +479,20 @@ function startEmoneyPayment() {
     return
   }
   if (!selectedGate.value) return
+
+  // If booth bridge is connected, use it directly
+  if (gateStore.boothConnected && boothWs) {
+    boothWs.send(JSON.stringify({
+      action: 'emoney_deduct',
+      peripheral: 'emoney_reader',
+      amount: tx.tariff,
+      expected_card_number: tx.card_number,
+    }))
+    gateStore.setEmoneyState('PROCESSING')
+    return
+  }
+
+  // Fallback to API-based deduct (for manless gates or legacy mode)
   const gateCode = selectedGate.value.code || `gate-out-${selectedGate.value.id}`
   gateStore.startEmoneyDeduct({
     gateId: gateCode,
@@ -424,10 +534,31 @@ function onKeydown(e) {
 // Lifecycle
 onMounted(async () => {
   await websiteStore.loadAll()
-  if (websiteStore.activeGateOuts.length > 0 && !gateStore.selectedGateOutId) {
+
+  // Auto-detect booth by IP and assign default gate
+  try {
+    const pos = await fetchApi('/api/pos/by-ip')
+    currentPos.value = pos
+    if (pos.default_gate_id) {
+      const gate = websiteStore.activeGateOuts.find((g) => g.id === pos.default_gate_id)
+      if (gate) {
+        gateStore.setSelectedGateOutId(gate.id)
+        onGateChange(gate.id)
+        console.log(`Auto-assigned to booth ${pos.code}, gate ${gate.name}`)
+      }
+    }
+  } catch (err) {
+    console.warn('Booth auto-detection failed:', err.message)
+    // Fallback: let operator pick manually
+  }
+
+  // If no auto-assignment, pick first available
+  if (!gateStore.selectedGateOutId && websiteStore.activeGateOuts.length > 0) {
     gateStore.setSelectedGateOutId(websiteStore.activeGateOuts[0].id)
     onGateChange(websiteStore.activeGateOuts[0].id)
   }
+
+  connectBooth()
   window.addEventListener('keydown', onKeydown)
 })
 
@@ -435,6 +566,7 @@ onUnmounted(() => {
   if (unsubscribeWs) {
     unsubscribeWs()
   }
+  disconnectBooth()
   window.removeEventListener('keydown', onKeydown)
 })
 </script>

@@ -14,6 +14,7 @@ export const useGateStore = defineStore('gate', () => {
   const paymentState = ref('IDLE') // IDLE, VEHICLE_PRESENT, WAITING_PAYMENT, TIMEOUT_ALERT
   const emoneyPaymentState = ref('IDLE') // IDLE, WAITING_CARD, PROCESSING, LOST_CONTACT, WRONG_CARD, INSUFFICIENT, SUCCESS, FAILED
   const wsConnected = ref(false)
+  const boothConnected = ref(false)
   const cameraSnapshot = ref(null)
   const waitingSeconds = ref(0)
   const selectedGateOutId = ref(null)
@@ -52,6 +53,10 @@ export const useGateStore = defineStore('gate', () => {
 
   function setWsConnected(connected) {
     wsConnected.value = connected
+  }
+
+  function setBoothConnected(connected) {
+    boothConnected.value = connected
   }
 
   function setCameraSnapshot(url) {
@@ -198,6 +203,43 @@ export const useGateStore = defineStore('gate', () => {
   }
 
   /**
+   * Confirm e-money payment (called after booth bridge deduct success).
+   */
+  async function confirmEmoneyPayment({ gateId, gateOutId, deductAmount, balanceAfter, transactionCounter, rawResponseHex }) {
+    isLoading.value = true
+    try {
+      const { fetchApi } = useApi()
+      const res = await fetchApi('/api/payments/emoney/result', {
+        method: 'POST',
+        body: JSON.stringify({
+          gate_id: gateId,
+          gate_out_id: gateOutId,
+          card_number: currentTransaction.value?.card_number,
+          status: 'SUCCESS',
+          deduct_amount: deductAmount,
+          balance_before: (currentTransaction.value?.tariff || 0) + balanceAfter,
+          balance_after: balanceAfter,
+          transaction_counter: transactionCounter,
+          raw_response_hex: rawResponseHex,
+        }),
+      })
+      if (res.success) {
+        ElMessage.success(res.message)
+        clearTransaction()
+        return true
+      } else {
+        ElMessage.error(res.message)
+        return false
+      }
+    } catch (err) {
+      ElMessage.error(err.message || 'E-money payment failed')
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /**
    * Handle incoming WebSocket event.
    */
   function handleWsEvent(event) {
@@ -252,6 +294,7 @@ export const useGateStore = defineStore('gate', () => {
     paymentState,
     emoneyPaymentState,
     wsConnected,
+    boothConnected,
     cameraSnapshot,
     waitingSeconds,
     selectedGateOutId,
@@ -267,6 +310,7 @@ export const useGateStore = defineStore('gate', () => {
     setPaymentState,
     setEmoneyState,
     setWsConnected,
+    setBoothConnected,
     setCameraSnapshot,
     setWaitingSeconds,
     setSelectedGateOutId,
@@ -275,6 +319,7 @@ export const useGateStore = defineStore('gate', () => {
     confirmCashPayment,
     processRfidPayment,
     startEmoneyDeduct,
+    confirmEmoneyPayment,
     handleWsEvent,
   }
 })
