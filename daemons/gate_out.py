@@ -1,7 +1,11 @@
 """Gate-out daemon implementing the full exit state machine.
 
-Three concurrent payment methods (RFID, E-Money, Cash) with asyncio.wait FIRST_COMPLETED.
+Three concurrent payment methods (RFID, E-Money via booth bridge, Cash) with asyncio.wait FIRST_COMPLETED.
 Timeout handling with operator alert and resolution.
+
+NOTE: E-Money is now handled by the booth bridge, not controller passthrough.
+The gate daemon still publishes events when PASSTI is used, but the actual
+reader is connected to the booth PC, not the gate controller.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from protocols.passti.transport import ControllerPassthroughTransport
 from shared.events import (
     BaseEvent,
     DeductResultEvent,
+    DeductStatus,
     GateOpenedEvent,
     PasstiCardTapEvent,
     RfidCardReadEvent,
@@ -54,12 +59,13 @@ class GateOutDaemon(BaseDaemon):
     def __init__(self, gate_id: str, config: dict[str, Any]) -> None:
         super().__init__(gate_id, config)
         self.controller: CompassTransport | None = None
-        self.passti_transport: ControllerPassthroughTransport | None = None
         self._controller_lock = asyncio.Lock()
         self._poll_task: asyncio.Task | None = None
         self._payment_task: asyncio.Task | None = None
         self._cash_payment_event = asyncio.Event()
         self._debounce_event: asyncio.Event | None = None
+        self.passti_transport: ControllerPassthroughTransport | None = None
+        self.has_emoney = self.config.get("hardware_config", {}).get("emoney", {}).get("enabled", False)
 
     # ------------------------------------------------------------------
     # Lifecycle overrides
@@ -100,21 +106,18 @@ class GateOutDaemon(BaseDaemon):
         try:
             self.controller = CompassTransport(host, port)
             self.controller.connect(timeout=5.0)
-            # Create PASSTI passthrough transport only when e-money reader is configured
-            if self.config.get("emoney_reader_id"):
+            if self.has_emoney:
                 self.passti_transport = ControllerPassthroughTransport(self.controller._sock)
             logger.info("controller_connected", gate_id=self.gate_id, host=host, port=port)
         except Exception as e:
             logger.error("controller_connect_failed", gate_id=self.gate_id, error=str(e))
             self.controller = None
-            self.passti_transport = None
 
     async def _disconnect_controller(self) -> None:
         """Disconnect from controller."""
         if self.controller:
             self.controller.close()
             self.controller = None
-            self.passti_transport = None
             logger.info("controller_disconnected", gate_id=self.gate_id)
 
     # ------------------------------------------------------------------
@@ -202,7 +205,7 @@ class GateOutDaemon(BaseDaemon):
         await self._start_waiting_payment()
 
     async def _start_waiting_payment(self) -> None:
-        """Start the three concurrent payment method tasks."""
+        """Start the concurrent payment method tasks."""
         await self._transition(STATE_WAITING_PAYMENT)
         self._cash_payment_event.clear()
 
@@ -214,13 +217,16 @@ class GateOutDaemon(BaseDaemon):
         )
 
         task_wiegand = asyncio.create_task(self._wait_for_wiegand(), name="wiegand")
-        task_passti = asyncio.create_task(self._wait_for_passti_tap(), name="passti")
         task_pos = asyncio.create_task(self._wait_for_pos_confirm(), name="pos")
         task_timeout = asyncio.create_task(
             self._payment_timeout(timeout_seconds), name="timeout"
         )
 
-        tasks = [task_wiegand, task_passti, task_pos, task_timeout]
+        # E-money is now handled by booth bridge; daemon only waits for booth events
+        # via Redis commands (e.g., "emoney_payment_confirmed" or "open_gate")
+        # We don't poll controller for PASSTI anymore.
+
+        tasks = [task_wiegand, task_pos, task_timeout]
         self._payment_task = asyncio.gather(*tasks, return_exceptions=True)
 
         try:
@@ -245,8 +251,6 @@ class GateOutDaemon(BaseDaemon):
 
             if winner_name == "wiegand":
                 await self._on_rfid_exit()
-            elif winner_name == "passti":
-                await self._on_passti_exit()
             elif winner_name == "pos":
                 await self._on_cash_exit()
             elif winner_name == "timeout":
@@ -271,33 +275,6 @@ class GateOutDaemon(BaseDaemon):
                     self.state_data["rfid_channel"] = "X"
                     return
             await asyncio.sleep(0.1)
-
-    async def _wait_for_passti_tap(self) -> None:
-        """Poll PASSTI reader until card is tapped."""
-        if not self.passti_transport:
-            # No PASSTI reader — sleep indefinitely until cancelled
-            while self.state == STATE_WAITING_PAYMENT and self._running:
-                await asyncio.sleep(1)
-            return
-
-        while self.state == STATE_WAITING_PAYMENT and self._running:
-            try:
-                from protocols.passti.commands import cmd_check_balance
-
-                frame = cmd_check_balance(timeout_sec=2)
-                result = await self.passti_transport.send_recv(frame, timeout=3.0)
-                if result.get("ok"):
-                    body = result.get("body", b"")
-                    if len(body) >= 13:
-                        card_number = body[1:9].hex().upper()
-                        self.state_data["passti_card"] = card_number
-                        self.state_data["passti_card_type"] = body[0]
-                        return
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                pass
-            await asyncio.sleep(0.5)
 
     async def _wait_for_pos_confirm(self) -> None:
         """Wait for cash payment confirmed signal from handle_command."""
@@ -331,22 +308,6 @@ class GateOutDaemon(BaseDaemon):
         )
         logger.info("rfid_exit_detected", gate_id=self.gate_id, card=card_number)
         # FastAPI validates member and sends open_gate command
-
-    async def _on_passti_exit(self) -> None:
-        """PASSTI card was tapped — publish event and wait for FastAPI deduct."""
-        card_number = self.state_data.get("passti_card", "")
-        card_type_code = self.state_data.get("passti_card_type", 0)
-        card_type = self._card_type_name(card_type_code)
-        await self.publish_event(
-            PasstiCardTapEvent(
-                event_type="passti_card_tap",
-                gate_id=self.gate_id,
-                card_number=card_number,
-                card_type=card_type,
-            )
-        )
-        logger.info("passti_exit_detected", gate_id=self.gate_id, card=card_number)
-        # FastAPI calculates tariff and sends deduct command
 
     async def _on_cash_exit(self) -> None:
         """Cash payment confirmed by POS — FastAPI will send open_gate."""
@@ -448,18 +409,22 @@ class GateOutDaemon(BaseDaemon):
 
             elif command_type == "deduct":
                 amount = int(command_data.get("amount", 0))
-                timeout = int(command_data.get("timeout_seconds", 30))
                 expected_card = command_data.get("expected_card_number", "")
-                expected_counter = int(command_data.get("expected_transaction_counter", 0))
-                await self._cmd_deduct(amount, timeout, expected_card, expected_counter)
+                await self._cmd_deduct(amount, expected_card)
 
             elif command_type == "cash_payment_confirmed":
                 transaction_id = command_data.get("transaction_id", "")
                 self.state_data["cash_transaction_id"] = transaction_id
                 self._cash_payment_event.set()
 
+            elif command_type == "emoney_payment_confirmed":
+                # New command from booth bridge via FastAPI relay
+                transaction_id = command_data.get("transaction_id", "")
+                self.state_data["emoney_transaction_id"] = transaction_id
+                self._cash_payment_event.set()
+
             elif command_type == "cancel_correction":
-                await self._cmd_cancel_correction()
+                logger.info("cancel_correction_ignored", gate_id=self.gate_id)
 
             elif command_type == "reset_gate":
                 reason = command_data.get("reason", "operator")
@@ -502,22 +467,26 @@ class GateOutDaemon(BaseDaemon):
         """Print exit receipt."""
         logger.info("print_receipt_commanded", gate_id=self.gate_id)
 
-    async def _cmd_deduct(
-        self,
-        amount: int,
-        timeout_seconds: int,
-        expected_card_number: str,
-        expected_transaction_counter: int,
-    ) -> None:
-        """Execute PASSTI deduct and publish result."""
+    async def _cmd_reset_gate(self, reason: str) -> None:
+        """Reset gate to IDLE."""
+        logger.info("reset_gate", gate_id=self.gate_id, reason=reason)
+        # Cancel any running payment tasks
+        for task in asyncio.all_tasks():
+            if task.get_name() in ("wiegand", "pos", "timeout"):
+                task.cancel()
+        await self._transition(STATE_IDLE)
+        await self._send_controller_command(cmd_dsu())
+
+    async def _cmd_deduct(self, amount: int, expected_card_number: str) -> None:
+        """Execute PASSTI deduct and publish DeductResultEvent."""
         if not self.passti_transport:
-            logger.error("passti_not_connected", gate_id=self.gate_id)
+            logger.warning("deduct_no_transport", gate_id=self.gate_id)
             await self.publish_event(
                 DeductResultEvent(
                     event_type="deduct_result",
                     gate_id=self.gate_id,
-                    status="FAILED",
-                    card_number=expected_card_number,
+                    status=DeductStatus.FAILED,
+                    card_number="",
                     card_type="",
                     deduct_amount=amount,
                     balance_before=0,
@@ -528,52 +497,19 @@ class GateOutDaemon(BaseDaemon):
             )
             return
 
-        try:
-            from protocols.passti.commands import cmd_deduct, parse_deduct_response
+        from protocols.passti.commands import cmd_deduct, parse_deduct_response
 
-            frame = cmd_deduct(amount, timeout_seconds)
-            result = await self.passti_transport.send_recv(frame, timeout=timeout_seconds + 5)
+        frame = cmd_deduct(amount, timeout_sec=30)
+        result = await self.passti_transport.send_recv(frame)
 
-            if result.get("ok"):
-                parsed = parse_deduct_response(result.get("body", b""))
-                if parsed.get("ok", False):
-                    await self.publish_event(
-                        DeductResultEvent(
-                            event_type="deduct_result",
-                            gate_id=self.gate_id,
-                            status="SUCCESS",
-                            card_number=parsed.get("card_number", ""),
-                            card_type=parsed.get("card_type", ""),
-                            deduct_amount=parsed.get("deducted", 0),
-                            balance_before=parsed.get("remaining", 0) + parsed.get("deducted", 0),
-                            balance_after=parsed.get("remaining", 0),
-                            transaction_counter=parsed.get("trans_counter", 0),
-                            raw_response_hex=result.get("raw", ""),
-                        )
-                    )
-                    return
-
-            # Handle specific error statuses
-            status = result.get("status", ())
-            status_msg = result.get("status_msg", "FAILED")
-
-            if status == (0x01, 0x10, 0x05):
-                deduct_status = "LOST_CONTACT"
-            elif status == (0x01, 0x10, 0x06):
-                deduct_status = "WRONG_CARD"
-            elif status == (0x01, 0x10, 0x04):
-                deduct_status = "INSUFFICIENT_BALANCE"
-            elif status == (0x01, 0x10, 0x02):
-                deduct_status = "TIMEOUT"
-            else:
-                deduct_status = "FAILED"
-
+        if not result.get("ok"):
+            status = self._map_passti_status_to_deduct(result.get("status"))
             await self.publish_event(
                 DeductResultEvent(
                     event_type="deduct_result",
                     gate_id=self.gate_id,
-                    status=deduct_status,
-                    card_number=expected_card_number,
+                    status=status,
+                    card_number="",
                     card_type="",
                     deduct_amount=amount,
                     balance_before=0,
@@ -582,45 +518,56 @@ class GateOutDaemon(BaseDaemon):
                     raw_response_hex=result.get("raw", ""),
                 )
             )
-        except Exception as e:
-            logger.error("deduct_error", gate_id=self.gate_id, error=str(e))
+            return
+
+        body = result.get("body", b"")
+        deduct_data = parse_deduct_response(body)
+
+        if not deduct_data.get("ok"):
             await self.publish_event(
                 DeductResultEvent(
                     event_type="deduct_result",
                     gate_id=self.gate_id,
-                    status="FAILED",
-                    card_number=expected_card_number,
+                    status=DeductStatus.FAILED,
+                    card_number="",
                     card_type="",
                     deduct_amount=amount,
                     balance_before=0,
                     balance_after=0,
                     transaction_counter=0,
-                    raw_response_hex="",
+                    raw_response_hex=result.get("raw", ""),
                 )
             )
-
-    async def _cmd_cancel_correction(self) -> None:
-        """Cancel correction mode on PASSTI reader."""
-        if not self.passti_transport:
             return
-        try:
-            from protocols.passti.commands import cmd_cancel_correction
 
-            frame = cmd_cancel_correction()
-            await self.passti_transport.send_recv(frame, timeout=5.0)
-            logger.info("cancel_correction_sent", gate_id=self.gate_id)
-        except Exception as e:
-            logger.error("cancel_correction_error", gate_id=self.gate_id, error=str(e))
+        await self.publish_event(
+            DeductResultEvent(
+                event_type="deduct_result",
+                gate_id=self.gate_id,
+                status=DeductStatus.SUCCESS,
+                card_number=deduct_data.get("card_number", ""),
+                card_type=deduct_data.get("card_type", ""),
+                deduct_amount=deduct_data.get("deducted", 0),
+                balance_before=deduct_data.get("remaining", 0) + deduct_data.get("deducted", 0),
+                balance_after=deduct_data.get("remaining", 0),
+                transaction_counter=deduct_data.get("trans_counter", 0),
+                raw_response_hex=result.get("raw", ""),
+            )
+        )
 
-    async def _cmd_reset_gate(self, reason: str) -> None:
-        """Reset gate to IDLE."""
-        logger.info("reset_gate", gate_id=self.gate_id, reason=reason)
-        # Cancel any running payment tasks
-        for task in asyncio.all_tasks():
-            if task.get_name() in ("wiegand", "passti", "pos", "timeout"):
-                task.cancel()
-        await self._transition(STATE_IDLE)
-        await self._send_controller_command(cmd_dsu())
+    def _map_passti_status_to_deduct(self, status: tuple | None) -> DeductStatus:
+        """Map PASSTI status tuple to DeductStatus enum."""
+        if status == (0x00, 0x00, 0x00):
+            return DeductStatus.SUCCESS
+        if status == (0x01, 0x10, 0x02):
+            return DeductStatus.TIMEOUT
+        if status == (0x01, 0x10, 0x04):
+            return DeductStatus.INSUFFICIENT_BALANCE
+        if status == (0x01, 0x10, 0x05):
+            return DeductStatus.LOST_CONTACT
+        if status == (0x01, 0x10, 0x06):
+            return DeductStatus.WRONG_CARD
+        return DeductStatus.FAILED
 
     # ------------------------------------------------------------------
     # Helpers
