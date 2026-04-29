@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     cors_origins: str = Field(
         default="http://localhost:3000,http://127.0.0.1:3000", alias="CORS_ORIGINS"
     )
+    internal_api_key: str | None = Field(default=None, alias="INTERNAL_API_KEY")
 
     # Hardware defaults
     default_emoney_minimum_balance: int = Field(
