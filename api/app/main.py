@@ -29,9 +29,14 @@ async def lifespan(app: FastAPI):
     from api.app.websocket.broadcaster import broadcaster
     await broadcaster.start()
 
+    # Start event consumer (after broadcaster)
+    from api.app.services.event_consumer import event_consumer
+    await event_consumer.start()
+
     yield
 
     # Shutdown
+    await event_consumer.stop()
     await broadcaster.stop()
     logger.info("api_shutting_down")
 
@@ -84,18 +89,21 @@ def create_app() -> FastAPI:
         areas,
         audit_logs,
         auth,
+        cameras,
         emoney_readers,
-        gates,
+        gates_unified,
         health,
         manual_open_logs,
         member_groups,
         members,
         payments,
+        pos,
         printers,
         reports,
         settlements,
         settings as settings_routes,
         shifts,
+        site_config,
         transactions,
         users,
         vehicle_types,
@@ -105,7 +113,9 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api")
     app.include_router(auth.router, prefix="/api")
     app.include_router(users.router, prefix="/api")
-    app.include_router(gates.router, prefix="/api")
+    app.include_router(gates_unified.router, prefix="/api")
+    app.include_router(pos.router, prefix="/api")
+    app.include_router(cameras.router, prefix="/api")
     app.include_router(settings_routes.router, prefix="/api")
     app.include_router(payments.router, prefix="/api")
     app.include_router(vehicle_types.router, prefix="/api")
@@ -118,6 +128,7 @@ def create_app() -> FastAPI:
     app.include_router(manual_open_logs.router, prefix="/api")
     app.include_router(abandoned_vehicles.router, prefix="/api")
     app.include_router(reports.router, prefix="/api")
+    app.include_router(site_config.router, prefix="/api")
     app.include_router(settlements.router, prefix="/api")
     app.include_router(audit_logs.router, prefix="/api")
     app.include_router(printers.router, prefix="/api")
