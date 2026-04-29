@@ -49,6 +49,19 @@ class EmoneyResultRequest(BaseModel):
     raw_response_hex: str = Field(default="")
 
 
+class EmoneyBoothResultRequest(BaseModel):
+    """E-money result from booth bridge (machine-to-machine)."""
+    gate_id: str = Field(..., description="Daemon gate ID")
+    gate_out_id: int = Field(..., description="Gate-out database ID")
+    card_number: str = Field(..., description="E-money card number")
+    status: str = Field(..., description="Deduct result status")
+    deduct_amount: int = Field(..., ge=0)
+    balance_before: int = Field(..., ge=0)
+    balance_after: int = Field(..., ge=0)
+    transaction_counter: int = Field(..., ge=0)
+    raw_response_hex: str = Field(default="")
+
+
 class TransactionLookupRequest(BaseModel):
     """Lookup an active transaction."""
 

@@ -3,10 +3,12 @@
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.app.middleware.api_key import require_api_key
 from api.app.middleware.auth import require_operator
 from api.app.schemas.common import ErrorResponse, SuccessResponse
 from api.app.schemas.payment import (
     CashPaymentRequest,
+    EmoneyBoothResultRequest,
     EmoneyDeductRequest,
     EmoneyResultRequest,
     PaymentResponse,
@@ -184,6 +186,48 @@ async def emoney_result(
             success=False,
             message=str(e),
         )
+
+
+@router.post("/emoney/booth-result", response_model=PaymentResponse)
+async def emoney_booth_result(
+    request: Request,
+    result: EmoneyBoothResultRequest,
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(require_api_key),
+) -> PaymentResponse:
+    """Process e-money deduct result from booth bridge (machine-to-machine)."""
+    try:
+        status_enum = DeductStatus(result.status)
+    except ValueError:
+        return PaymentResponse(
+            success=False,
+            message=f"Invalid deduct status: {result.status}",
+        )
+
+    try:
+        proc_result = await process_emoney_result(
+            db,
+            gate_id=result.gate_id,
+            gate_out_id=result.gate_out_id,
+            card_number=result.card_number,
+            status=status_enum,
+            deduct_amount=result.deduct_amount,
+            balance_before=result.balance_before,
+            balance_after=result.balance_after,
+            transaction_counter=result.transaction_counter,
+            raw_response_hex=result.raw_response_hex,
+            operator_id=None,
+        )
+        return PaymentResponse(
+            success=proc_result["success"],
+            message="E-money payment processed" if proc_result["success"] else "E-money payment failed",
+            transaction_id=proc_result["transaction"].id,
+            fee=result.deduct_amount if proc_result["success"] else None,
+            payment_method="EMONEY" if proc_result["success"] else None,
+        )
+    except ValueError as e:
+        logger.warning("emoney_booth_result_failed", error=str(e), gate_id=result.gate_id)
+        return PaymentResponse(success=False, message=str(e))
 
 
 @router.post("/lookup", response_model=TransactionLookupResponse)
