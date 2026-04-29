@@ -114,7 +114,7 @@ class WebSocketServer:
         except Exception as e:
             logger.error("booth_api_call_exception", error=str(e))
 
-    async def _handle_client(self, websocket, path):
+    async def _handle_client(self, websocket, path=None):
         """Handle a client connection."""
         self._clients.add(websocket)
         logger.info("client_connected", client=websocket.remote_address)
