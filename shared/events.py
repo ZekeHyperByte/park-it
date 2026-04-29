@@ -288,6 +288,13 @@ class CashPaymentConfirmedCommand(BaseCommand):
     transaction_id: str
 
 
+class EmoneyPaymentConfirmedCommand(BaseCommand):
+    """E-money payment confirmed by POS or booth bridge."""
+
+    command_type: Literal["emoney_payment_confirmed"] = "emoney_payment_confirmed"
+    transaction_id: str
+
+
 class ResetGateCommand(BaseCommand):
     """Reset gate to IDLE."""
 
@@ -308,5 +315,6 @@ RedisCommand = (
     | DeductCommand
     | CancelCorrectionCommand
     | CashPaymentConfirmedCommand
+    | EmoneyPaymentConfirmedCommand
     | ResetGateCommand
 )
