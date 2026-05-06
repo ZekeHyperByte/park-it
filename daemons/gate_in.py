@@ -225,6 +225,17 @@ class GateInDaemon(BaseDaemon):
         duration_ms = self.config.get("gate_close_duration_ms", 5000)
         asyncio.create_task(self._gate_close_timer(duration_ms / 1000.0))
 
+        # Welcome audio (configurable)
+        audio_cfg = self.hw.get("audio", {})
+        if audio_cfg.get("enabled", True):
+            track = audio_cfg.get("welcome_track", 1)
+            await self._send_controller_command(cmd_mt(f"{track:05d}"))
+
+        # Welcome LED (configurable)
+        led_cfg = self.hw.get("led", {})
+        if led_cfg.get("enabled", True):
+            await self._send_controller_command(cmd_ds("Selamat Datang", ""))
+
     async def _gate_close_timer(self, duration: float) -> None:
         """Fallback timer for gate close confirmation."""
         await asyncio.sleep(duration)
@@ -380,6 +391,9 @@ class GateInDaemon(BaseDaemon):
             )
         )
         await self._send_controller_command(cmd_dsu())
+        # Close gate for DUAL relay mode (barrier returns to closed position)
+        if self.config.get("relay_mode") == "DUAL":
+            await self._send_controller_command(cmd_trig2())
 
     async def _on_gate_opened(self) -> None:
         """Gate has opened."""
@@ -566,6 +580,8 @@ class GateInDaemon(BaseDaemon):
                 error=str(e),
             )
 
+        audio_cfg = self.hw.get("audio", {})
+
         if not print_success:
             # Fallback: display barcode on LED
             await self._send_controller_command(
@@ -580,9 +596,14 @@ class GateInDaemon(BaseDaemon):
             )
             # Hold for 3 seconds so driver can see/photograph barcode
             await asyncio.sleep(3)
+            # Play error audio
+            if audio_cfg.get("enabled", True):
+                track = audio_cfg.get("error_track", 11)
+                await self._cmd_play_audio(track)
         else:
             # Play "ambil tiket" audio
-            await self._cmd_play_audio(2)
+            track = audio_cfg.get("ticket_track", 2) if audio_cfg.get("enabled", True) else 2
+            await self._cmd_play_audio(track)
 
         # Gate ALWAYS opens (never trap a vehicle)
         await self._cmd_open_gate()

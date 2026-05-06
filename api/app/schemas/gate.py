@@ -173,6 +173,16 @@ class PrinterConfig(PeripheralConfig):
     """Printer configuration reference."""
 
     printer_id: int | None = None
+    mode: str = "CONTROLLER_PASSTHROUGH"
+
+
+class AudioConfig(PeripheralConfig):
+    """Audio speaker configuration via Compass controller."""
+
+    welcome_track: int = 1
+    ticket_track: int = 2
+    timeout_track: int = 8
+    error_track: int = 11
 
 
 class EmoneyConfig(PeripheralConfig):
@@ -208,7 +218,7 @@ class HardwareConfig(BaseModel):
     ticket_printer: PrinterConfig = Field(default_factory=PrinterConfig)
     emoney: EmoneyConfig = Field(default_factory=EmoneyConfig)
     camera: CameraConfig = Field(default_factory=CameraConfig)
-    audio: PeripheralConfig = Field(default_factory=PeripheralConfig)
+    audio: AudioConfig = Field(default_factory=AudioConfig)
     led: PeripheralConfig = Field(default_factory=PeripheralConfig)
     uhf_reader: UhfReaderConfig = Field(default_factory=UhfReaderConfig)
     receipt_printer: PrinterConfig = Field(default_factory=PrinterConfig)
