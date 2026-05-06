@@ -464,8 +464,29 @@ class GateOutDaemon(BaseDaemon):
             await self._cmd_play_audio(11)
 
     async def _cmd_print_receipt(self, command_data: dict[str, str]) -> None:
-        """Print exit receipt."""
+        """Print exit receipt — enqueue ARQ print job."""
+        import json as json_mod
+
         logger.info("print_receipt_commanded", gate_id=self.gate_id)
+
+        try:
+            from shared.redis import get_arq_redis
+
+            transaction_data_raw = command_data.get("transaction_data", "{}")
+            if isinstance(transaction_data_raw, str):
+                transaction_data = json_mod.loads(transaction_data_raw)
+            else:
+                transaction_data = transaction_data_raw
+
+            arq_redis = await get_arq_redis()
+            await arq_redis.enqueue_job(
+                "print_receipt",
+                gate_id=self.gate_id,
+                transaction_data=transaction_data,
+            )
+            logger.info("receipt_job_enqueued", gate_id=self.gate_id)
+        except Exception as e:
+            logger.error("receipt_enqueue_failed", gate_id=self.gate_id, error=str(e))
 
     async def _cmd_reset_gate(self, reason: str) -> None:
         """Reset gate to IDLE."""
