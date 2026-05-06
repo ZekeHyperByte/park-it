@@ -286,7 +286,7 @@ class BaseDaemon(ABC):
     # ------------------------------------------------------------------
 
     async def _heartbeat(self) -> None:
-        """Publish heartbeat every 30 seconds."""
+        """Publish heartbeat every 30 seconds with daemon state."""
         while self._running:
             try:
                 event = HeartbeatEvent(
@@ -296,6 +296,15 @@ class BaseDaemon(ABC):
                     passti_ok=True,
                 )
                 await self.publish_event(event)
+                # Publish additional state info for monitoring
+                if self._redis:
+                    state_payload = json.dumps({
+                        "event_type": "heartbeat_state",
+                        "gate_id": self.gate_id,
+                        "state": self.state,
+                        "state_data": self.state_data,
+                    })
+                    await self._redis.publish(f"parking.events.{self.gate_id}", state_payload)
                 await asyncio.wait_for(
                     self._shutdown_event.wait(),
                     timeout=30.0,
