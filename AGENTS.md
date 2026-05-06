@@ -34,14 +34,23 @@ The system uses a **single `Gate` model** replacing the old `GateIn`/`GateOut` s
 ```
 Vehicle enters → Controller (IN1 sensor) → GateInDaemon → Redis Pub/Sub → API
                                                               ↓
+                                            Welcome audio + LED (configurable)
+                                                              ↓
                                                          Transaction created
+                                                              ↓
+                                                   Entry snapshot enqueued (ARQ)
+                                                              ↓
+                                              print_ticket_then_open → gate opens
+
 Vehicle exits  → Controller (IN1 sensor) → GateOutDaemon → Redis Pub/Sub → API
                                                               ↓
                                                          POS notified (WebSocket)
                                                               ↓
-                                               Operator pays (Cash/RFID/E-Money)
+                                               Operator pays Cash/RFID/E-Money
                                                               ↓
-                                                         Gate opens via Redis Stream
+                                    CASH: Receipt prints (ARQ), NO auto gate open
+                                    CASH: Operator presses Space/button → open gate
+                                    RFID/EMONEY: Auto open gate (pre-verified)
 ```
 
 ### E-Money Payment Architecture
@@ -206,7 +215,19 @@ parking-system-v2/
 - `systemd` templates use: `ExecStart=python -m daemons.cli --gate-id %i`
 - The CLI queries the DB by gate code, auto-detects direction, starts correct daemon
 - Daemons communicate with API via Redis (Pub/Sub for events, Streams for commands)
-- Heartbeat every 30 seconds
+- Heartbeat every 30 seconds — daemons/base.py publishes state in heartbeat for monitoring
+
+### Exit Flow (Two-Step Cash)
+- Cash payment does **NOT** auto-open the gate (Task 4 change)
+- Operator pays → receipt prints (ARQ worker) → operator presses **Space** or clicks button → `POST /api/gates/{id}/open` → Opens via Redis Stream
+- RFID and e-money remain auto-open (pre-verified methods)
+- New endpoint: `POST /api/gates/{id}/open` with `GateControlRequest(reason="operator")`
+
+### Entry Flow
+- `gate_in.py` plays configurable welcome audio on vehicle detection (AudioConfig.welcome_track, default track 1)
+- LED shows "Selamat Datang" on vehicle arrival (configurable via hardware_config.led.enabled)
+- Ticket success/failure use configurable tracks (ticket_track/error_track)
+- DUAL relay mode: gate closes after vehicle passes through (TRIG2)
 
 ---
 
@@ -254,18 +275,31 @@ python scripts/seed.py
 | File | Purpose |
 |------|---------|
 | `api/app/models/gate.py` | Unified Gate model — source of truth for gate config |
+| `api/app/schemas/gate.py` | HardwareConfig, AudioConfig (welcome/ticket/error track) |
+| `api/app/schemas/gate_control.py` | GateControlRequest/Response for manual open/close |
 | `daemons/cli.py` | Daemon runner — reads gate config from DB |
-| `daemons/base.py` | BaseDaemon — Redis Streams consumer + Pub/Sub publisher |
+| `daemons/base.py` | BaseDaemon — Redis Streams consumer + Pub/Sub publisher + heartbeat state |
+| `daemons/gate_in.py` | Entry gate state machine — welcome audio/LED on vehicle detection |
+| `daemons/gate_out.py` | Exit gate state machine — receipt printing via ARQ worker |
 | `api/app/main.py` | FastAPI app factory — where routers are registered |
 | `frontend/nuxt.config.ts` | Frontend config — `apiBaseUrl`, modules |
+| `frontend/stores/gate.js` | POS transaction state — awaitingGateOpen, openGate() |
 | `frontend/stores/website.js` | Gate cache — fetches `/api/gates?direction=IN/OUT` |
+| `frontend/pages/index.vue` | POS page — two-step flow (pay → Space to open gate) |
+| `frontend/pages/gate-in.vue` | Gate-in monitor — real-time WebSocket state, vehicle counts |
 | `shared/config.py` | Settings — loaded from `.env` via pydantic-settings |
+| `shared/events.py` | All Redis IPC event/command models |
 | `api/alembic/versions/` | All DB migrations — read these before schema changes |
 | `api/app/middleware/api_key.py` | API key auth for booth bridge → machine-to-machine |
-| `api/app/routes/payments.py` | Payment routes including `/emoney/booth-result` |
-| `api/app/services/event_consumer.py` | Server-side Redis Pub/Sub event consumer |
-| `booth_bridge/websocket_server.py` | PASSTI parsing + direct API calls |
-| `shared/events.py` | All Redis IPC event/command models |
+| `api/app/routes/gates_unified.py` | Gate CRUD + `POST /{id}/open` `POST /{id}/close` |
+| `api/app/routes/payments.py` | Payment routes including `/cash` (no auto-open) |
+| `api/app/services/payment.py` | Cash/RFID/e-money orchestration — cash does NOT send OpenGateCommand |
+| `api/app/services/event_consumer.py` | Server-side Redis Pub/Sub — handles vehicle_detected for exit snapshots |
+| `api/app/services/transaction.py` | Transaction lifecycle — enqueues entry snapshot on create |
+| `workers/critical/print_worker.py` | print_ticket + print_receipt ARQ jobs (ESC/POS templates) |
+| `booth_bridge/websocket_server.py` | PASSTI parsing + direct API calls + print_receipt handler |
+| `daemons/tests/test_gate_in_audio.py` | Tests for welcome audio, LED display, DUAL relay close |
+| `api/tests/test_gate_control_routes.py` | Tests for manual open/close API endpoints |
 
 ---
 
@@ -322,5 +356,5 @@ cd frontend && npm test
 
 ---
 
-*Last updated: April 29, 2026*
-*Version: 2.2.0*
+*Last updated: May 6, 2026*
+*Version: 2.3.0*
