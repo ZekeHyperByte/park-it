@@ -159,6 +159,28 @@
 
           <!-- E-Money status panel -->
           <EmoneyPaymentStatus v-if="gateStore.emoneyPaymentState !== 'IDLE'" class="mt-3" />
+
+          <!-- Open Gate button — shown after cash payment confirmation -->
+          <el-card v-if="gateStore.awaitingGateOpen" class="open-gate-card mt-3" shadow="never">
+            <div class="text-center">
+              <p style="color: #e6a23c; font-weight: 500; margin-bottom: 12px;">
+                Pembayaran selesai. Struk sedang dicetak.
+              </p>
+              <el-button
+                type="success"
+                size="large"
+                class="open-gate-btn"
+                :loading="gateStore.isLoading"
+                @click="openGateAction"
+              >
+                <el-icon class="mr-2"><Unlock /></el-icon>
+                Buka Palang & Cetak Struk
+              </el-button>
+              <p class="mt-2" style="color: #909399; font-size: 13px;">
+                Tekan <kbd>Space</kbd> untuk membuka palang
+              </p>
+            </div>
+          </el-card>
         </el-card>
       </el-col>
     </el-row>
@@ -230,7 +252,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { Ticket, Picture, Money, Postcard, CreditCard, Search } from '@element-plus/icons-vue'
+import { Ticket, Picture, Money, Postcard, CreditCard, Search, Unlock } from '@element-plus/icons-vue'
 
 definePageMeta({
   middleware: 'auth',
@@ -501,35 +523,53 @@ function startEmoneyPayment() {
   })
 }
 
-// Keyboard shortcuts
-function onKeydown(e) {
-  // F1 = Cash
-  if (e.key === 'F1') {
-    e.preventDefault()
-    if (gateStore.canPayCash && !gateStore.isLoading) {
-      openCashModal()
+  async function openGateAction() {
+    if (!selectedGate.value) return
+    const success = await gateStore.openGate({
+      gateId: selectedGate.value.id,
+    })
+    if (success) {
+      barcodeInput.value = ''
     }
   }
-  // F2 = RFID
-  if (e.key === 'F2') {
-    e.preventDefault()
-    if (gateStore.canPayRfid && !gateStore.isLoading) {
-      startRfidPayment()
+
+  // Keyboard shortcuts
+  function onKeydown(e) {
+    // Space = Open Gate (when awaiting gate open)
+    if (e.key === ' ') {
+      e.preventDefault()
+      if (gateStore.awaitingGateOpen && !gateStore.isLoading) {
+        openGateAction()
+        return
+      }
+    }
+    // F1 = Cash
+    if (e.key === 'F1') {
+      e.preventDefault()
+      if (gateStore.canPayCash && !gateStore.isLoading) {
+        openCashModal()
+      }
+    }
+    // F2 = RFID
+    if (e.key === 'F2') {
+      e.preventDefault()
+      if (gateStore.canPayRfid && !gateStore.isLoading) {
+        startRfidPayment()
+      }
+    }
+    // F3 = E-Money
+    if (e.key === 'F3') {
+      e.preventDefault()
+      if (gateStore.canPayEmoney && !gateStore.isLoading) {
+        startEmoneyPayment()
+      }
+    }
+    // Escape = cancel modals
+    if (e.key === 'Escape') {
+      cashModalVisible.value = false
+      rfidModalVisible.value = false
     }
   }
-  // F3 = E-Money
-  if (e.key === 'F3') {
-    e.preventDefault()
-    if (gateStore.canPayEmoney && !gateStore.isLoading) {
-      startEmoneyPayment()
-    }
-  }
-  // Escape = cancel modals
-  if (e.key === 'Escape') {
-    cashModalVisible.value = false
-    rfidModalVisible.value = false
-  }
-}
 
 // Lifecycle
 onMounted(async () => {
@@ -629,5 +669,31 @@ onUnmounted(() => {
 
 .ep-red {
   color: #f56c6c;
+}
+
+.open-gate-card {
+  background: #f0f9eb;
+  border: 1px solid #c2e7b0;
+  border-radius: 8px;
+}
+
+.open-gate-btn {
+  height: 56px;
+  font-size: 18px;
+  font-weight: 600;
+  width: 100%;
+}
+
+kbd {
+  background-color: #f5f5f5;
+  border: 1px solid #d9d9d9;
+  border-radius: 3px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+  color: #333;
+  display: inline-block;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 1px 6px;
+  white-space: nowrap;
 }
 </style>

@@ -20,13 +20,14 @@ export const useGateStore = defineStore('gate', () => {
   const selectedGateOutId = ref(null)
   const alertMessage = ref(null)
   const isLoading = ref(false)
+  const awaitingGateOpen = ref(false)
 
   // Getters
   const isWaitingPayment = computed(() => paymentState.value === 'WAITING_PAYMENT')
   const isTimeout = computed(() => paymentState.value === 'TIMEOUT_ALERT')
-  const canPayCash = computed(() => isWaitingPayment.value || isTimeout.value)
-  const canPayEmoney = computed(() => isWaitingPayment.value || isTimeout.value)
-  const canPayRfid = computed(() => isWaitingPayment.value || isTimeout.value)
+  const canPayCash = computed(() => (isWaitingPayment.value || isTimeout.value) && !awaitingGateOpen.value)
+  const canPayEmoney = computed(() => (isWaitingPayment.value || isTimeout.value) && !awaitingGateOpen.value)
+  const canPayRfid = computed(() => (isWaitingPayment.value || isTimeout.value) && !awaitingGateOpen.value)
 
   // Actions
 
@@ -41,6 +42,7 @@ export const useGateStore = defineStore('gate', () => {
     cameraSnapshot.value = null
     waitingSeconds.value = 0
     alertMessage.value = null
+    awaitingGateOpen.value = false
   }
 
   function setPaymentState(state) {
@@ -124,8 +126,8 @@ export const useGateStore = defineStore('gate', () => {
         }),
       })
       if (res.success) {
-        ElMessage.success(res.message)
-        clearTransaction()
+        awaitingGateOpen.value = true
+        ElMessage.success('Pembayaran berhasil. Tekan Space untuk buka palang.')
         return true
       } else {
         ElMessage.error(res.message)
@@ -133,6 +135,34 @@ export const useGateStore = defineStore('gate', () => {
       }
     } catch (err) {
       ElMessage.error(err.message || 'Pembayaran tunai gagal')
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /**
+   * Open the gate manually (two-step flow after cash payment).
+   */
+  async function openGate({ gateId }) {
+    isLoading.value = true
+    try {
+      const { fetchApi } = useApi()
+      const res = await fetchApi(`/api/gates/${gateId}/open`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: 'operator' }),
+      })
+      if (res.success) {
+        awaitingGateOpen.value = false
+        ElMessage.success('Palang pintu dibuka')
+        clearTransaction()
+        return true
+      } else {
+        ElMessage.error(res.message || 'Gagal membuka palang')
+        return false
+      }
+    } catch (err) {
+      ElMessage.error(err.message || 'Gagal membuka palang')
       return false
     } finally {
       isLoading.value = false
@@ -300,6 +330,7 @@ export const useGateStore = defineStore('gate', () => {
     selectedGateOutId,
     alertMessage,
     isLoading,
+    awaitingGateOpen,
     isWaitingPayment,
     isTimeout,
     canPayCash,
@@ -317,6 +348,7 @@ export const useGateStore = defineStore('gate', () => {
     setAlertMessage,
     lookupTransaction,
     confirmCashPayment,
+    openGate,
     processRfidPayment,
     startEmoneyDeduct,
     confirmEmoneyPayment,
