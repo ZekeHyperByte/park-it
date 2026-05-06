@@ -4,11 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.app.middleware.auth import require_admin
+from api.app.middleware.auth import require_admin, require_operator
 from api.app.models.gate import Gate
 from api.app.schemas.common import SuccessResponse
 from api.app.schemas.gate import GateCreate, GateResponse, GateUpdate
+from api.app.schemas.gate_control import GateControlRequest, GateControlResponse
+from api.app.services.gate_command import publish_command
 from api.database import get_db
+from shared.events import CloseGateCommand, OpenGateCommand
 from shared.logging import get_logger
 
 logger = get_logger("gate_routes")
@@ -94,3 +97,45 @@ async def delete_gate(
     await db.commit()
     logger.info("gate_deleted", gate_id=gate_id)
     return SuccessResponse(message="Gate deleted")
+
+
+@router.post("/{gate_id}/open", response_model=GateControlResponse)
+async def open_gate(
+    gate_id: int,
+    req: GateControlRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_operator),
+) -> GateControlResponse:
+    """Manually open a gate. Operator triggered."""
+    gate = await db.get(Gate, gate_id)
+    if gate is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gate not found")
+    if not gate.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gate is not active")
+
+    cmd = OpenGateCommand(gate_id=gate.code, reason=req.reason)
+    msg_id = await publish_command(cmd)
+    logger.info("gate_open_commanded", gate_id=gate.code, reason=req.reason)
+    return GateControlResponse(success=True, message="Gate open command sent", gate_id=gate.code, command_id=msg_id)
+
+
+@router.post("/{gate_id}/close", response_model=GateControlResponse)
+async def close_gate(
+    gate_id: int,
+    req: GateControlRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_operator),
+) -> GateControlResponse:
+    """Manually close a gate (DUAL relay mode only)."""
+    gate = await db.get(Gate, gate_id)
+    if gate is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gate not found")
+    if not gate.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gate is not active")
+    if gate.relay_mode != "DUAL":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gate does not support close command (relay_mode must be DUAL)")
+
+    cmd = CloseGateCommand(gate_id=gate.code, reason=req.reason)
+    msg_id = await publish_command(cmd)
+    logger.info("gate_close_commanded", gate_id=gate.code, reason=req.reason)
+    return GateControlResponse(success=True, message="Gate close command sent", gate_id=gate.code, command_id=msg_id)

@@ -221,12 +221,14 @@ class OpenGateCommand(BaseCommand):
 
     command_type: Literal["open_gate"] = "open_gate"
     duration_seconds: int | None = None
+    reason: str = "operator"
 
 
 class CloseGateCommand(BaseCommand):
     """Close the gate."""
 
     command_type: Literal["close_gate"] = "close_gate"
+    reason: str = "operator"
 
 
 class PlayAudioCommand(BaseCommand):
