@@ -3,7 +3,8 @@
  *
  * Real-time gate-out state for the POS operator.
  * Tracks: current transaction, payment state, e-money payment state,
- * WebSocket connection status, camera snapshot, waiting seconds.
+ * WebSocket connection status, camera snapshot, waiting seconds,
+ * duration timer, and hardware status.
  */
 
 import { defineStore } from 'pinia'
@@ -11,8 +12,8 @@ import { defineStore } from 'pinia'
 export const useGateStore = defineStore('gate', () => {
   // State
   const currentTransaction = ref(null)
-  const paymentState = ref('IDLE') // IDLE, VEHICLE_PRESENT, WAITING_PAYMENT, TIMEOUT_ALERT
-  const emoneyPaymentState = ref('IDLE') // IDLE, WAITING_CARD, PROCESSING, LOST_CONTACT, WRONG_CARD, INSUFFICIENT, SUCCESS, FAILED
+  const paymentState = ref('IDLE')
+  const emoneyPaymentState = ref('IDLE')
   const wsConnected = ref(false)
   const boothConnected = ref(false)
   const cameraSnapshot = ref(null)
@@ -21,6 +22,11 @@ export const useGateStore = defineStore('gate', () => {
   const alertMessage = ref(null)
   const isLoading = ref(false)
   const awaitingGateOpen = ref(false)
+  const durationSeconds = ref(0)
+  const changeAmount = ref(0)
+
+  // Duration timer
+  let durationInterval = null
 
   // Getters
   const isWaitingPayment = computed(() => paymentState.value === 'WAITING_PAYMENT')
@@ -33,6 +39,9 @@ export const useGateStore = defineStore('gate', () => {
 
   function setTransaction(tx) {
     currentTransaction.value = tx
+    if (tx?.entry_time) {
+      startDurationTimer(tx.entry_time)
+    }
   }
 
   function clearTransaction() {
@@ -43,6 +52,8 @@ export const useGateStore = defineStore('gate', () => {
     waitingSeconds.value = 0
     alertMessage.value = null
     awaitingGateOpen.value = false
+    changeAmount.value = 0
+    stopDurationTimer()
   }
 
   function setPaymentState(state) {
@@ -77,6 +88,26 @@ export const useGateStore = defineStore('gate', () => {
     alertMessage.value = message
   }
 
+  function startDurationTimer(entryTime) {
+    stopDurationTimer()
+    const entry = new Date(entryTime)
+    durationSeconds.value = Math.floor((Date.now() - entry.getTime()) / 1000)
+    durationInterval = setInterval(() => {
+      if (currentTransaction.value?.entry_time) {
+        const e = new Date(currentTransaction.value.entry_time)
+        durationSeconds.value = Math.floor((Date.now() - e.getTime()) / 1000)
+      }
+    }, 1000)
+  }
+
+  function stopDurationTimer() {
+    if (durationInterval) {
+      clearInterval(durationInterval)
+      durationInterval = null
+    }
+    durationSeconds.value = 0
+  }
+
   /**
    * Look up an active transaction by barcode, card, or plate.
    */
@@ -96,6 +127,9 @@ export const useGateStore = defineStore('gate', () => {
         currentTransaction.value = {
           ...res.transaction,
           tariff: res.fee,
+        }
+        if (res.transaction.entry_time) {
+          startDurationTimer(res.transaction.entry_time)
         }
         return true
       }
@@ -126,16 +160,17 @@ export const useGateStore = defineStore('gate', () => {
         }),
       })
       if (res.success) {
+        changeAmount.value = res.change_amount || 0
         awaitingGateOpen.value = true
         ElMessage.success('Pembayaran berhasil. Tekan Space untuk buka palang.')
-        return true
+        return res
       } else {
         ElMessage.error(res.message)
-        return false
+        return null
       }
     } catch (err) {
       ElMessage.error(err.message || 'Pembayaran tunai gagal')
-      return false
+      return null
     } finally {
       isLoading.value = false
     }
@@ -234,8 +269,9 @@ export const useGateStore = defineStore('gate', () => {
 
   /**
    * Confirm e-money payment (called after booth bridge deduct success).
+   * Bug fix #4: Use balance_before from response, not calculated from tariff.
    */
-  async function confirmEmoneyPayment({ gateId, gateOutId, deductAmount, balanceAfter, transactionCounter, rawResponseHex }) {
+  async function confirmEmoneyPayment({ gateId, gateOutId, cardNumber, deductAmount, balanceBefore, balanceAfter, transactionCounter, rawResponseHex }) {
     isLoading.value = true
     try {
       const { fetchApi } = useApi()
@@ -244,10 +280,10 @@ export const useGateStore = defineStore('gate', () => {
         body: JSON.stringify({
           gate_id: gateId,
           gate_out_id: gateOutId,
-          card_number: currentTransaction.value?.card_number,
+          card_number: cardNumber,
           status: 'SUCCESS',
           deduct_amount: deductAmount,
-          balance_before: (currentTransaction.value?.tariff || 0) + balanceAfter,
+          balance_before: balanceBefore,
           balance_after: balanceAfter,
           transaction_counter: transactionCounter,
           raw_response_hex: rawResponseHex,
@@ -256,14 +292,14 @@ export const useGateStore = defineStore('gate', () => {
       if (res.success) {
         ElMessage.success(res.message)
         clearTransaction()
-        return true
+        return res
       } else {
         ElMessage.error(res.message)
-        return false
+        return null
       }
     } catch (err) {
       ElMessage.error(err.message || 'E-money payment failed')
-      return false
+      return null
     } finally {
       isLoading.value = false
     }
@@ -276,7 +312,6 @@ export const useGateStore = defineStore('gate', () => {
     switch (event.type) {
       case 'vehicle_detected':
         paymentState.value = 'VEHICLE_PRESENT'
-        // Try to lookup transaction if card number is available
         if (event.card_number) {
           lookupTransaction({ cardNumber: event.card_number })
         }
@@ -296,7 +331,6 @@ export const useGateStore = defineStore('gate', () => {
       case 'deduct_result':
         if (event.status === 'SUCCESS') {
           emoneyPaymentState.value = 'SUCCESS'
-          // Auto-clear after 3 seconds
           setTimeout(() => clearTransaction(), 3000)
         } else if (event.status === 'LOST_CONTACT') {
           emoneyPaymentState.value = 'LOST_CONTACT'
@@ -309,7 +343,6 @@ export const useGateStore = defineStore('gate', () => {
         }
         break
       case 'rfid_card_read':
-        // Auto-process RFID if transaction exists
         if (event.card_number && currentTransaction.value) {
           // RFID handled server-side; POS gets notified
         }
@@ -331,6 +364,8 @@ export const useGateStore = defineStore('gate', () => {
     alertMessage,
     isLoading,
     awaitingGateOpen,
+    durationSeconds,
+    changeAmount,
     isWaitingPayment,
     isTimeout,
     canPayCash,
@@ -346,6 +381,8 @@ export const useGateStore = defineStore('gate', () => {
     setWaitingSeconds,
     setSelectedGateOutId,
     setAlertMessage,
+    startDurationTimer,
+    stopDurationTimer,
     lookupTransaction,
     confirmCashPayment,
     openGate,

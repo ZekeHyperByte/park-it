@@ -1,258 +1,79 @@
 <template>
   <div class="pos-page">
-    <!-- Page header -->
-    <el-row :gutter="16" class="mb-3">
-      <el-col :span="16">
-        <h1 class="pos-title">Point of Sale — Gate Out</h1>
-        <p class="pos-subtitle">
-          Gate: <strong>{{ selectedGate?.name || '—' }}</strong>
-          &nbsp;|&nbsp; Gate WS:
-          <el-tag :type="wsStatusType" size="small">{{ wsStatusText }}</el-tag>
-          &nbsp;|&nbsp; Booth:
-          <el-tag :type="gateStore.boothConnected ? 'success' : 'danger'" size="small">
-            {{ gateStore.boothConnected ? 'Connected' : 'Disconnected' }}
-          </el-tag>
-        </p>
-      </el-col>
-      <el-col :span="8" class="text-right">
-        <el-select
-          v-if="gateSelectorVisible"
-          v-model="gateStore.selectedGateOutId"
-          placeholder="Pilih Gate Out"
-          style="width: 220px"
-          @change="onGateChange"
-        >
-          <el-option
-            v-for="g in websiteStore.activeGateOuts"
-            :key="g.id"
-            :label="g.name"
-            :value="g.id"
-          />
-        </el-select>
-        <el-tag v-else type="info" size="large">
-          {{ selectedGate?.name || '—' }}
-        </el-tag>
-      </el-col>
-    </el-row>
+    <!-- Zone 1: Status Bar -->
+    <StatusBar
+      :gate="selectedGate"
+      :hardware-status="hardwareStatus"
+      :user="authStore.user"
+      :cash-collected="cashCollected"
+      :transaction-count="transactionCount"
+      :shift-info="shiftInfo"
+    />
 
-    <!-- Main POS layout -->
-    <el-row :gutter="16">
-      <!-- Left: Transaction + Snapshot -->
-      <el-col :span="14">
-        <el-card class="pos-card" shadow="hover">
-          <template #header>
-            <span>Transaksi Aktif</span>
-          </template>
-
-          <!-- Barcode lookup -->
-          <div class="mb-3">
-            <el-input
-              v-model="barcodeInput"
-              placeholder="Scan barcode atau masukkan plat nomor..."
-              clearable
-              @keyup.enter="onBarcodeLookup"
-            >
-              <template #append>
-                <el-button @click="onBarcodeLookup">
-                  <el-icon><Search /></el-icon>
-                </el-button>
-              </template>
-            </el-input>
-          </div>
-
-          <div v-if="gateStore.currentTransaction" class="transaction-detail">
-            <el-descriptions :column="2" border>
-              <el-descriptions-item label="Barcode">{{ gateStore.currentTransaction.barcode || '—' }}</el-descriptions-item>
-              <el-descriptions-item label="Plat Nomor">{{ gateStore.currentTransaction.plate_number || '—' }}</el-descriptions-item>
-              <el-descriptions-item label="Jenis">{{ vehicleTypeName }}</el-descriptions-item>
-              <el-descriptions-item label="Waktu Masuk">{{ formatDateTime(gateStore.currentTransaction.entry_time) }}</el-descriptions-item>
-              <el-descriptions-item label="Durasi">{{ durationText }}</el-descriptions-item>
-              <el-descriptions-item label="Tarif">
-                <strong class="ep-red">Rp {{ formatNumber(gateStore.currentTransaction.tariff) }}</strong>
-              </el-descriptions-item>
-            </el-descriptions>
-          </div>
-
-          <div v-else class="transaction-empty text-center p-4">
-            <el-icon :size="48" color="#dcdfe6"><Ticket /></el-icon>
-            <p class="mt-2" style="color: #909399;">Tidak ada transaksi aktif</p>
-          </div>
-
-          <!-- Snapshot preview -->
-          <div v-if="gateStore.cameraSnapshot" class="snapshot-preview mt-3">
-            <el-image
-              :src="gateStore.cameraSnapshot"
-              fit="cover"
-              style="width: 100%; height: 240px; border-radius: 4px;"
-            >
-              <template #error>
-                <div class="image-slot">
-                  <el-icon><Picture /></el-icon>
-                </div>
-              </template>
-            </el-image>
-          </div>
-        </el-card>
-      </el-col>
-
-      <!-- Right: Payment Methods -->
-      <el-col :span="10">
-        <el-card class="pos-card payment-panel" shadow="hover">
-          <template #header>
-            <span>Metode Pembayaran</span>
-          </template>
-
-          <!-- Payment timeout alert -->
-          <el-alert
-            v-if="gateStore.isTimeout"
-            :title="gateStore.alertMessage || 'Waktu pembayaran habis'"
-            type="warning"
-            show-icon
-            :closable="false"
-            class="mb-3"
-          />
-
-          <!-- Cash Payment -->
-          <div class="payment-method mb-3">
-            <el-button
-              type="primary"
-              size="large"
-              class="w-full payment-btn"
-              :disabled="!gateStore.canPayCash || gateStore.isLoading"
-              :loading="gateStore.isLoading && activeMethod === 'cash'"
-              @click="openCashModal"
-            >
-              <el-icon class="mr-2"><Money /></el-icon>
-              Bayar Tunai (F1)
-            </el-button>
-          </div>
-
-          <!-- RFID Payment -->
-          <div class="payment-method mb-3">
-            <el-button
-              type="success"
-              size="large"
-              class="w-full payment-btn"
-              :disabled="!gateStore.canPayRfid || gateStore.isLoading"
-              :loading="gateStore.isLoading && activeMethod === 'rfid'"
-              @click="startRfidPayment"
-            >
-              <el-icon class="mr-2"><Postcard /></el-icon>
-              Bayar RFID Member (F2)
-            </el-button>
-          </div>
-
-          <!-- E-Money Payment -->
-          <div class="payment-method">
-            <el-button
-              type="warning"
-              size="large"
-              class="w-full payment-btn"
-              :disabled="!gateStore.canPayEmoney || gateStore.isLoading"
-              :loading="gateStore.isLoading && activeMethod === 'emoney'"
-              @click="startEmoneyPayment"
-            >
-              <el-icon class="mr-2"><CreditCard /></el-icon>
-              Bayar E-Money (F3)
-            </el-button>
-          </div>
-
-          <!-- E-Money status panel -->
-          <EmoneyPaymentStatus v-if="gateStore.emoneyPaymentState !== 'IDLE'" class="mt-3" />
-
-          <!-- Open Gate button — shown after cash payment confirmation -->
-          <el-card v-if="gateStore.awaitingGateOpen" class="open-gate-card mt-3" shadow="never">
-            <div class="text-center">
-              <p style="color: #e6a23c; font-weight: 500; margin-bottom: 12px;">
-                Pembayaran selesai. Struk sedang dicetak.
-              </p>
-              <el-button
-                type="success"
-                size="large"
-                class="open-gate-btn"
-                :loading="gateStore.isLoading"
-                @click="openGateAction"
-              >
-                <el-icon class="mr-2"><Unlock /></el-icon>
-                Buka Palang & Cetak Struk
-              </el-button>
-              <p class="mt-2" style="color: #909399; font-size: 13px;">
-                Tekan <kbd>Space</kbd> untuk membuka palang
-              </p>
-            </div>
-          </el-card>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <!-- Cash Payment Modal -->
-    <el-dialog
-      v-model="cashModalVisible"
-      title="Pembayaran Tunai"
-      width="400px"
-      :close-on-click-modal="false"
-    >
-      <div v-if="gateStore.currentTransaction">
-        <p class="mb-2">Total yang harus dibayar:</p>
-        <h2 class="text-center ep-red mb-3">
-          Rp {{ formatNumber(gateStore.currentTransaction.tariff) }}
-        </h2>
-        <el-form label-position="top">
-          <el-form-item label="Uang Diterima">
-            <el-input-number
-              v-model="cashReceived"
-              :min="0"
-              :step="1000"
-              style="width: 100%"
-              size="large"
-              @keyup.enter="confirmCashPayment"
-            />
-          </el-form-item>
-          <el-form-item label="Kembalian">
-            <el-input
-              :model-value="formatNumber(changeAmount)"
-              readonly
-              size="large"
-            />
-          </el-form-item>
-        </el-form>
-      </div>
-      <template #footer>
-        <el-button @click="cashModalVisible = false">Batal</el-button>
-        <el-button type="primary" :loading="gateStore.isLoading" @click="confirmCashPayment">
-          Konfirmasi (Enter)
-        </el-button>
-      </template>
-    </el-dialog>
-
-    <!-- RFID Card Input Modal -->
-    <el-dialog
-      v-model="rfidModalVisible"
-      title="Bayar RFID Member"
-      width="400px"
-      :close-on-click-modal="false"
-    >
-      <p class="mb-2">Tempelkan atau masukkan nomor kartu member:</p>
-      <el-input
-        v-model="rfidCardNumber"
-        placeholder="Nomor kartu RFID"
-        size="large"
-        clearable
-        @keyup.enter="confirmRfidPayment"
+    <!-- Zone 2: Main Area (60/40 split) -->
+    <div class="main-area">
+      <!-- Left: Vehicle Info Card -->
+      <VehicleInfoCard
+        :transaction="gateStore.currentTransaction"
+        :duration-seconds="gateStore.durationSeconds"
+        :waiting-seconds="gateStore.waitingSeconds"
+        :payment-state="gateStore.paymentState"
+        :emoney-state="gateStore.emoneyPaymentState"
+        :vehicle-types="websiteStore.vehicleTypes"
+        :entry-photo-url="entryPhotoUrl"
+        :exit-photo-url="exitPhotoUrl"
+        :timeout-seconds="timeoutSeconds"
+        @lookup="onBarcodeLookup"
+        @manual-open="openGateAction"
+        @reset-gate="resetGateAction"
+        @vehicle-left="vehicleLeftAction"
+        @pay-cash="openCashModal"
+        @pay-rfid="startRfidPayment"
+        @retry-emoney="retryEmoney"
+        @cancel-correction="cancelCorrection"
+        @override="overrideAction"
       />
-      <template #footer>
-        <el-button @click="rfidModalVisible = false">Batal</el-button>
-        <el-button type="success" :loading="gateStore.isLoading" @click="confirmRfidPayment">
-          Konfirmasi
-        </el-button>
-      </template>
-    </el-dialog>
+
+      <!-- Right: Payment Panel -->
+      <PaymentPanel
+        ref="paymentPanelRef"
+        :payment-state="gateStore.paymentState"
+        :emoney-state="gateStore.emoneyPaymentState"
+        :awaiting-gate-open="gateStore.awaitingGateOpen"
+        :tariff="currentTariff"
+        :change-amount="gateStore.changeAmount"
+        :emoney-card-info="emoneyCardInfo"
+        :emoney-balance="emoneyBalance"
+        @pay-cash="openCashModal"
+        @pay-rfid="startRfidPayment"
+        @pay-emoney="startEmoneyPayment"
+        @open-gate="openGateAction"
+        @cancel-emoney="cancelEmoney"
+        @retry-emoney="retryEmoney"
+        @barcode-lookup="onBarcodeLookupInput"
+        @confirm-cash="confirmCashPayment"
+        @confirm-rfid="confirmRfidPayment"
+      />
+    </div>
+
+    <!-- Zone 3: Quick Action Bar -->
+    <QuickActionBar
+      :payment-state="gateStore.paymentState"
+      :emoney-state="gateStore.emoneyPaymentState"
+      :awaiting-gate-open="gateStore.awaitingGateOpen"
+      :can-pay-cash="gateStore.canPayCash"
+      :can-pay-rfid="gateStore.canPayRfid"
+      :can-pay-emoney="gateStore.canPayEmoney"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { Ticket, Picture, Money, Postcard, CreditCard, Search, Unlock } from '@element-plus/icons-vue'
+import StatusBar from '~/components/pos/StatusBar.vue'
+import VehicleInfoCard from '~/components/pos/VehicleInfoCard.vue'
+import PaymentPanel from '~/components/pos/PaymentPanel.vue'
+import QuickActionBar from '~/components/pos/QuickActionBar.vue'
 
 definePageMeta({
   middleware: 'auth',
@@ -263,14 +84,11 @@ const websiteStore = useWebsiteStore()
 const gateStore = useGateStore()
 const { $ws } = useNuxtApp()
 const { fetchApi } = useApi()
+const sound = useSound()
+const { hardwareStatus, updateFromGate, updateWebSocketStatus, startPolling, stopPolling } = useHardwareStatus()
 
-// Local state
-const cashModalVisible = ref(false)
-const cashReceived = ref(0)
-const rfidModalVisible = ref(false)
-const rfidCardNumber = ref('')
-const barcodeInput = ref('')
-const activeMethod = ref(null)
+// Refs
+const paymentPanelRef = ref(null)
 let unsubscribeWs = null
 let boothWs = null
 let boothWsReconnectTimer = null
@@ -278,88 +96,78 @@ let boothWsReconnectTimer = null
 // Booth auto-detection
 const currentPos = ref(null)
 const isAdmin = computed(() => authStore.user?.role === 'admin')
-const gateSelectorVisible = computed(() => isAdmin.value || !currentPos.value?.default_gate_id)
+
+// Shift counter state
+const cashCollected = ref(0)
+const transactionCount = ref(0)
+const shiftInfo = ref(null)
+
+// Timeout config (default 120s)
+const timeoutSeconds = computed(() => {
+  return parseInt(websiteStore.getSetting('payment_timeout_seconds', '120'))
+})
 
 // Computed
 const selectedGate = computed(() =>
   websiteStore.activeGateOuts.find((g) => g.id === gateStore.selectedGateOutId)
 )
 
-const wsStatusText = computed(() => {
-  if (!gateStore.selectedGateOutId) return 'No Gate'
-  const gateCode = selectedGate.value?.code || `gate-out-${gateStore.selectedGateOutId}`
-  return $ws.isConnected(gateCode) ? 'Connected' : 'Disconnected'
+const currentTariff = computed(() => {
+  return gateStore.currentTransaction?.tariff || gateStore.currentTransaction?.fee || 0
 })
 
-const wsStatusType = computed(() => {
-  if (!gateStore.selectedGateOutId) return 'info'
-  const gateCode = selectedGate.value?.code || `gate-out-${gateStore.selectedGateOutId}`
-  return $ws.isConnected(gateCode) ? 'success' : 'danger'
+const entryPhotoUrl = computed(() => {
+  const tx = gateStore.currentTransaction
+  if (!tx?.entry_snapshot_id) return null
+  return `/api/snapshots/${tx.entry_snapshot_id}/image`
 })
 
-const changeAmount = computed(() => {
-  const tariff = gateStore.currentTransaction?.tariff || 0
-  return Math.max(0, cashReceived.value - tariff)
+const exitPhotoUrl = computed(() => {
+  return gateStore.cameraSnapshot
 })
 
-const vehicleTypeName = computed(() => {
-  const vtId = gateStore.currentTransaction?.vehicle_type_id
-  if (!vtId) return '—'
-  const vt = websiteStore.vehicleTypes?.find((v) => v.id === vtId)
-  return vt?.name || '—'
+const emoneyCardInfo = computed(() => {
+  const tx = gateStore.currentTransaction
+  if (!tx?.card_number) return null
+  return {
+    cardType: detectCardType(tx.card_number),
+    cardNumber: maskCardNumber(tx.card_number),
+  }
 })
 
-const durationText = computed(() => {
-  const entryTime = gateStore.currentTransaction?.entry_time
-  if (!entryTime) return '—'
-  const entry = new Date(entryTime)
-  const now = new Date()
-  const diffMs = now - entry
-  const diffH = Math.floor(diffMs / 3600000)
-  const diffM = Math.floor((diffMs % 3600000) / 60000)
-  return `${diffH}j ${diffM}m`
-})
+const emoneyBalance = ref(null)
 
 // Methods
-function formatNumber(n) {
-  if (n === undefined || n === null) return '0'
-  return Number(n).toLocaleString('id-ID')
+function detectCardNumber(cardNumber) {
+  if (!cardNumber) return 'Unknown'
+  if (cardNumber.startsWith('00') || cardNumber.startsWith('01')) return 'Mandiri eMoney'
+  if (cardNumber.startsWith('02')) return 'BRI Brizzi'
+  if (cardNumber.startsWith('03')) return 'BNI TapCash'
+  if (cardNumber.startsWith('04')) return 'BCA Flazz'
+  return 'E-Money'
 }
 
-function formatDateTime(iso) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return d.toLocaleString('id-ID')
+function maskCardNumber(cardNumber) {
+  if (!cardNumber || cardNumber.length < 8) return '****'
+  const last4 = cardNumber.slice(-4)
+  return `**** **** **** ${last4}`
 }
 
-function onGateChange(gateId) {
-  if (unsubscribeWs) {
-    unsubscribeWs()
-    unsubscribeWs = null
+function formatCurrency(amount) {
+  return `Rp ${new Intl.NumberFormat('id-ID').format(amount)}`
+}
+
+function onBarcodeLookup() {
+  if (paymentPanelRef.value) {
+    paymentPanelRef.value.openCashModal()
   }
-
-  gateStore.clearTransaction()
-  barcodeInput.value = ''
-
-  if (!gateId) return
-
-  const gate = websiteStore.activeGateOuts.find((g) => g.id === gateId)
-  if (!gate) return
-
-  const gateCode = gate.code || `gate-out-${gateId}`
-
-  unsubscribeWs = $ws.on(gateCode, (event) => {
-    gateStore.handleWsEvent(event)
-  })
-
-  gateStore.setWsConnected($ws.isConnected(gateCode))
 }
 
-async function onBarcodeLookup() {
-  if (!barcodeInput.value.trim()) return
+async function onBarcodeLookupInput(input) {
+  if (!input.trim()) return
   const found = await gateStore.lookupTransaction({
-    barcode: barcodeInput.value.trim(),
-    plateNumber: barcodeInput.value.trim(),
+    barcode: input.trim(),
+    plateNumber: input.trim(),
   })
   if (!found) {
     ElMessage.warning('Transaksi tidak ditemukan')
@@ -367,34 +175,34 @@ async function onBarcodeLookup() {
 }
 
 function openCashModal() {
-  cashReceived.value = gateStore.currentTransaction?.tariff || 0
-  activeMethod.value = 'cash'
-  cashModalVisible.value = true
+  if (paymentPanelRef.value) {
+    paymentPanelRef.value.openCashModal()
+  }
 }
 
-async function confirmCashPayment() {
+async function confirmCashPayment(amount) {
   if (!selectedGate.value) return
   const gateCode = selectedGate.value.code || `gate-out-${selectedGate.value.id}`
-  const success = await gateStore.confirmCashPayment({
+  const result = await gateStore.confirmCashPayment({
     gateId: gateCode,
     gateOutId: selectedGate.value.id,
-    paidAmount: cashReceived.value,
+    paidAmount: amount,
   })
-  if (success) {
-    cashModalVisible.value = false
-    barcodeInput.value = ''
+  if (result) {
+    sound.paymentSuccess()
+    cashCollected.value += amount - (result.change_amount || 0)
+    transactionCount.value++
   }
-  activeMethod.value = null
 }
 
 function startRfidPayment() {
-  activeMethod.value = 'rfid'
-  rfidCardNumber.value = ''
-  rfidModalVisible.value = true
+  if (paymentPanelRef.value) {
+    paymentPanelRef.value.openRfidModal()
+  }
 }
 
-async function confirmRfidPayment() {
-  if (!rfidCardNumber.value.trim() || !selectedGate.value) {
+async function confirmRfidPayment(cardNumber) {
+  if (!cardNumber.trim() || !selectedGate.value) {
     ElMessage.warning('Masukkan nomor kartu RFID')
     return
   }
@@ -402,14 +210,12 @@ async function confirmRfidPayment() {
   const success = await gateStore.processRfidPayment({
     gateId: gateCode,
     gateOutId: selectedGate.value.id,
-    cardNumber: rfidCardNumber.value.trim(),
+    cardNumber: cardNumber.trim(),
   })
   if (success) {
-    rfidModalVisible.value = false
-    rfidCardNumber.value = ''
-    barcodeInput.value = ''
+    sound.paymentSuccess()
+    transactionCount.value++
   }
-  activeMethod.value = null
 }
 
 function connectBooth() {
@@ -438,7 +244,6 @@ function connectBooth() {
   }
   boothWs.onclose = () => {
     gateStore.setBoothConnected(false)
-    // Auto-reconnect after 3s
     if (!boothWsReconnectTimer) {
       boothWsReconnectTimer = setTimeout(() => {
         boothWsReconnectTimer = null
@@ -464,12 +269,16 @@ function handleBoothMessage(data) {
   if (data.action === 'emoney_deduct_result') {
     if (data.status === 'SUCCESS') {
       gateStore.setEmoneyState('SUCCESS')
+      emoneyBalance.value = data.balance_after
+      sound.paymentSuccess()
       if (selectedGate.value) {
         const gateCode = selectedGate.value.code || `gate-out-${selectedGate.value.id}`
         gateStore.confirmEmoneyPayment({
           gateId: gateCode,
           gateOutId: selectedGate.value.id,
+          cardNumber: data.card_number,
           deductAmount: data.deduct_amount,
+          balanceBefore: data.balance_before,
           balanceAfter: data.balance_after,
           transactionCounter: data.transaction_counter,
           rawResponseHex: data.raw_response_hex,
@@ -477,32 +286,32 @@ function handleBoothMessage(data) {
       }
     } else if (data.status === 'LOST_CONTACT') {
       gateStore.setEmoneyState('LOST_CONTACT')
+      sound.paymentFailed()
       ElMessage.warning('Tap kartu lagi untuk koreksi')
     } else if (data.status === 'INSUFFICIENT_BALANCE') {
       gateStore.setEmoneyState('INSUFFICIENT')
+      sound.paymentFailed()
       ElMessage.warning('Saldo tidak cukup')
     } else if (data.status === 'WRONG_CARD') {
       gateStore.setEmoneyState('WRONG_CARD')
+      sound.paymentFailed()
       ElMessage.error('Kartu tidak sesuai')
     } else {
       gateStore.setEmoneyState('FAILED')
+      sound.paymentFailed()
       ElMessage.error(data.error || 'E-Money gagal')
     }
-    activeMethod.value = null
   }
 }
 
 function startEmoneyPayment() {
-  activeMethod.value = 'emoney'
   const tx = gateStore.currentTransaction
   if (!tx?.card_number) {
     ElMessage.warning('Transaksi tidak memiliki nomor kartu e-money')
-    activeMethod.value = null
     return
   }
   if (!selectedGate.value) return
 
-  // If booth bridge is connected, use it directly
   if (gateStore.boothConnected && boothWs) {
     boothWs.send(JSON.stringify({
       action: 'emoney_deduct',
@@ -514,7 +323,6 @@ function startEmoneyPayment() {
     return
   }
 
-  // Fallback to API-based deduct (for manless gates or legacy mode)
   const gateCode = selectedGate.value.code || `gate-out-${selectedGate.value.id}`
   gateStore.startEmoneyDeduct({
     gateId: gateCode,
@@ -523,53 +331,73 @@ function startEmoneyPayment() {
   })
 }
 
-  async function openGateAction() {
-    if (!selectedGate.value) return
-    const success = await gateStore.openGate({
-      gateId: selectedGate.value.id,
-    })
-    if (success) {
-      barcodeInput.value = ''
-    }
+function cancelEmoney() {
+  gateStore.setEmoneyState('IDLE')
+}
+
+function retryEmoney() {
+  gateStore.setEmoneyState('IDLE')
+  startEmoneyPayment()
+}
+
+function cancelCorrection() {
+  gateStore.setEmoneyState('IDLE')
+  ElMessage.info('Koreksi dibatalkan')
+}
+
+function overrideAction() {
+  ElMessage.warning('Override memerlukan hak admin')
+}
+
+async function openGateAction() {
+  if (!selectedGate.value) return
+  const success = await gateStore.openGate({
+    gateId: selectedGate.value.id,
+  })
+  if (success) {
+    sound.gateOpen()
+  }
+}
+
+function resetGateAction() {
+  ElMessage.info('Reset palang — kirim perintah ke daemon')
+}
+
+function vehicleLeftAction() {
+  gateStore.clearTransaction()
+  ElMessage.info('Kendaraan pergi — transaksi dibersihkan')
+}
+
+function onGateChange(gateId) {
+  if (unsubscribeWs) {
+    unsubscribeWs()
+    unsubscribeWs = null
   }
 
-  // Keyboard shortcuts
-  function onKeydown(e) {
-    // Space = Open Gate (when awaiting gate open)
-    if (e.key === ' ') {
-      e.preventDefault()
-      if (gateStore.awaitingGateOpen && !gateStore.isLoading) {
-        openGateAction()
-        return
-      }
+  gateStore.clearTransaction()
+
+  if (!gateId) return
+
+  const gate = websiteStore.activeGateOuts.find((g) => g.id === gateId)
+  if (!gate) return
+
+  const gateCode = gate.code || `gate-out-${gateId}`
+
+  unsubscribeWs = $ws.on(gateCode, (event) => {
+    gateStore.handleWsEvent(event)
+
+    // Sound feedback on events
+    if (event.type === 'vehicle_detected') {
+      sound.vehicleDetected()
+    } else if (event.type === 'timeout_alert') {
+      sound.timeoutAlert()
     }
-    // F1 = Cash
-    if (e.key === 'F1') {
-      e.preventDefault()
-      if (gateStore.canPayCash && !gateStore.isLoading) {
-        openCashModal()
-      }
-    }
-    // F2 = RFID
-    if (e.key === 'F2') {
-      e.preventDefault()
-      if (gateStore.canPayRfid && !gateStore.isLoading) {
-        startRfidPayment()
-      }
-    }
-    // F3 = E-Money
-    if (e.key === 'F3') {
-      e.preventDefault()
-      if (gateStore.canPayEmoney && !gateStore.isLoading) {
-        startEmoneyPayment()
-      }
-    }
-    // Escape = cancel modals
-    if (e.key === 'Escape') {
-      cashModalVisible.value = false
-      rfidModalVisible.value = false
-    }
-  }
+  })
+
+  gateStore.setWsConnected($ws.isConnected(gateCode))
+  updateWebSocketStatus($ws.isConnected(gateCode))
+  updateFromGate(gate)
+}
 
 // Lifecycle
 onMounted(async () => {
@@ -589,7 +417,6 @@ onMounted(async () => {
     }
   } catch (err) {
     console.warn('Booth auto-detection failed:', err.message)
-    // Fallback: let operator pick manually
   }
 
   // If no auto-assignment, pick first available
@@ -598,7 +425,21 @@ onMounted(async () => {
     onGateChange(websiteStore.activeGateOuts[0].id)
   }
 
+  // Load shift info
+  const now = new Date()
+  const shiftName = websiteStore.getSetting('current_shift_name', '')
+  const shiftStart = websiteStore.getSetting('current_shift_start', '')
+  const shiftEnd = websiteStore.getSetting('current_shift_end', '')
+  if (shiftName) {
+    shiftInfo.value = {
+      name: shiftName,
+      timeRange: shiftStart && shiftEnd ? `${shiftStart}-${shiftEnd}` : '',
+    }
+  }
+
   connectBooth()
+  startPolling(60000)
+
   window.addEventListener('keydown', onKeydown)
 })
 
@@ -607,93 +448,66 @@ onUnmounted(() => {
     unsubscribeWs()
   }
   disconnectBooth()
+  stopPolling()
+  gateStore.stopDurationTimer()
   window.removeEventListener('keydown', onKeydown)
 })
+
+// Keyboard shortcuts
+function onKeydown(e) {
+  if (e.key === ' ') {
+    e.preventDefault()
+    if (gateStore.awaitingGateOpen && !gateStore.isLoading) {
+      openGateAction()
+      return
+    }
+  }
+  if (e.key === 'F1') {
+    e.preventDefault()
+    if (gateStore.canPayCash && !gateStore.isLoading) {
+      openCashModal()
+    }
+  }
+  if (e.key === 'F2') {
+    e.preventDefault()
+    if (gateStore.canPayRfid && !gateStore.isLoading) {
+      startRfidPayment()
+    }
+  }
+  if (e.key === 'F3') {
+    e.preventDefault()
+    if (gateStore.canPayEmoney && !gateStore.isLoading) {
+      startEmoneyPayment()
+    }
+  }
+  if (e.key === 'Escape') {
+    if (paymentPanelRef.value) {
+      paymentPanelRef.value.closeModals()
+    }
+  }
+  if (e.key === 'Enter') {
+    if (paymentPanelRef.value) {
+      // Enter is handled inside PaymentPanel modals
+    }
+  }
+}
 </script>
 
 <style scoped>
 .pos-page {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.pos-title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-}
-
-.pos-subtitle {
-  margin: 4px 0 0;
-  font-size: 14px;
-  color: #606266;
-}
-
-.pos-card {
-  min-height: 400px;
-}
-
-.payment-panel {
-  background: #fafafa;
-}
-
-.payment-btn {
-  height: 56px;
-  font-size: 16px;
-  font-weight: 500;
-}
-
-.transaction-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-}
-
-.snapshot-preview {
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
+  display: grid;
+  grid-template-rows: 60px 1fr 50px;
+  height: 100vh;
+  background: var(--bg-primary);
   overflow: hidden;
 }
 
-.image-slot {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-  background: #f5f7fa;
-  color: #909399;
-}
-
-.ep-red {
-  color: #f56c6c;
-}
-
-.open-gate-card {
-  background: #f0f9eb;
-  border: 1px solid #c2e7b0;
-  border-radius: 8px;
-}
-
-.open-gate-btn {
-  height: 56px;
-  font-size: 18px;
-  font-weight: 600;
-  width: 100%;
-}
-
-kbd {
-  background-color: #f5f5f5;
-  border: 1px solid #d9d9d9;
-  border-radius: 3px;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
-  color: #333;
-  display: inline-block;
-  font-size: 13px;
-  line-height: 1.4;
-  padding: 1px 6px;
-  white-space: nowrap;
+.main-area {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 16px;
+  padding: 16px;
+  overflow: hidden;
+  min-height: 0;
 }
 </style>

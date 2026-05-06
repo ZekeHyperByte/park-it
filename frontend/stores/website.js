@@ -70,6 +70,7 @@ export const useWebsiteStore = defineStore('website', () => {
       await Promise.all([
         fetchGateIns(),
         fetchGateOuts(),
+        fetchVehicleTypes(),
         fetchSettings(),
       ])
     } catch (err) {

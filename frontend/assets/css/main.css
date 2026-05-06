@@ -7,6 +7,46 @@ html, body, #__nuxt {
     'Microsoft YaHei', Arial, sans-serif;
 }
 
+/* Dark Theme CSS Variables */
+:root {
+  /* Backgrounds */
+  --bg-primary: #0f0f23;
+  --bg-secondary: #1a1a2e;
+  --bg-tertiary: #252542;
+  --bg-hover: #2a2a4a;
+
+  /* Text */
+  --text-primary: #e8e8f0;
+  --text-secondary: #a0a0b8;
+  --text-muted: #6a6a82;
+
+  /* Accents */
+  --accent-green: #00d68f;
+  --accent-orange: #ffaa00;
+  --accent-red: #ff3d71;
+  --accent-blue: #3366ff;
+  --accent-purple: #aa66ff;
+
+  /* Payment methods */
+  --cash-color: #00d68f;
+  --rfid-color: #3366ff;
+  --emoney-color: #aa66ff;
+
+  /* Borders */
+  --border-color: #2a2a4a;
+  --border-active: #3366ff;
+
+  /* Element Plus Overrides */
+  --el-bg-color: var(--bg-secondary);
+  --el-text-color-primary: var(--text-primary);
+  --el-text-color-regular: var(--text-secondary);
+  --el-border-color: var(--border-color);
+  --el-fill-color-blank: var(--bg-tertiary);
+  --el-fill-color-light: var(--bg-hover);
+  --el-mask-color: rgba(15, 15, 35, 0.8);
+}
+
+/* Legacy utility colors */
 .ep-green {
   color: #67c23a;
 }

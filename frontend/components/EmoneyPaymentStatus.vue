@@ -6,6 +6,7 @@
           <component :is="icon" />
         </el-icon>
         <span>{{ displayText }}</span>
+        <span v-if="balanceDisplay" class="balance-text">{{ balanceDisplay }}</span>
       </div>
 
       <div class="status-actions">
@@ -72,6 +73,7 @@ import {
 } from '@element-plus/icons-vue'
 
 const gateStore = useGateStore()
+const emit = defineEmits(['pay-cash', 'pay-rfid'])
 
 const stateMap = {
   WAITING_CARD: { text: 'Tempelkan kartu e-money', icon: CreditCard, type: 'info' },
@@ -89,6 +91,18 @@ const displayText = computed(() => current.value.text)
 const icon = computed(() => current.value.icon)
 const cardClass = computed(() => `is-${current.value.type}`)
 
+const balanceDisplay = computed(() => {
+  const tx = gateStore.currentTransaction
+  if (!tx) return ''
+  if (gateStore.emoneyPaymentState === 'INSUFFICIENT') {
+    return ''
+  }
+  if (gateStore.emoneyPaymentState === 'SUCCESS') {
+    return ''
+  }
+  return ''
+})
+
 const showCancel = computed(() =>
   ['WAITING_CARD', 'WRONG_CARD', 'LOST_CONTACT'].includes(gateStore.emoneyPaymentState)
 )
@@ -105,19 +119,22 @@ function retry() {
   gateStore.setEmoneyState('WAITING_CARD')
 }
 
-function override() {
-  // Emit override event or call API
-  ElMessage.warning('Override e-money — perlu konfirmasi supervisor')
+async function override() {
+  ElMessage.warning('Override e-money — membuka palang tanpa pembayaran')
+  const gateId = gateStore.selectedGateOutId
+  if (gateId) {
+    await gateStore.openGate({ gateId })
+  }
 }
 
 function payCash() {
   gateStore.setEmoneyState('IDLE')
-  // Trigger cash flow
+  emit('pay-cash')
 }
 
 function payRfid() {
   gateStore.setEmoneyState('IDLE')
-  // Trigger RFID flow
+  emit('pay-rfid')
 }
 </script>
 
@@ -150,6 +167,12 @@ function payRfid() {
   display: flex;
   align-items: center;
   font-weight: 500;
+}
+
+.balance-text {
+  margin-left: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .status-actions {
