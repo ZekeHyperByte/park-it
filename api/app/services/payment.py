@@ -84,10 +84,7 @@ async def process_cash_payment(
         shift_id=shift.id if shift else None,
     )
 
-    # Publish open_gate command
-    await publish_command(OpenGateCommand(gate_id=gate_id))
-
-    # Publish print_receipt command
+    # Publish print_receipt command (DO NOT open gate — operator controls this)
     await publish_command(
         PrintReceiptCommand(
             gate_id=gate_id,
@@ -103,6 +100,9 @@ async def process_cash_payment(
             },
         )
     )
+
+    # Play checkout audio
+    await publish_command(PlayAudioCommand(gate_id=gate_id, track=3))
 
     logger.info(
         "cash_payment_processed",

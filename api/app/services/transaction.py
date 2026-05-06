@@ -58,6 +58,33 @@ async def create_entry_transaction(
     await db.flush()
     await db.refresh(tx)
 
+    # Enqueue entry snapshot if camera is configured for this gate
+    if gate_in_id:
+        try:
+            from api.app.models import Gate
+            from shared.redis import get_arq_redis
+
+            gate = await db.get(Gate, gate_in_id)
+            if gate and gate.is_peripheral_enabled("camera"):
+                camera_config = gate.get_peripheral("camera")
+                camera_url = camera_config.get("url")
+                if camera_url:
+                    arq_redis = await get_arq_redis()
+                    await arq_redis.enqueue_job(
+                        "take_snapshot",
+                        gate_id=gate.code,
+                        camera_url=camera_url,
+                        transaction_id=tx.id,
+                        snapshot_type="entry",
+                    )
+                    logger.info(
+                        "entry_snapshot_enqueued",
+                        transaction_id=tx.id,
+                        gate_id=gate.code,
+                    )
+        except Exception:
+            logger.warning("entry_snapshot_enqueue_failed", transaction_id=tx.id)
+
     logger.info(
         "transaction_created",
         transaction_id=tx.id,

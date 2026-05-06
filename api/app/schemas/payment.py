@@ -85,6 +85,7 @@ class PaymentResponse(BaseModel):
     fee: int | None = None
     change_amount: int | None = None
     payment_method: str | None = None
+    receipt_queued: bool = False
 
 
 class TransactionLookupResponse(BaseModel):

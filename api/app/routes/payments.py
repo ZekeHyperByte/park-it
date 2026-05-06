@@ -61,11 +61,12 @@ async def cash_payment(
         payment_success_total.labels(method="cash").inc()
         return PaymentResponse(
             success=True,
-            message="Payment successful",
+            message="Payment successful. Receipt printed.",
             transaction_id=result["transaction"].id,
             fee=result["fee"],
             change_amount=result["change_amount"],
             payment_method="CASH",
+            receipt_queued=True,
         )
     except ValueError as e:
         logger.warning("cash_payment_failed", error=str(e), gate_id=payment.gate_id)

@@ -81,6 +81,8 @@ class EventConsumer:
             await self._handle_emoney_print_decision(payload)
         elif event_type == "deduct_result":
             await self._handle_deduct_result(payload)
+        elif event_type == "vehicle_detected":
+            await self._handle_vehicle_detected(payload)
         else:
             # Other events are broadcast-only; no server-side action needed
             pass
@@ -195,6 +197,45 @@ class EventConsumer:
                     gate_id=gate_id,
                     error=str(e),
                 )
+
+
+    async def _handle_vehicle_detected(self, payload: dict) -> None:
+        """Handle vehicle_detected event — enqueue exit snapshot if camera configured."""
+        gate_id = payload.get("gate_id", "")
+        from sqlalchemy import select
+
+        from api.app.models import Gate
+        from api.database import AsyncSessionLocal
+        from shared.redis import get_arq_redis
+
+        logger.info("vehicle_detected_received", gate_id=gate_id)
+
+        async with AsyncSessionLocal() as db:
+            try:
+                result = await db.execute(select(Gate).where(Gate.code == gate_id))
+                gate = result.scalar_one_or_none()
+                if gate is None:
+                    logger.error("vehicle_detected_gate_not_found", gate_id=gate_id)
+                    return
+
+                if gate.is_peripheral_enabled("camera"):
+                    camera_config = gate.get_peripheral("camera")
+                    camera_url = camera_config.get("url")
+                    if camera_url:
+                        arq_redis = await get_arq_redis()
+                        await arq_redis.enqueue_job(
+                            "take_snapshot",
+                            gate_id=gate_id,
+                            camera_url=camera_url,
+                            snapshot_type="exit" if gate.direction == "OUT" else "entry",
+                        )
+                        logger.info(
+                            "vehicle_detected_snapshot_enqueued",
+                            gate_id=gate_id,
+                            direction=gate.direction,
+                        )
+            except Exception as e:
+                logger.error("vehicle_detected_snapshot_error", gate_id=gate_id, error=str(e))
 
 
 # Global instance
