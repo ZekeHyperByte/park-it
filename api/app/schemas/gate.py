@@ -13,15 +13,17 @@ class GateInBase(BaseModel):
     name: str = Field(..., max_length=100)
     code: str = Field(..., max_length=20)
     area_parkir_id: int | None = None
-    protocol: str = Field(default="compass", pattern="^(compass|enet)$")
+    protocol: str = Field(default="compass", pattern="^(compass|enet|serial)$")
     controller_host: str | None = Field(None, max_length=100)
     controller_port: int | None = None
+    controller_device: str | None = Field(None, max_length=100)
+    controller_baudrate: int | None = None
     gate_mode: str = Field(default="CASH", pattern="^(CASH|RFID|EMONEY)$")
     emoney_minimum_balance: int = Field(default=10000, ge=0)
     print_decision_timeout_seconds: int = Field(default=10, ge=1)
     has_close_sensor: bool = False
     gate_close_duration_ms: int = Field(default=5000, ge=0)
-    relay_mode: str = Field(default="SINGLE", pattern="^(SINGLE|DUAL)$")
+    relay_mode: str = Field(default="SINGLE", pattern="^(SINGLE|DUAL|TRIPLE)$")
     open_command: str | None = Field(None, max_length=50)
     close_command: str | None = Field(None, max_length=50)
     pulse_duration_ms: int | None = None
@@ -48,15 +50,17 @@ class GateInUpdate(BaseModel):
     name: str | None = Field(None, max_length=100)
     code: str | None = Field(None, max_length=20)
     area_parkir_id: int | None = None
-    protocol: str | None = Field(None, pattern="^(compass|enet)$")
+    protocol: str | None = Field(None, pattern="^(compass|enet|serial)$")
     controller_host: str | None = Field(None, max_length=100)
     controller_port: int | None = None
+    controller_device: str | None = Field(None, max_length=100)
+    controller_baudrate: int | None = None
     gate_mode: str | None = Field(None, pattern="^(CASH|RFID|EMONEY)$")
     emoney_minimum_balance: int | None = Field(None, ge=0)
     print_decision_timeout_seconds: int | None = Field(None, ge=1)
     has_close_sensor: bool | None = None
     gate_close_duration_ms: int | None = Field(None, ge=0)
-    relay_mode: str | None = Field(None, pattern="^(SINGLE|DUAL)$")
+    relay_mode: str | None = Field(None, pattern="^(SINGLE|DUAL|TRIPLE)$")
     open_command: str | None = Field(None, max_length=50)
     close_command: str | None = Field(None, max_length=50)
     pulse_duration_ms: int | None = None
@@ -89,14 +93,16 @@ class GateOutBase(BaseModel):
     name: str = Field(..., max_length=100)
     code: str = Field(..., max_length=20)
     area_parkir_id: int | None = None
-    protocol: str = Field(default="compass", pattern="^(compass|enet)$")
+    protocol: str = Field(default="compass", pattern="^(compass|enet|serial)$")
     controller_host: str | None = Field(None, max_length=100)
     controller_port: int | None = None
+    controller_device: str | None = Field(None, max_length=100)
+    controller_baudrate: int | None = None
     emoney_reader_id: int | None = None
     payment_timeout_seconds: int = Field(default=120, ge=10)
     has_close_sensor: bool = False
     gate_close_duration_ms: int = Field(default=5000, ge=0)
-    relay_mode: str = Field(default="SINGLE", pattern="^(SINGLE|DUAL)$")
+    relay_mode: str = Field(default="SINGLE", pattern="^(SINGLE|DUAL|TRIPLE)$")
     open_command: str | None = Field(None, max_length=50)
     close_command: str | None = Field(None, max_length=50)
     pulse_duration_ms: int | None = None
@@ -123,14 +129,16 @@ class GateOutUpdate(BaseModel):
     name: str | None = Field(None, max_length=100)
     code: str | None = Field(None, max_length=20)
     area_parkir_id: int | None = None
-    protocol: str | None = Field(None, pattern="^(compass|enet)$")
+    protocol: str | None = Field(None, pattern="^(compass|enet|serial)$")
     controller_host: str | None = Field(None, max_length=100)
     controller_port: int | None = None
+    controller_device: str | None = Field(None, max_length=100)
+    controller_baudrate: int | None = None
     emoney_reader_id: int | None = None
     payment_timeout_seconds: int | None = Field(None, ge=10)
     has_close_sensor: bool | None = None
     gate_close_duration_ms: int | None = Field(None, ge=0)
-    relay_mode: str | None = Field(None, pattern="^(SINGLE|DUAL)$")
+    relay_mode: str | None = Field(None, pattern="^(SINGLE|DUAL|TRIPLE)$")
     open_command: str | None = Field(None, max_length=50)
     close_command: str | None = Field(None, max_length=50)
     pulse_duration_ms: int | None = None
@@ -239,7 +247,7 @@ class GateBase(BaseModel):
     controller_baudrate: int | None = None
     has_close_sensor: bool = False
     gate_close_duration_ms: int = Field(default=5000, ge=0)
-    relay_mode: str = Field(default="SINGLE", pattern="^(SINGLE|DUAL)$")
+    relay_mode: str = Field(default="SINGLE", pattern="^(SINGLE|DUAL|TRIPLE)$")
     hardware_config: HardwareConfig = Field(default_factory=HardwareConfig)
     is_active: bool = True
 
@@ -262,7 +270,7 @@ class GateUpdate(BaseModel):
     controller_baudrate: int | None = None
     has_close_sensor: bool | None = None
     gate_close_duration_ms: int | None = Field(None, ge=0)
-    relay_mode: str | None = Field(None, pattern="^(SINGLE|DUAL)$")
+    relay_mode: str | None = Field(None, pattern="^(SINGLE|DUAL|TRIPLE)$")
     hardware_config: HardwareConfig | None = None
     is_active: bool | None = None
 

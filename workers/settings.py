@@ -45,24 +45,39 @@ class BackgroundWorkerSettings:
 
     functions = [
         "workers.background.settlement_worker.generate_settlement_file",
+        "workers.background.settlement_uploader.upload_settlement_job",
+        "workers.background.settlement_uploader.poll_settlement_responses",
         "workers.background.cleanup_worker.cleanup_old_sessions",
         "workers.background.cleanup_worker.cleanup_old_snapshots",
+        "workers.background.cleanup_worker.timeout_pending_payments",
         "workers.background.notification_worker.send_telegram_alert",
     ]
 
     # Cron jobs
     cron_jobs = [
-        # Daily settlement at 2 AM
+        # Daily settlement at 2 AM (operational timezone enforced inside the job)
         cron(
             "workers.background.settlement_worker.generate_settlement_file",
             hour=2,
             minute=0,
+        ),
+        # Poll bank for .OK/.NOK every 15 minutes — fast enough for prompt
+        # reconciliation, sparse enough to not hammer the bank's SFTP.
+        cron(
+            "workers.background.settlement_uploader.poll_settlement_responses",
+            minute={0, 15, 30, 45},
         ),
         # Cleanup old data daily at 3 AM
         cron(
             "workers.background.cleanup_worker.cleanup_old_sessions",
             hour=3,
             minute=0,
+        ),
+        # Timeout stuck PENDING e-money payments every 2 minutes
+        cron(
+            "workers.background.cleanup_worker.timeout_pending_payments",
+            minute={0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,
+                    32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58},
         ),
     ]
 

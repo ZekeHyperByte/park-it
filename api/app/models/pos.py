@@ -16,9 +16,14 @@ class Pos(Base, IntPKMixin, TimestampMixin):
     code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
 
-    # Assigned gate for this booth (OUT gates only)
+    # Assigned gate for this booth (OUT gates only).
+    # use_alter breaks the gates↔pos circular FK so SQLAlchemy can topo-sort
+    # CREATE/DROP table order. The constraint is added/dropped via ALTER TABLE
+    # after both tables already exist.
     default_gate_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("gates.id"), nullable=True
+        BigInteger,
+        ForeignKey("gates.id", name="fk_pos_default_gate_id", use_alter=True),
+        nullable=True,
     )
 
     # Booth peripherals configuration

@@ -1,93 +1,118 @@
 <template>
   <div>
-    <h1>Transaksi</h1>
-    <p class="text-secondary mb-3">Riwayat transaksi parkir dan log peristiwa.</p>
+    <h1 class="text-xl font-semibold text-foreground">Transaksi</h1>
+    <p class="mb-4 text-sm text-muted-foreground">Riwayat transaksi parkir dan log peristiwa.</p>
 
-    <el-tabs v-model="activeTab" type="border-card">
-      <!-- Transactions -->
-      <el-tab-pane label="Transaksi Parkir" name="transactions">
-        <div class="filter-bar mb-3">
-          <el-date-picker
-            v-model="dateRange"
-            type="daterange"
-            range-separator="s/d"
-            start-placeholder="Tanggal Mulai"
-            end-placeholder="Tanggal Akhir"
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
-            style="width: 300px"
-            @change="loadTransactions"
-          />
-          <el-select
-            v-model="statusFilter"
-            placeholder="Status"
-            clearable
-            style="width: 150px; margin-left: 10px"
-            @change="loadTransactions"
-          >
-            <el-option label="Aktif" value="ACTIVE" />
-            <el-option label="Selesai" value="COMPLETED" />
-            <el-option label="Lost Contact" value="LOST_CONTACT" />
-          </el-select>
-        </div>
-        <DataTable
-          :data="transactions"
-          :columns="transactionColumns"
-          :loading="loadingTransactions"
-          :show-add="false"
-          :show-edit="false"
-          :show-delete="false"
-          server-pagination
-          :total-items="transactionTotal"
-          @page-change="handleTransactionPageChange"
-          @size-change="handleTransactionSizeChange"
-        />
-      </el-tab-pane>
+    <!-- Tabs (Tailwind-styled) -->
+    <div class="mb-4 flex gap-1 border-b border-border">
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        :class="[
+          'px-4 py-2 text-sm font-medium transition-colors -mb-px',
+          activeTab === tab.key
+            ? 'border-b-2 border-primary text-primary'
+            : 'text-muted-foreground hover:text-foreground',
+        ]"
+        @click="activeTab = tab.key"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
 
-      <!-- Manual Open Logs -->
-      <el-tab-pane label="Buka Manual" name="manual-opens">
-        <DataTable
-          :data="manualOpens"
-          :columns="manualOpenColumns"
-          :loading="loadingManualOpens"
-          :show-add="false"
-          :show-edit="false"
-          :show-delete="false"
+    <!-- Transactions tab -->
+    <div v-if="activeTab === 'transactions'">
+      <div class="mb-4 flex items-center gap-3">
+        <input
+          v-model="dateFrom"
+          type="date"
+          class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"
         />
-      </el-tab-pane>
+        <span class="text-muted-foreground">s/d</span>
+        <input
+          v-model="dateTo"
+          type="date"
+          class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"
+        />
+        <select
+          v-model="statusFilter"
+          class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"
+        >
+          <option value="">Semua Status</option>
+          <option value="ACTIVE">Aktif</option>
+          <option value="COMPLETED">Selesai</option>
+          <option value="LOST_CONTACT">Lost Contact</option>
+        </select>
+        <Button size="sm" @click="loadTransactions">Filter</Button>
+      </div>
+      <DataTable
+        :data="transactions"
+        :columns="transactionColumns"
+        :loading="loadingTransactions"
+        :show-add="false"
+        :show-edit="false"
+        :show-delete="false"
+        server-pagination
+        :total-items="transactionTotal"
+        @page-change="handleTransactionPageChange"
+        @size-change="handleTransactionSizeChange"
+      />
+    </div>
 
-      <!-- Abandoned Vehicles -->
-      <el-tab-pane label="Kendaraan Ditinggal" name="abandoned">
-        <DataTable
-          :data="abandonedVehicles"
-          :columns="abandonedColumns"
-          :loading="loadingAbandoned"
-          :show-add="false"
-          :show-edit="false"
-          :show-delete="false"
-        />
-      </el-tab-pane>
-    </el-tabs>
+    <!-- Manual Opens tab -->
+    <div v-if="activeTab === 'manual-opens'">
+      <DataTable
+        :data="manualOpens"
+        :columns="manualOpenColumns"
+        :loading="loadingManualOpens"
+        :show-add="false"
+        :show-edit="false"
+        :show-delete="false"
+      />
+    </div>
+
+    <!-- Abandoned tab -->
+    <div v-if="activeTab === 'abandoned'">
+      <DataTable
+        :data="abandonedVehicles"
+        :columns="abandonedColumns"
+        :loading="loadingAbandoned"
+        :show-add="false"
+        :show-edit="false"
+        :show-delete="false"
+      />
+    </div>
   </div>
 </template>
 
 <script setup>
-definePageMeta({
-  middleware: 'auth',
-})
+import { Button } from '~/components/ui/button'
+
+definePageMeta({ middleware: 'auth' })
 
 const { fetchApi } = useApi()
+
+const tabs = [
+  { key: 'transactions', label: 'Transaksi Parkir' },
+  { key: 'manual-opens', label: 'Buka Manual' },
+  { key: 'abandoned', label: 'Kendaraan Ditinggal' },
+]
 
 const activeTab = ref('transactions')
 const loadingTransactions = ref(false)
 const loadingManualOpens = ref(false)
 const loadingAbandoned = ref(false)
 
-// Filters
-const dateRange = ref(null)
+const dateFrom = ref('')
+const dateTo = ref('')
 const statusFilter = ref('')
 
-// Transactions
+// Set default date range
+const today = new Date()
+const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+dateFrom.value = firstDay.toISOString().split('T')[0]
+dateTo.value = today.toISOString().split('T')[0]
+
 const transactions = ref([])
 const transactionTotal = ref(0)
 const transactionPage = ref(1)
@@ -106,7 +131,6 @@ const transactionColumns = [
   { prop: 'status', label: 'Status', width: 120, type: 'enum' },
 ]
 
-// Manual Open Logs
 const manualOpens = ref([])
 const manualOpenColumns = [
   { prop: 'gate_id', label: 'Gate ID', width: 100 },
@@ -115,7 +139,6 @@ const manualOpenColumns = [
   { prop: 'notes', label: 'Catatan' },
 ]
 
-// Abandoned Vehicles
 const abandonedVehicles = ref([])
 const abandonedColumns = [
   { prop: 'gate_out_id', label: 'Gate Out', width: 100 },
@@ -124,12 +147,20 @@ const abandonedColumns = [
   { prop: 'notes', label: 'Catatan' },
 ]
 
-// Load data
-onMounted(() => {
-  loadTransactions()
-  loadManualOpens()
-  loadAbandoned()
-})
+// Lazy-load tabs: fetch only on first activation, cache thereafter.
+const _loaded = reactive({ transactions: false, 'manual-opens': false, abandoned: false })
+
+watch(
+  activeTab,
+  (tab) => {
+    if (_loaded[tab]) return
+    if (tab === 'transactions') loadTransactions()
+    else if (tab === 'manual-opens') loadManualOpens()
+    else if (tab === 'abandoned') loadAbandoned()
+    _loaded[tab] = true
+  },
+  { immediate: true },
+)
 
 async function loadTransactions() {
   loadingTransactions.value = true
@@ -138,26 +169,20 @@ async function loadTransactions() {
       skip: (transactionPage.value - 1) * transactionPageSize.value,
       limit: transactionPageSize.value,
     }
-    if (dateRange.value && dateRange.value.length === 2) {
-      params.date_from = dateRange.value[0]
-      params.date_to = dateRange.value[1]
-    }
-    if (statusFilter.value) {
-      params.status = statusFilter.value
-    }
+    if (dateFrom.value) params.date_from = dateFrom.value
+    if (dateTo.value) params.date_to = dateTo.value
+    if (statusFilter.value) params.status = statusFilter.value
     const qs = new URLSearchParams()
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== null && v !== '') qs.append(k, v)
     }
+    // Backend returns {items, total, skip, limit} — see
+    // api/app/routes/transactions.py::TransactionListResponse.
     const result = await fetchApi(`/api/transactions?${qs.toString()}`)
-    transactions.value = result
-    // Note: API returns list only; for true server pagination we need total count.
-    // Using result length as fallback until API provides total.
-    transactionTotal.value = result.length === transactionPageSize.value
-      ? (transactionPage.value * transactionPageSize.value) + 1
-      : (transactionPage.value - 1) * transactionPageSize.value + result.length
+    transactions.value = result.items ?? []
+    transactionTotal.value = typeof result.total === 'number' ? result.total : transactions.value.length
   } catch (err) {
-    ElMessage.error('Gagal memuat transaksi')
+    console.error('Gagal memuat transaksi:', err)
   } finally {
     loadingTransactions.value = false
   }
@@ -181,7 +206,7 @@ async function loadManualOpens() {
     const result = await fetchApi('/api/manual-open-logs')
     manualOpens.value = result.items || []
   } catch (err) {
-    ElMessage.error('Gagal memuat log buka manual')
+    console.error('Gagal memuat log buka manual:', err)
   } finally {
     loadingManualOpens.value = false
   }
@@ -193,16 +218,9 @@ async function loadAbandoned() {
     const result = await fetchApi('/api/abandoned-vehicle-logs')
     abandonedVehicles.value = result.items || []
   } catch (err) {
-    ElMessage.error('Gagal memuat kendaraan ditinggal')
+    console.error('Gagal memuat kendaraan ditinggal:', err)
   } finally {
     loadingAbandoned.value = false
   }
 }
 </script>
-
-<style scoped>
-.filter-bar {
-  display: flex;
-  align-items: center;
-}
-</style>

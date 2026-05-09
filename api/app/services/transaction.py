@@ -58,32 +58,38 @@ async def create_entry_transaction(
     await db.flush()
     await db.refresh(tx)
 
-    # Enqueue entry snapshot if camera is configured for this gate
+    # Enqueue entry snapshot(s) for all cameras on this gate
     if gate_in_id:
         try:
             from api.app.models import Gate
             from shared.redis import get_arq_redis
 
             gate = await db.get(Gate, gate_in_id)
-            if gate and gate.is_peripheral_enabled("camera"):
-                camera_config = gate.get_peripheral("camera")
-                camera_url = camera_config.get("url")
-                if camera_url:
+            if gate:
+                cameras = gate.get_cameras()
+                if cameras:
                     arq_redis = await get_arq_redis()
-                    await arq_redis.enqueue_job(
-                        "take_snapshot",
-                        gate_id=gate.code,
-                        camera_url=camera_url,
-                        transaction_id=tx.id,
-                        snapshot_type="entry",
-                    )
+                    for cam in cameras:
+                        await arq_redis.enqueue_job(
+                            "take_snapshot",
+                            gate_id=gate.code,
+                            camera_url=cam["url"],
+                            transaction_id=tx.id,
+                            snapshot_type="entry",
+                            camera_label=cam.get("label"),
+                        )
                     logger.info(
                         "entry_snapshot_enqueued",
                         transaction_id=tx.id,
                         gate_id=gate.code,
+                        count=len(cameras),
                     )
-        except Exception:
-            logger.warning("entry_snapshot_enqueue_failed", transaction_id=tx.id)
+        except Exception as exc:
+            logger.warning(
+                "entry_snapshot_enqueue_failed",
+                transaction_id=tx.id,
+                error=str(exc),
+            )
 
     logger.info(
         "transaction_created",
@@ -101,6 +107,7 @@ async def find_active_transaction(
     barcode: str | None = None,
     card_number: str | None = None,
     plate_number: str | None = None,
+    for_update: bool = False,
 ) -> ParkingTransaction | None:
     """Find an active (uncompleted) parking transaction.
 
@@ -126,6 +133,9 @@ async def find_active_transaction(
         query = query.where(ParkingTransaction.plate_number == plate_number)
     else:
         return None
+
+    if for_update:
+        query = query.with_for_update()
 
     result = await db.execute(query)
     return result.scalar_one_or_none()

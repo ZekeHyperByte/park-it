@@ -14,10 +14,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies (production only)
 COPY pyproject.toml README.md ./
 RUN pip install --upgrade pip && \
-    pip install -e ".[dev]"
+    pip install .
 
 # Copy application code
 COPY . .

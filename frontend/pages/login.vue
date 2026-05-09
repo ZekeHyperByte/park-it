@@ -1,72 +1,86 @@
 <template>
-  <div class="login-page flex items-center justify-center">
-    <el-card class="login-card" shadow="always">
-      <template #header>
-        <div class="text-center">
-          <el-icon class="login-logo"><Promotion /></el-icon>
-          <h2 class="login-title">E-Parking v2</h2>
-          <p class="login-subtitle">Silakan masuk untuk melanjutkan</p>
-        </div>
-      </template>
+  <div class="flex min-h-screen items-center justify-center bg-background relative overflow-hidden">
+    <!-- Background grid -->
+    <div class="pointer-events-none absolute inset-0">
+      <div class="absolute inset-0 opacity-[0.03]" style="background-image: linear-gradient(rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px); background-size: 60px 60px;" />
+      <div class="absolute -top-32 -right-24 h-96 w-96 rounded-full bg-primary opacity-[0.06] blur-[100px]" />
+      <div class="absolute -bottom-24 -left-12 h-80 w-80 rounded-full bg-purple-500 opacity-[0.04] blur-[100px]" />
+    </div>
 
-      <el-form
-        ref="formRef"
-        :model="form"
-        :rules="rules"
-        label-position="top"
-        @keyup.enter="handleLogin"
-      >
-        <el-form-item label="Username" prop="username">
-          <el-input
+    <!-- Login card -->
+    <div class="relative z-10 w-full max-w-sm rounded-xl border border-border bg-surface p-8 shadow-lg">
+      <!-- Header -->
+      <div class="mb-8 text-center">
+        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-primary/30 bg-primary/10 text-primary">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path d="M8 12h8M12 8v8" />
+          </svg>
+        </div>
+        <h1 class="text-2xl font-bold text-foreground">E-Parking v2</h1>
+        <p class="text-sm text-muted-foreground">Sistem Manajemen Parkir</p>
+      </div>
+
+      <!-- Form -->
+      <form @submit.prevent="handleLogin" class="space-y-4">
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-foreground">Username</label>
+          <Input
             v-model="form.username"
             placeholder="Masukkan username"
-            :prefix-icon="User"
-            size="large"
-            clearable
+            class="h-10"
             autofocus
           />
-        </el-form-item>
+        </div>
 
-        <el-form-item label="Password" prop="password">
-          <el-input
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-foreground">Password</label>
+          <Input
             v-model="form.password"
             type="password"
             placeholder="Masukkan password"
-            :prefix-icon="Lock"
-            size="large"
-            show-password
-            clearable
+            class="h-10"
           />
-        </el-form-item>
+        </div>
 
-        <el-form-item>
-          <el-button
-            type="primary"
-            size="large"
-            class="w-full"
-            :loading="authStore.isLoading"
-            @click="handleLogin"
+        <Button
+          type="submit"
+          class="w-full h-10 font-semibold"
+          :disabled="authStore.isLoading"
+        >
+          {{ authStore.isLoading ? 'Memproses...' : 'Masuk' }}
+        </Button>
+
+        <Transition name="fade">
+          <div
+            v-if="authStore.error"
+            class="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
           >
-            Masuk
-          </el-button>
-        </el-form-item>
+            <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="12" cy="12" r="10" /><path d="M15 9l-6 6M9 9l6 6" />
+            </svg>
+            {{ authStore.error }}
+          </div>
+        </Transition>
+      </form>
 
-        <el-alert
-          v-if="authStore.error"
-          :title="authStore.error"
-          type="error"
-          show-icon
-          :closable="false"
-          class="mt-2"
-        />
-      </el-form>
-    </el-card>
+      <!-- Help text -->
+      <p class="mt-5 text-center text-xs text-muted-foreground/60">
+        Lupa password? Hubungi administrator.
+      </p>
+
+      <!-- Footer -->
+      <div class="mt-4 border-t border-border pt-4 text-center text-xs text-muted-foreground">
+        PT Mitra Teknik &copy; {{ new Date().getFullYear() }}
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
-import { User, Lock, Promotion } from '@element-plus/icons-vue'
+import { reactive } from 'vue'
+import { Button } from '~/components/ui/button'
+import { Input } from '~/components/ui/input'
 
 definePageMeta({
   layout: false,
@@ -75,64 +89,26 @@ definePageMeta({
 
 const authStore = useAuthStore()
 const router = useRouter()
-const formRef = ref()
 
 const form = reactive({
   username: '',
   password: '',
 })
 
-const rules = {
-  username: [
-    { required: true, message: 'Username wajib diisi', trigger: 'blur' },
-  ],
-  password: [
-    { required: true, message: 'Password wajib diisi', trigger: 'blur' },
-  ],
-}
-
 async function handleLogin() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
+  if (!form.username || !form.password) return
 
   try {
     await authStore.login(form.username, form.password)
-    ElMessage.success('Login berhasil')
     router.push('/')
   } catch (err) {
-    // Error is already stored in authStore.error
-    ElMessage.error(err.message || 'Login gagal')
+    // Error is stored in authStore.error
   }
 }
 </script>
 
 <style scoped>
-.login-page {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-}
-
-.login-card {
-  width: 400px;
-  max-width: 90vw;
-}
-
-.login-logo {
-  font-size: 48px;
-  color: #67c23a;
-  margin-bottom: 12px;
-}
-
-.login-title {
-  margin: 0 0 8px;
-  font-size: 24px;
-  font-weight: 600;
-  color: #1a1a2e;
-}
-
-.login-subtitle {
-  margin: 0;
-  font-size: 14px;
-  color: #909399;
-}
+.fade-enter-active { transition: all 0.3s ease; }
+.fade-leave-active { transition: all 0.2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(-4px); }
 </style>

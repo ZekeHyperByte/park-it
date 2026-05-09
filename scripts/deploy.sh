@@ -45,10 +45,10 @@ sudo systemctl restart parking-worker-critical
 sudo systemctl restart parking-worker-bg
 
 # Restart gate daemons (if any are enabled)
-for service in $(systemctl list-units --plain --no-legend 'parking-daemon-gate-in@*'); do
+for service in $(systemctl list-units --plain --no-legend 'parking-daemon-gate-in@*' | awk '{print $1}'); do
     sudo systemctl restart "$service"
 done
-for service in $(systemctl list-units --plain --no-legend 'parking-daemon-gate-out@*'); do
+for service in $(systemctl list-units --plain --no-legend 'parking-daemon-gate-out@*' | awk '{print $1}'); do
     sudo systemctl restart "$service"
 done
 

@@ -1,39 +1,46 @@
-"""Gate-in daemon implementing the full entry state machine.
+"""Gate-in daemon — combined entry state machine.
 
-Auto-detects all input methods concurrently (button, RFID, e-money).
-States: IDLE → VEHICLE_PRESENT → GATE_CLOSED → method branch → OPENING → IDLE
+Single WAITING_INPUT state handles all payment methods simultaneously:
+button (cash), Wiegand W/X (RFID/UHF), PASSTI (e-money).
 
-The daemon polls the Compass controller for sensor inputs, publishes events
-to FastAPI via Redis Pub/Sub, and executes commands from FastAPI via Redis Streams.
+States: IDLE → WAITING_INPUT → method branch → OPENING → IDLE
 """
 
 from __future__ import annotations
 
 import asyncio
-import uuid
 from typing import Any
 
-from protocols.compass.parser import parse_rfid_card, parse_stat
+from protocols.compass.parser import parse_stat
 from protocols.compass.protocol import (
     CompassTransport,
+    SerialTransport,
+    cmd_ack_in1off,
+    cmd_ack_in1on,
+    cmd_ack_in2on,
+    cmd_ack_in3off,
+    cmd_ack_in3on,
+    cmd_ack_in4on,
+    cmd_ack_wiegand,
+    cmd_close1,
     cmd_ds,
     cmd_dsu,
     cmd_mt,
-    cmd_qr5,
+    cmd_open1,
+    cmd_pr3,
+    cmd_rss,
     cmd_stat,
+    cmd_stop1,
     cmd_trig1,
-    cmd_trig2,
 )
-from protocols.passti.frame import parse_response
 from protocols.passti.transport import ControllerPassthroughTransport
 from shared.events import (
     BaseEvent,
     EmoneyPrintDecisionEvent,
-    GateClosedEvent,
-    GateMode,
     GateOpenedEvent,
+    HelpButtonPressedEvent,
     PasstiCardTapEvent,
-    PlayAudioCommand,
+    PlayAudioEvent,
     RfidCardReadEvent,
     TicketButtonPressedEvent,
     VehicleDetectedEvent,
@@ -47,10 +54,7 @@ logger = get_logger(__name__)
 
 # State constants
 STATE_IDLE = "IDLE"
-STATE_VEHICLE_PRESENT = "VEHICLE_PRESENT"
-STATE_GATE_CLOSED = "GATE_CLOSED"
-STATE_WAITING_BUTTON = "WAITING_BUTTON"
-STATE_WAITING_CARD = "WAITING_CARD"
+STATE_WAITING_INPUT = "WAITING_INPUT"
 STATE_VALIDATING = "VALIDATING"
 STATE_CHECKING_BALANCE = "CHECKING_BALANCE"
 STATE_WAITING_PRINT_DECISION = "WAITING_PRINT_DECISION"
@@ -58,42 +62,35 @@ STATE_PROCESSING = "PROCESSING"
 STATE_OPENING = "OPENING"
 STATE_ERROR = "ERROR"
 
-# Poll interval for controller STAT
-STAT_POLL_INTERVAL_MS = 100
-
 
 class GateInDaemon(BaseDaemon):
     """Gate-in daemon for vehicle entry processing."""
 
     def __init__(self, gate_id: str, config: dict[str, Any]) -> None:
         super().__init__(gate_id, config)
-        # Read hardware config for peripheral enablement
         self.hw = config.get("hardware_config", {})
         self.has_rfid = self.hw.get("rfid", {}).get("enabled", False)
         self.has_ticket_printer = self.hw.get("ticket_printer", {}).get("enabled", False)
         self.has_emoney = self.hw.get("emoney", {}).get("enabled", False)
 
-        self.controller: CompassTransport | None = None
+        self.controller: CompassTransport | SerialTransport | None = None
         self.passti_transport: ControllerPassthroughTransport | None = None
         self._controller_lock = asyncio.Lock()
         self._poll_task: asyncio.Task | None = None
         self._print_decision_timer: asyncio.Task | None = None
 
     # ------------------------------------------------------------------
-    # Lifecycle overrides
+    # Lifecycle
     # ------------------------------------------------------------------
 
     async def run(self) -> None:
-        """Start daemon: connect controller, then delegate to base run."""
         await self._connect_controller()
         await super().run()
 
     async def _on_started(self) -> None:
-        """Start controller polling after base sets _running=True."""
         await self._start_polling()
 
     async def stop(self) -> None:
-        """Graceful stop with controller disconnect."""
         await super().stop()
         if self._poll_task and not self._poll_task.done():
             self._poll_task.cancel()
@@ -107,26 +104,34 @@ class GateInDaemon(BaseDaemon):
     # ------------------------------------------------------------------
 
     async def _connect_controller(self) -> None:
-        """Connect to Compass TCP controller."""
-        host = self.config.get("controller_host")
-        port = self.config.get("controller_port")
-        if not host or not port:
-            logger.warning("no_controller_config", gate_id=self.gate_id)
-            return
+        protocol = self.config.get("protocol", "compass")
         try:
-            self.controller = CompassTransport(host, port)
-            self.controller.connect(timeout=5.0)
-            # Create PASSTI passthrough transport only when e-money is enabled
-            if self.has_emoney:
-                self.passti_transport = ControllerPassthroughTransport(self.controller._sock)
-            logger.info("controller_connected", gate_id=self.gate_id, host=host, port=port)
+            if protocol == "serial":
+                device = self.config.get("controller_device")
+                baudrate = self.config.get("controller_baudrate", 9600)
+                if not device:
+                    logger.warning("no_controller_config", gate_id=self.gate_id, protocol=protocol)
+                    return
+                self.controller = SerialTransport(device, baudrate)
+                self.controller.connect(timeout=5.0)
+                logger.info("controller_connected", gate_id=self.gate_id, device=device, baudrate=baudrate)
+            else:
+                host = self.config.get("controller_host")
+                port = self.config.get("controller_port")
+                if not host or not port:
+                    logger.warning("no_controller_config", gate_id=self.gate_id, protocol=protocol)
+                    return
+                self.controller = CompassTransport(host, port)
+                self.controller.connect(timeout=5.0)
+                if self.has_emoney:
+                    self.passti_transport = ControllerPassthroughTransport(self.controller._sock)
+                logger.info("controller_connected", gate_id=self.gate_id, host=host, port=port)
         except Exception as e:
             logger.error("controller_connect_failed", gate_id=self.gate_id, error=str(e))
             self.controller = None
             self.passti_transport = None
 
     async def _disconnect_controller(self) -> None:
-        """Disconnect from controller."""
         if self.controller:
             self.controller.close()
             self.controller = None
@@ -134,191 +139,141 @@ class GateInDaemon(BaseDaemon):
             logger.info("controller_disconnected", gate_id=self.gate_id)
 
     # ------------------------------------------------------------------
-    # Main polling loop (started by base run as additional task)
+    # Relay mode helpers
+    # ------------------------------------------------------------------
+
+    async def _relay_open(self) -> None:
+        relay_mode = self.config.get("relay_mode", "SINGLE")
+        if relay_mode == "SINGLE":
+            await self._send_controller_command(cmd_trig1())
+        else:
+            await self._send_controller_command(cmd_open1())
+
+    async def _relay_close(self) -> None:
+        if self.config.get("relay_mode") in ("DUAL", "TRIPLE"):
+            await self._send_controller_command(cmd_close1())
+
+    async def _relay_brake(self) -> None:
+        if self.config.get("relay_mode") == "TRIPLE":
+            await self._send_controller_command(cmd_stop1())
+
+    # ------------------------------------------------------------------
+    # RSS listener
     # ------------------------------------------------------------------
 
     async def _start_polling(self) -> None:
-        """Start the controller polling loop."""
-        self._poll_task = asyncio.create_task(self._poll_controller(), name="poll")
+        self._poll_task = asyncio.create_task(self._rss_listener(), name="poll")
         self._tasks.append(self._poll_task)
+        if self.has_rfid and self.hw.get("rfid", {}).get("connection") == "direct_serial":
+            task = asyncio.create_task(self._rfid_serial_reader_task(), name="rfid_serial")
+            self._tasks.append(task)
 
-    async def _poll_controller(self) -> None:
-        """Poll controller STAT and handle state transitions."""
+    async def _setup_rss(self) -> None:
+        if self.controller and self.controller.is_connected():
+            async with self._controller_lock:
+                self.controller.send(cmd_rss(interval_100ms=2))
+            logger.info("rss_configured", gate_id=self.gate_id)
+
+    async def _rss_listener(self) -> None:
+        await self._setup_rss()
+        buffer = b""
         while self._running:
             try:
                 if self.controller and self.controller.is_connected():
-                    async with self._controller_lock:
-                        response = self.controller.send_recv(cmd_stat(), timeout=0.5)
-                    # Always handle response (even empty) so state-specific polling
-                    # (e.g., PASSTI tap check in WAITING_CARD) can run.
-                    await self._handle_stat_response(response or b"")
-                await asyncio.sleep(STAT_POLL_INTERVAL_MS / 1000.0)
+                    chunk = await self.controller.recv_async(timeout=0.5)
+                    if chunk:
+                        buffer += chunk
+                        buffer = await self._process_rss_buffer(buffer)
+                else:
+                    await asyncio.sleep(0.1)
             except asyncio.CancelledError:
-                logger.debug("poll_cancelled", gate_id=self.gate_id)
+                logger.debug("rss_listener_cancelled", gate_id=self.gate_id)
                 raise
             except Exception as e:
-                logger.error("poll_error", gate_id=self.gate_id, error=str(e))
+                logger.error("rss_listener_error", gate_id=self.gate_id, error=str(e))
                 await asyncio.sleep(1)
 
-    # ------------------------------------------------------------------
-    # STAT response handler
-    # ------------------------------------------------------------------
+    async def _process_rss_buffer(self, buffer: bytes) -> bytes:
+        while len(buffer) >= 2:
+            try:
+                start = buffer.index(0xA6)
+            except ValueError:
+                return b""
+            try:
+                end = buffer.index(0xA9, start + 1)
+            except ValueError:
+                break
+            msg = buffer[start: end + 1]
+            buffer = buffer[end + 1:]
+            await self._dispatch_rss_message(msg)
+        return buffer
 
-    async def _handle_stat_response(self, response: bytes) -> None:
-        """Process a STAT response based on current state."""
-        parsed = parse_stat(response)
+    async def _dispatch_rss_message(self, msg: bytes) -> None:
+        text = msg.decode("latin-1", errors="ignore")
 
-        if self.state == STATE_IDLE:
-            if parsed["in1"]:
-                await self._on_vehicle_detected()
-
-        elif self.state == STATE_VEHICLE_PRESENT:
-            # Wait for gate close confirmation
-            has_sensor = self.config.get("has_close_sensor", False)
-            if has_sensor and parsed["in3"]:
-                await self._on_gate_closed()
-            # Timer fallback is handled by _gate_close_timer
-
-        elif self.state == STATE_WAITING_BUTTON:
-            if parsed["in2"]:
-                await self._on_ticket_button_pressed()
-
-        elif self.state == STATE_WAITING_CARD:
-            # Check for RFID (W channel)
-            if self.has_rfid and parsed["wiegand_w"]:
-                await self._on_rfid_card_read(parsed["wiegand_w"], "W")
-                return
-            # Check for UHF (X channel)
-            if self.has_rfid and parsed["wiegand_x"]:
-                await self._on_rfid_card_read(parsed["wiegand_x"], "X")
-                return
-            # Check for PASSTI tap (EMONEY enabled)
-            if self.has_emoney:
-                await self._check_passti_tap()
-
-        elif self.state == STATE_WAITING_PRINT_DECISION:
-            if parsed["in2"]:
-                await self._on_print_decision(printed=True)
-
-        elif self.state == STATE_OPENING:
-            # Wait for vehicle to pass (IN3 or IN1 off + timer)
-            if parsed["in3"] or not parsed["in1"]:
-                await self._on_vehicle_passed()
-
-    # ------------------------------------------------------------------
-    # State transition handlers
-    # ------------------------------------------------------------------
-
-    async def _on_vehicle_detected(self) -> None:
-        """Vehicle detected at entry."""
-        await self._transition(STATE_VEHICLE_PRESENT)
-        await self.publish_event(
-            VehicleDetectedEvent(
-                event_type="vehicle_detected",
-                gate_id=self.gate_id,
-                sensor="IN1",
-            )
-        )
-        # Close gate
-        await self._send_controller_command(cmd_trig2() if self.config.get("relay_mode") == "DUAL" else cmd_trig1())
-        # Start gate close timer (fallback if no sensor)
-        duration_ms = self.config.get("gate_close_duration_ms", 5000)
-        asyncio.create_task(self._gate_close_timer(duration_ms / 1000.0))
-
-        # Welcome audio (configurable)
-        audio_cfg = self.hw.get("audio", {})
-        if audio_cfg.get("enabled", True):
-            track = audio_cfg.get("welcome_track", 1)
-            await self._send_controller_command(cmd_mt(f"{track:05d}"))
-
-        # Welcome LED (configurable)
-        led_cfg = self.hw.get("led", {})
-        if led_cfg.get("enabled", True):
-            await self._send_controller_command(cmd_ds("Selamat Datang", ""))
-
-    async def _gate_close_timer(self, duration: float) -> None:
-        """Fallback timer for gate close confirmation."""
-        await asyncio.sleep(duration)
-        if self.state == STATE_VEHICLE_PRESENT:
-            await self._on_gate_closed()
-
-    async def _on_gate_closed(self) -> None:
-        """Gate has closed — auto-detect all enabled input methods."""
-        await self._transition(STATE_GATE_CLOSED)
-        await self.publish_event(
-            GateClosedEvent(
-                event_type="gate_closed",
-                gate_id=self.gate_id,
-            )
-        )
-        # Reset display
-        await self._send_controller_command(cmd_dsu())
-
-        # Build display message based on enabled methods
-        methods = []
-        if self.has_rfid:
-            methods.append("RFID")
-        if self.has_emoney:
-            methods.append("E-Money")
-        if not self.has_rfid and not self.has_emoney:
-            # Pure cash mode
-            await self._transition(STATE_WAITING_BUTTON)
-            await self._send_controller_command(
-                cmd_ds("Selamat Datang", "Ambil Tiket")
-            )
+        if text.rstrip("\xa9").endswith("OK"):
             return
 
-        # Multi-method mode: wait for any card tap
-        await self._transition(STATE_WAITING_CARD)
-        if len(methods) == 1:
-            await self._send_controller_command(
-                cmd_ds(f"Tempelkan Kartu", methods[0])
-            )
+        if "IN1ON" in text:
+            await self._send_controller_command(cmd_ack_in1on())
+            if self.state == STATE_IDLE:
+                await self._on_vehicle_detected()
+
+        elif "IN1OFF" in text:
+            await self._send_controller_command(cmd_ack_in1off())
+            if self.state == STATE_WAITING_INPUT:
+                await self._on_vehicle_backed_up()
+            elif self.state == STATE_OPENING:
+                await self._on_vehicle_passed()
+
+        elif "IN2ON" in text:
+            await self._send_controller_command(cmd_ack_in2on())
+            if self.state == STATE_WAITING_INPUT:
+                await self._on_ticket_button_pressed()
+            elif self.state == STATE_WAITING_PRINT_DECISION:
+                await self._on_print_decision(printed=True)
+
+        elif "IN3ON" in text:
+            await self._send_controller_command(cmd_ack_in3on())
+            if self.state == STATE_WAITING_INPUT:
+                await self._on_reset()
+            elif self.state == STATE_OPENING:
+                await self._on_vehicle_passed()
+
+        elif "IN3OFF" in text:
+            await self._send_controller_command(cmd_ack_in3off())
+            if self.state == STATE_OPENING:
+                await self._on_vehicle_passed()
+
+        elif "IN4ON" in text:
+            await self._send_controller_command(cmd_ack_in4on())
+            if self.state == STATE_WAITING_INPUT:
+                await self._on_help_button()
+
         else:
-            await self._send_controller_command(
-                cmd_ds("Tempelkan Kartu", " / ".join(methods))
-            )
+            parsed = parse_stat(msg)
+            if parsed["wiegand_w"] or parsed["wiegand_x"]:
+                await self._send_controller_command(cmd_ack_wiegand())
+                if self.state == STATE_WAITING_INPUT and self.has_rfid:
+                    if parsed["wiegand_w"]:
+                        await self._on_rfid_card_read(parsed["wiegand_w"], "W")
+                    elif parsed["wiegand_x"]:
+                        await self._on_rfid_card_read(parsed["wiegand_x"], "X")
 
-    async def _on_ticket_button_pressed(self) -> None:
-        """Ticket button pressed in CASH mode.
+    # ------------------------------------------------------------------
+    # PASSTI polling (serial port — not RSS-pushable)
+    # ------------------------------------------------------------------
 
-        IMPORTANT: Cash entry uses PRINT-FIRST flow.
-        The ticket IS the transaction identifier for cash customers.
-        Gate only opens after ticket is printed (or fallback to LED barcode).
-        """
-        await self._transition(STATE_PROCESSING)
-        await self.publish_event(
-            TicketButtonPressedEvent(
-                event_type="ticket_button_pressed",
-                gate_id=self.gate_id,
-            )
-        )
-        # FastAPI will create transaction and send print_ticket_then_open command
-        # The print_ticket_then_open command handler will:
-        #   1. Print the ticket (blocking)
-        #   2. If print OK → open gate
-        #   3. If print FAIL → display barcode on LED → alert operator → open gate
-
-    async def _on_rfid_card_read(self, card_number: str, channel: str) -> None:
-        """RFID/UHF card read."""
-        await self._transition(STATE_VALIDATING)
-        await self.publish_event(
-            RfidCardReadEvent(
-                event_type="rfid_card_read",
-                gate_id=self.gate_id,
-                card_number=card_number,
-                channel=channel,
-            )
-        )
-        # FastAPI validates member and sends open_gate command
+    async def _passti_poll_loop(self) -> None:
+        while self.state == STATE_WAITING_INPUT and self._running:
+            await self._check_passti_tap()
+            await asyncio.sleep(0.5)
 
     async def _check_passti_tap(self) -> None:
-        """Check for PASSTI card tap when e-money is enabled."""
         if not self.passti_transport:
             return
         try:
             from protocols.passti.commands import cmd_check_balance
-
             frame = cmd_check_balance(timeout_sec=10)
             result = await self.passti_transport.send_recv(frame, timeout=2.0)
             if result.get("ok"):
@@ -331,8 +286,68 @@ class GateInDaemon(BaseDaemon):
         except Exception as e:
             logger.debug("passti_poll_no_card", gate_id=self.gate_id, error=str(e))
 
+    # ------------------------------------------------------------------
+    # State transition handlers
+    # ------------------------------------------------------------------
+
+    async def _on_vehicle_detected(self) -> None:
+        """Vehicle at sensor — go straight to WAITING_INPUT, no gate close."""
+        await self._transition(STATE_WAITING_INPUT)
+        await self.publish_event(
+            VehicleDetectedEvent(event_type="vehicle_detected", gate_id=self.gate_id, sensor="IN1")
+        )
+        audio_cfg = self.hw.get("audio", {})
+        if audio_cfg.get("enabled", True):
+            track = audio_cfg.get("welcome_track", 1)
+            await self._cmd_play_audio(track)
+        await self._send_controller_command(cmd_ds("Selamat Datang", "Tombol/Tempel Kartu"))
+        if self.has_emoney:
+            asyncio.create_task(self._passti_poll_loop(), name="passti_poll")
+
+    async def _on_vehicle_backed_up(self) -> None:
+        """Vehicle reversed before completing entry."""
+        await self._transition(STATE_IDLE)
+        await self._send_controller_command(cmd_dsu())
+        logger.info("vehicle_backed_up", gate_id=self.gate_id)
+
+    async def _on_reset(self) -> None:
+        """IN3 triggered during input wait — reset to IDLE."""
+        await self._transition(STATE_IDLE)
+        await self._send_controller_command(cmd_dsu())
+        logger.info("gate_reset_by_sensor", gate_id=self.gate_id)
+
+    async def _on_help_button(self) -> None:
+        """IN4 help button — alert operator, hold 10s, reset."""
+        await self._cmd_play_audio(5)
+        await self._send_controller_command(cmd_ds("Mohon Tunggu", "Petugas Membantu Anda"))
+        await self.publish_event(
+            HelpButtonPressedEvent(event_type="help_button_pressed", gate_id=self.gate_id)
+        )
+        await asyncio.sleep(10)
+        await self._transition(STATE_IDLE)
+        await self._send_controller_command(cmd_dsu())
+
+    async def _on_ticket_button_pressed(self) -> None:
+        """Cash button pressed — notify API to create transaction and print."""
+        await self._transition(STATE_PROCESSING)
+        await self.publish_event(
+            TicketButtonPressedEvent(event_type="ticket_button_pressed", gate_id=self.gate_id)
+        )
+
+    async def _on_rfid_card_read(self, card_number: str, channel: str) -> None:
+        """Wiegand card read — notify API to validate member."""
+        await self._transition(STATE_VALIDATING)
+        await self.publish_event(
+            RfidCardReadEvent(
+                event_type="rfid_card_read",
+                gate_id=self.gate_id,
+                card_number=card_number,
+                channel=channel,
+            )
+        )
+
     async def _on_passti_card_tap(self, card_number: str, card_type_code: int, balance: int) -> None:
-        """PASSTI card tapped in e-money mode."""
+        """E-money card tapped — notify API to check balance threshold."""
         await self._transition(STATE_CHECKING_BALANCE)
         card_type = self._card_type_name(card_type_code)
         self.state_data["passti_card_number"] = card_number
@@ -346,311 +361,194 @@ class GateInDaemon(BaseDaemon):
                 card_type=card_type,
             )
         )
-        # FastAPI will check balance against threshold and send next command
-        # (either display insufficient balance, or proceed to print decision)
 
     async def _start_print_decision_timer(self, timeout: float) -> None:
-        """Start timer for print decision in e-money mode."""
         async def timer() -> None:
             await asyncio.sleep(timeout)
             if self.state == STATE_WAITING_PRINT_DECISION:
                 await self._on_print_decision(printed=False)
-
         self._print_decision_timer = asyncio.create_task(timer(), name="print_timer")
 
     async def _on_print_decision(self, printed: bool) -> None:
-        """Print decision made (button pressed or timeout)."""
+        """Driver made print decision (button or timeout)."""
         if self._print_decision_timer and not self._print_decision_timer.done():
             self._print_decision_timer.cancel()
         self.state_data["ticket_printed"] = printed
         await self._transition(STATE_PROCESSING)
-
-        # Publish event so API can create transaction
-        card_number = self.state_data.get("passti_card_number", "")
-        card_type = self.state_data.get("passti_card_type", "")
-        balance = self.state_data.get("passti_balance", 0)
-
         await self.publish_event(
             EmoneyPrintDecisionEvent(
                 event_type="emoney_print_decision",
                 gate_id=self.gate_id,
                 printed=printed,
-                card_number=card_number,
-                card_type=card_type,
-                balance=balance,
+                card_number=self.state_data.get("passti_card_number", ""),
+                card_type=self.state_data.get("passti_card_type", ""),
+                balance=self.state_data.get("passti_balance", 0),
             )
         )
-
-    async def _on_vehicle_passed(self) -> None:
-        """Vehicle has passed through gate."""
-        await self._transition(STATE_IDLE)
-        await self.publish_event(
-            VehiclePassedEvent(
-                event_type="vehicle_passed",
-                gate_id=self.gate_id,
-            )
-        )
-        await self._send_controller_command(cmd_dsu())
-        # Close gate for DUAL relay mode (barrier returns to closed position)
-        if self.config.get("relay_mode") == "DUAL":
-            await self._send_controller_command(cmd_trig2())
 
     async def _on_gate_opened(self) -> None:
-        """Gate has opened."""
         await self._transition(STATE_OPENING)
         await self.publish_event(
-            GateOpenedEvent(
-                event_type="gate_opened",
-                gate_id=self.gate_id,
-            )
+            GateOpenedEvent(event_type="gate_opened", gate_id=self.gate_id)
         )
-        # Start timer to detect vehicle passing
         asyncio.create_task(self._vehicle_pass_timer())
 
     async def _vehicle_pass_timer(self) -> None:
-        """Timer to detect vehicle has passed."""
         await asyncio.sleep(self.config.get("gate_open_timeout_s", 10))
         if self.state == STATE_OPENING:
             await self._on_vehicle_passed()
+
+    async def _on_vehicle_passed(self) -> None:
+        await self._transition(STATE_IDLE)
+        await self.publish_event(
+            VehiclePassedEvent(event_type="vehicle_passed", gate_id=self.gate_id)
+        )
+        await self._send_controller_command(cmd_dsu())
+        await self._relay_close()
 
     # ------------------------------------------------------------------
     # Command handlers (from Redis Streams)
     # ------------------------------------------------------------------
 
     async def handle_command(self, command_data: dict[str, str]) -> bool:
-        """Process a command from FastAPI."""
         command_type = command_data.get("command_type", "")
         logger.info("gate_in_command", gate_id=self.gate_id, command_type=command_type)
-
         try:
             if command_type == "open_gate":
-                duration = command_data.get("duration_seconds")
-                dur = int(duration) if duration else None
-                await self._cmd_open_gate(dur)
-
+                await self._cmd_open_gate()
             elif command_type == "close_gate":
-                await self._cmd_close_gate()
-
+                await self._relay_close()
+            elif command_type == "brake_gate":
+                await self._relay_brake()
             elif command_type == "play_audio":
-                track = int(command_data.get("track", 1))
-                await self._cmd_play_audio(track)
-
+                await self._cmd_play_audio(int(command_data.get("track", 1)))
             elif command_type == "display_text":
-                line1 = command_data.get("line1", "")
-                line2 = command_data.get("line2", "")
-                await self._cmd_display_text(line1, line2)
-
+                await self._cmd_display_text(
+                    command_data.get("line1", ""), command_data.get("line2", "")
+                )
             elif command_type == "buzzer":
-                success = command_data.get("success", "true").lower() == "true"
-                await self._cmd_buzzer(success)
-
+                if command_data.get("success", "true").lower() != "true":
+                    await self._cmd_play_audio(11)
             elif command_type == "print_ticket":
-                barcode = command_data.get("barcode", "")
-                gate_name = command_data.get("gate_name", self.config.get("name", ""))
-                await self._cmd_print_ticket(barcode, gate_name)
-
+                await self._cmd_print_ticket(
+                    command_data.get("barcode", ""),
+                    command_data.get("gate_name", self.config.get("name", "")),
+                )
             elif command_type == "print_ticket_then_open":
-                barcode = command_data.get("barcode", "")
-                gate_name = command_data.get("gate_name", self.config.get("name", ""))
-                await self._cmd_print_ticket_then_open(barcode, gate_name)
-
+                await self._cmd_print_ticket_then_open(
+                    command_data.get("barcode", ""),
+                    command_data.get("gate_name", self.config.get("name", "")),
+                )
             elif command_type == "check_balance":
-                threshold = int(command_data.get("minimum_threshold", 10000))
-                await self._cmd_check_balance(threshold)
-
+                await self._cmd_check_balance(
+                    int(command_data.get("minimum_threshold", 10000))
+                )
             elif command_type == "reset_gate":
-                reason = command_data.get("reason", "operator")
-                await self._cmd_reset_gate(reason)
-
+                await self._cmd_reset_gate(command_data.get("reason", "operator"))
             elif command_type == "deduct":
-                # Gate-in does not handle deduct; gate-out only
                 logger.warning("deduct_ignored_at_gate_in", gate_id=self.gate_id)
-
             else:
                 logger.warning("unknown_command", gate_id=self.gate_id, command_type=command_type)
-
             return True
         except Exception as e:
             logger.error("command_error", gate_id=self.gate_id, command_type=command_type, error=str(e))
             return False
 
-    async def _cmd_open_gate(self, duration_seconds: int | None = None) -> None:
-        """Open the gate."""
-        await self._send_controller_command(cmd_trig1())
+    async def _cmd_open_gate(self) -> None:
+        await self._relay_open()
+        await self._cmd_play_audio(9)  # terima_kasih
         await self._on_gate_opened()
 
-    async def _cmd_close_gate(self) -> None:
-        """Close the gate (DUAL relay mode)."""
-        if self.config.get("relay_mode") == "DUAL":
-            await self._send_controller_command(cmd_trig2())
-
     async def _cmd_play_audio(self, track: int) -> None:
-        """Play audio track."""
-        track_str = f"{track:05d}"
-        await self._send_controller_command(cmd_mt(track_str))
+        if self.config.get("protocol", "compass") == "serial":
+            await self.publish_event(PlayAudioEvent(gate_id=self.gate_id, track=track))
+        else:
+            await self._send_controller_command(cmd_mt(f"{track:05d}"))
 
     async def _cmd_display_text(self, line1: str, line2: str) -> None:
-        """Display text on LED."""
         await self._send_controller_command(cmd_ds(line1, line2))
 
-    async def _cmd_buzzer(self, success: bool) -> None:
-        """Trigger buzzer."""
-        # Compass protocol doesn't have direct buzzer; use audio track 11 for failure
-        if not success:
-            await self._cmd_play_audio(11)
-
     async def _cmd_print_ticket(self, barcode: str, gate_name: str) -> None:
-        """Print entry ticket via ARQ critical worker.
-
-        For cash entry, this is called as print_ticket_then_open which
-        enforces print-first ordering. See _cmd_print_ticket_then_open.
-        """
         logger.info("print_ticket_commanded", gate_id=self.gate_id, barcode=barcode)
-
         try:
             from shared.redis import get_arq_redis
             arq_redis = await get_arq_redis()
-            await arq_redis.enqueue_job(
-                "print_ticket",
-                gate_id=self.gate_id,
-                barcode=barcode,
-                gate_name=gate_name,
-            )
+            await arq_redis.enqueue_job("print_ticket", gate_id=self.gate_id, barcode=barcode, gate_name=gate_name)
         except Exception as e:
             logger.error("print_ticket_enqueue_failed", gate_id=self.gate_id, error=str(e))
 
     async def _cmd_print_ticket_then_open(self, barcode: str, gate_name: str) -> None:
-        """Print-first flow for CASH entry.
-
-        1. Attempt to print the ticket (blocking)
-        2. If print succeeds → open gate
-        3. If print fails → display barcode on LED → alert operator → open gate
-
-        The gate ALWAYS opens eventually — we never trap a vehicle.
-        But for cash, we try to print first because the ticket is the identifier.
-        """
-        logger.info(
-            "print_ticket_then_open",
-            gate_id=self.gate_id,
-            barcode=barcode,
-        )
-
+        """Print-first cash entry flow. Gate ALWAYS opens — never trap a vehicle."""
+        logger.info("print_ticket_then_open", gate_id=self.gate_id, barcode=barcode)
         print_success = False
-
         try:
-            # Attempt synchronous print via controller passthrough
-            from protocols.compass.protocol import cmd_pr4
-
-            timestamp_str = ""
-            try:
-                from datetime import datetime
-                timestamp_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-            except Exception:
-                pass
-
-            # Build ESC/POS ticket data inline (same as print_worker)
-            escpos_lines = [
-                b"\x1b\x61\x01",  # Center align
+            from datetime import datetime
+            timestamp_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            escpos_data = b"".join([
+                b"\x1b\x61\x01",
                 b"TIKET PARKIR\n",
-                b"\x1b\x61\x00",  # Left align
+                b"\x1b\x61\x00",
                 f"GATE    : {gate_name}\n".encode(),
                 f"TANGGAL : {timestamp_str}\n".encode(),
-                b"\x1b\x61\x01",  # Center align
-                b"\x1d\x68\x64",  # Barcode height 100
-                b"\x1d\x48\x02",  # Text below barcode
-                b"\x1d\x6b\x45",  # CODE39
+                b"\x1b\x61\x01",
+                b"\x1d\x68\x64",
+                b"\x1d\x48\x02",
+                b"\x1d\x6b\x45",
                 bytes([len(barcode)]) + barcode.encode() + b"\x00",
-                b"\n\x1d\x56\x41",  # Full cut
-            ]
-            escpos_data = b"".join(escpos_lines)
-
-            # Send to printer via controller
-            await self._send_controller_command(cmd_pr4(escpos_data))
-
-            # Wait briefly for printer to process
+                b"\n\x1d\x56\x41",
+            ])
+            await self._send_controller_command(cmd_pr3(escpos_data))
             await asyncio.sleep(1.5)
             print_success = True
             logger.info("cash_ticket_printed", gate_id=self.gate_id, barcode=barcode)
-
         except Exception as e:
-            logger.error(
-                "cash_ticket_print_failed",
-                gate_id=self.gate_id,
-                barcode=barcode,
-                error=str(e),
-            )
+            logger.error("cash_ticket_print_failed", gate_id=self.gate_id, barcode=barcode, error=str(e))
 
         audio_cfg = self.hw.get("audio", {})
-
         if not print_success:
-            # Fallback: display barcode on LED
-            await self._send_controller_command(
-                cmd_ds("CATAT NOMOR:", barcode)
-            )
-            # Alert operator
-            await self.publish_event(
-                BaseEvent(
-                    event_type="print_failed_alert",
-                    gate_id=self.gate_id,
-                )
-            )
-            # Hold for 3 seconds so driver can see/photograph barcode
+            await self._send_controller_command(cmd_ds("CATAT NOMOR:", barcode))
+            await self.publish_event(BaseEvent(event_type="print_failed_alert", gate_id=self.gate_id))
             await asyncio.sleep(3)
-            # Play error audio
             if audio_cfg.get("enabled", True):
-                track = audio_cfg.get("error_track", 11)
-                await self._cmd_play_audio(track)
+                await self._cmd_play_audio(audio_cfg.get("error_track", 11))
         else:
-            # Play "ambil tiket" audio
-            track = audio_cfg.get("ticket_track", 2) if audio_cfg.get("enabled", True) else 2
-            await self._cmd_play_audio(track)
+            if audio_cfg.get("enabled", True):
+                await self._cmd_play_audio(audio_cfg.get("ticket_track", 2))
 
-        # Gate ALWAYS opens (never trap a vehicle)
         await self._cmd_open_gate()
 
     async def _cmd_check_balance(self, minimum_threshold: int) -> None:
-        """Check PASSTI balance and transition based on result."""
         if not self.passti_transport:
             logger.error("passti_not_connected", gate_id=self.gate_id)
             return
-
         try:
             from protocols.passti.commands import cmd_check_balance
-
             frame = cmd_check_balance(timeout_sec=10)
             result = await self.passti_transport.send_recv(frame, timeout=5.0)
-
             if result.get("ok"):
                 body = result.get("body", b"")
                 if len(body) >= 13:
                     balance = int.from_bytes(body[9:13], "big")
                     if balance < minimum_threshold:
-                        await self._send_controller_command(
-                            cmd_ds("Saldo Tidak Cukup", f"Rp {balance:,}")
-                        )
+                        await self._send_controller_command(cmd_ds("Saldo Tidak Cukup", f"Rp {balance:,}"))
                         await self._cmd_play_audio(6)
                         await self._transition(STATE_IDLE)
                     else:
-                        # Sufficient balance — proceed to print decision
                         await self._transition(STATE_WAITING_PRINT_DECISION)
-                        await self._send_controller_command(
-                            cmd_ds("Cetak Tiket?", "Tekan Tombol")
-                        )
+                        await self._send_controller_command(cmd_ds("Cetak Tiket?", "Tekan Tombol"))
                         timeout = self.hw.get("emoney", {}).get("print_decision_timeout_seconds", 10)
                         await self._start_print_decision_timer(timeout)
                 else:
                     await self._send_controller_command(cmd_ds("Kartu Error", "Coba Lagi"))
                     await self._transition(STATE_IDLE)
             else:
-                status_msg = result.get("status_msg", "Unknown error")
-                await self._send_controller_command(cmd_ds("Error", status_msg))
+                await self._send_controller_command(cmd_ds("Error", result.get("status_msg", "")))
                 await self._transition(STATE_IDLE)
         except Exception as e:
             logger.error("check_balance_error", gate_id=self.gate_id, error=str(e))
             await self._transition(STATE_IDLE)
 
     async def _cmd_reset_gate(self, reason: str) -> None:
-        """Reset gate to IDLE."""
         logger.info("reset_gate", gate_id=self.gate_id, reason=reason)
         await self._transition(STATE_IDLE)
         await self._send_controller_command(cmd_dsu())
@@ -659,8 +557,40 @@ class GateInDaemon(BaseDaemon):
     # Helpers
     # ------------------------------------------------------------------
 
+    async def _rfid_serial_reader_task(self) -> None:
+        """Read card numbers from a directly-connected serial RFID reader."""
+        rfid_cfg = self.hw.get("rfid", {})
+        device = rfid_cfg.get("device")
+        baudrate = rfid_cfg.get("baudrate", 9600)
+        if not device:
+            logger.error("rfid_serial_no_device", gate_id=self.gate_id)
+            return
+
+        loop = asyncio.get_event_loop()
+        try:
+            import serial as _serial
+            ser = _serial.Serial(port=device, baudrate=baudrate, timeout=0.5)
+        except Exception as e:
+            logger.error("rfid_serial_open_failed", gate_id=self.gate_id, error=str(e))
+            return
+
+        logger.info("rfid_serial_reader_started", gate_id=self.gate_id, device=device)
+        try:
+            while self._running:
+                try:
+                    raw = await loop.run_in_executor(None, ser.readline)
+                    card_number = raw.decode("ascii", errors="ignore").strip()
+                    if card_number and self.state == STATE_WAITING_INPUT and self.has_rfid:
+                        await self._on_rfid_card_read(card_number, "S")
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    logger.error("rfid_serial_read_error", gate_id=self.gate_id, error=str(e))
+                    await asyncio.sleep(1)
+        finally:
+            ser.close()
+
     async def _send_controller_command(self, command: bytes) -> None:
-        """Send a command to the Compass controller."""
         if self.controller and self.controller.is_connected():
             try:
                 async with self._controller_lock:
@@ -671,6 +601,5 @@ class GateInDaemon(BaseDaemon):
 
     @staticmethod
     def _card_type_name(code: int) -> str:
-        """Map PASSTI card type code to name."""
         from protocols.passti.frame import CARD_TYPES
         return CARD_TYPES.get(code, f"Unknown({code:02X})")

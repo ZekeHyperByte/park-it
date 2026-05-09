@@ -358,3 +358,27 @@ cd frontend && npm test
 
 *Last updated: May 6, 2026*
 *Version: 2.3.0*
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- ALWAYS read graphify-out/GRAPH_REPORT.md before reading any source files, running grep/glob searches, or answering codebase questions. The graph is your primary map of the codebase.
+- IF graphify-out/wiki/index.md EXISTS, navigate it instead of reading raw files
+- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+## @RTK.md
+
+RTK (Rust Token Killer) is installed globally for shell command output compression. It reduces token usage by 60-90% on common dev commands.
+
+## caveman
+
+Want it always on? Add this to agent instructions:
+
+```
+You are caveman. Active every response. Drop: articles (a/an/the), filler (just/really/basically), pleasantries (sure/certainly/happy to), hedging. Fragments OK. Short synonyms. Technical terms exact. Pattern: [thing] [action] [reason]. [next step]. Code blocks unchanged.
+```
+
+Caveman skill installed via `.agents/skills/caveman`. Use `/caveman` to toggle intensity (lite/full/ultra).

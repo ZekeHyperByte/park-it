@@ -1,513 +1,131 @@
 <template>
-  <div class="pos-page">
-    <!-- Zone 1: Status Bar -->
-    <StatusBar
-      :gate="selectedGate"
-      :hardware-status="hardwareStatus"
-      :user="authStore.user"
-      :cash-collected="cashCollected"
-      :transaction-count="transactionCount"
-      :shift-info="shiftInfo"
-    />
-
-    <!-- Zone 2: Main Area (60/40 split) -->
-    <div class="main-area">
-      <!-- Left: Vehicle Info Card -->
-      <VehicleInfoCard
-        :transaction="gateStore.currentTransaction"
-        :duration-seconds="gateStore.durationSeconds"
-        :waiting-seconds="gateStore.waitingSeconds"
-        :payment-state="gateStore.paymentState"
-        :emoney-state="gateStore.emoneyPaymentState"
-        :vehicle-types="websiteStore.vehicleTypes"
-        :entry-photo-url="entryPhotoUrl"
-        :exit-photo-url="exitPhotoUrl"
-        :timeout-seconds="timeoutSeconds"
-        @lookup="onBarcodeLookup"
-        @manual-open="openGateAction"
-        @reset-gate="resetGateAction"
-        @vehicle-left="vehicleLeftAction"
-        @pay-cash="openCashModal"
-        @pay-rfid="startRfidPayment"
-        @retry-emoney="retryEmoney"
-        @cancel-correction="cancelCorrection"
-        @override="overrideAction"
-      />
-
-      <!-- Right: Payment Panel -->
-      <PaymentPanel
-        ref="paymentPanelRef"
-        :payment-state="gateStore.paymentState"
-        :emoney-state="gateStore.emoneyPaymentState"
-        :awaiting-gate-open="gateStore.awaitingGateOpen"
-        :tariff="currentTariff"
-        :change-amount="gateStore.changeAmount"
-        :emoney-card-info="emoneyCardInfo"
-        :emoney-balance="emoneyBalance"
-        @pay-cash="openCashModal"
-        @pay-rfid="startRfidPayment"
-        @pay-emoney="startEmoneyPayment"
-        @open-gate="openGateAction"
-        @cancel-emoney="cancelEmoney"
-        @retry-emoney="retryEmoney"
-        @barcode-lookup="onBarcodeLookupInput"
-        @confirm-cash="confirmCashPayment"
-        @confirm-rfid="confirmRfidPayment"
-      />
+  <div class="space-y-6">
+    <!-- Greeting bar -->
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-xl font-semibold text-foreground">
+          {{ greeting }}, {{ authStore.user?.username || 'Operator' }}
+        </h2>
+        <p class="mt-1 text-sm text-muted-foreground">{{ formattedDate }}</p>
+      </div>
     </div>
 
-    <!-- Zone 3: Quick Action Bar -->
-    <QuickActionBar
-      :payment-state="gateStore.paymentState"
-      :emoney-state="gateStore.emoneyPaymentState"
-      :awaiting-gate-open="gateStore.awaitingGateOpen"
-      :can-pay-cash="gateStore.canPayCash"
-      :can-pay-rfid="gateStore.canPayRfid"
-      :can-pay-emoney="gateStore.canPayEmoney"
-    />
+    <!-- Hero tile: POS Kiosk -->
+    <NuxtLink
+      to="/pos"
+      class="group flex items-center gap-6 rounded-xl border-l-4 border-l-primary border border-border bg-surface p-6 transition-all hover:border-primary/30 hover:-translate-y-0.5"
+    >
+      <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+          <path d="M2 10h20" />
+          <path d="M12 4v6" />
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <h3 class="text-lg font-semibold text-foreground">Mulai POS Kiosk</h3>
+        <p class="mt-1 text-sm text-muted-foreground">
+          Mode layar penuh untuk operasional gate keluar
+        </p>
+        <div class="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+          <span v-if="posSession.shiftName">
+            Shift: <span class="text-foreground font-medium">{{ posSession.shiftName }}</span>
+          </span>
+          <span>
+            Transaksi hari ini: <span class="text-foreground font-medium">{{ posSession.transactionCount }}</span>
+          </span>
+          <span>
+            Kas: <span class="text-foreground font-medium">{{ formatCurrency(posSession.cashCollected) }}</span>
+          </span>
+        </div>
+      </div>
+      <div class="shrink-0 text-muted-foreground/40 transition-transform group-hover:translate-x-1">
+        <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+      </div>
+    </NuxtLink>
+
+    <!-- Module grid -->
+    <div>
+      <h3 class="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Modul</h3>
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <DashboardModuleTile
+          v-for="item in visibleModules"
+          :key="item.to"
+          :title="item.title"
+          :description="item.description"
+          :icon="item.icon"
+          :to="item.to"
+          :badge="item.badge"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue'
-import StatusBar from '~/components/pos/StatusBar.vue'
-import VehicleInfoCard from '~/components/pos/VehicleInfoCard.vue'
-import PaymentPanel from '~/components/pos/PaymentPanel.vue'
-import QuickActionBar from '~/components/pos/QuickActionBar.vue'
+import { computed, onMounted, markRaw } from 'vue'
+import {
+  LogIn,
+  FileText,
+  Users,
+  BarChart3,
+  Bell,
+  Settings,
+  Cpu,
+} from 'lucide-vue-next'
 
 definePageMeta({
   middleware: 'auth',
+  layout: 'default',
 })
 
 const authStore = useAuthStore()
-const websiteStore = useWebsiteStore()
-const gateStore = useGateStore()
-const { $ws } = useNuxtApp()
-const { fetchApi } = useApi()
-const sound = useSound()
-const { hardwareStatus, updateFromGate, updateWebSocketStatus, startPolling, stopPolling } = useHardwareStatus()
+const posSession = usePosSessionStore()
 
-// Refs
-const paymentPanelRef = ref(null)
-let unsubscribeWs = null
-let boothWs = null
-let boothWsReconnectTimer = null
+// markRaw prevents Vue from making the components reactive (cheap optimisation
+// for icon refs that never change).
+const allModules = [
+  { to: '/gate-in', title: 'Gate In Monitor', description: 'Pantau kendaraan masuk secara real-time', icon: markRaw(LogIn), adminOnly: false },
+  { to: '/transaksi', title: 'Transaksi', description: 'Riwayat dan pencarian transaksi parkir', icon: markRaw(FileText), adminOnly: false },
+  { to: '/member', title: 'Member', description: 'Kelola kartu member dan langganan', icon: markRaw(Users), adminOnly: false },
+  { to: '/report', title: 'Laporan', description: 'Laporan pendapatan dan statistik parkir', icon: markRaw(BarChart3), adminOnly: false },
+  { to: '/notification', title: 'Notifikasi', description: 'Peringatan sistem dan notifikasi gate', icon: markRaw(Bell), adminOnly: false },
+  { to: '/device', title: 'Perangkat', description: 'Konfigurasi perangkat keras dan gate', icon: markRaw(Cpu), adminOnly: true },
+  { to: '/setting', title: 'Pengaturan', description: 'Pengaturan sistem, tarif, dan shift', icon: markRaw(Settings), adminOnly: true },
+]
 
-// Booth auto-detection
-const currentPos = ref(null)
-const isAdmin = computed(() => authStore.user?.role === 'admin')
-
-// Shift counter state
-const cashCollected = ref(0)
-const transactionCount = ref(0)
-const shiftInfo = ref(null)
-
-// Timeout config (default 120s)
-const timeoutSeconds = computed(() => {
-  return parseInt(websiteStore.getSetting('payment_timeout_seconds', '120'))
-})
-
-// Computed
-const selectedGate = computed(() =>
-  websiteStore.activeGateOuts.find((g) => g.id === gateStore.selectedGateOutId)
+const visibleModules = computed(() =>
+  allModules.filter((m) => !m.adminOnly || authStore.isAdmin)
 )
 
-const currentTariff = computed(() => {
-  return gateStore.currentTransaction?.tariff || gateStore.currentTransaction?.fee || 0
+const greeting = computed(() => {
+  const hour = new Date().getHours()
+  if (hour < 11) return 'Selamat pagi'
+  if (hour < 15) return 'Selamat siang'
+  if (hour < 18) return 'Selamat sore'
+  return 'Selamat malam'
 })
 
-const entryPhotoUrl = computed(() => {
-  const tx = gateStore.currentTransaction
-  if (!tx?.entry_snapshot_id) return null
-  return `/api/snapshots/${tx.entry_snapshot_id}/image`
+const formattedDate = computed(() => {
+  return new Date().toLocaleDateString('id-ID', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
 })
 
-const exitPhotoUrl = computed(() => {
-  return gateStore.cameraSnapshot
-})
-
-const emoneyCardInfo = computed(() => {
-  const tx = gateStore.currentTransaction
-  if (!tx?.card_number) return null
-  return {
-    cardType: detectCardType(tx.card_number),
-    cardNumber: maskCardNumber(tx.card_number),
-  }
-})
-
-const emoneyBalance = ref(null)
-
-// Methods
-function detectCardNumber(cardNumber) {
-  if (!cardNumber) return 'Unknown'
-  if (cardNumber.startsWith('00') || cardNumber.startsWith('01')) return 'Mandiri eMoney'
-  if (cardNumber.startsWith('02')) return 'BRI Brizzi'
-  if (cardNumber.startsWith('03')) return 'BNI TapCash'
-  if (cardNumber.startsWith('04')) return 'BCA Flazz'
-  return 'E-Money'
+function formatCurrency(value) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+  }).format(value || 0)
 }
 
-function maskCardNumber(cardNumber) {
-  if (!cardNumber || cardNumber.length < 8) return '****'
-  const last4 = cardNumber.slice(-4)
-  return `**** **** **** ${last4}`
-}
-
-function formatCurrency(amount) {
-  return `Rp ${new Intl.NumberFormat('id-ID').format(amount)}`
-}
-
-function onBarcodeLookup() {
-  if (paymentPanelRef.value) {
-    paymentPanelRef.value.openCashModal()
-  }
-}
-
-async function onBarcodeLookupInput(input) {
-  if (!input.trim()) return
-  const found = await gateStore.lookupTransaction({
-    barcode: input.trim(),
-    plateNumber: input.trim(),
-  })
-  if (!found) {
-    ElMessage.warning('Transaksi tidak ditemukan')
-  }
-}
-
-function openCashModal() {
-  if (paymentPanelRef.value) {
-    paymentPanelRef.value.openCashModal()
-  }
-}
-
-async function confirmCashPayment(amount) {
-  if (!selectedGate.value) return
-  const gateCode = selectedGate.value.code || `gate-out-${selectedGate.value.id}`
-  const result = await gateStore.confirmCashPayment({
-    gateId: gateCode,
-    gateOutId: selectedGate.value.id,
-    paidAmount: amount,
-  })
-  if (result) {
-    sound.paymentSuccess()
-    cashCollected.value += amount - (result.change_amount || 0)
-    transactionCount.value++
-  }
-}
-
-function startRfidPayment() {
-  if (paymentPanelRef.value) {
-    paymentPanelRef.value.openRfidModal()
-  }
-}
-
-async function confirmRfidPayment(cardNumber) {
-  if (!cardNumber.trim() || !selectedGate.value) {
-    ElMessage.warning('Masukkan nomor kartu RFID')
-    return
-  }
-  const gateCode = selectedGate.value.code || `gate-out-${selectedGate.value.id}`
-  const success = await gateStore.processRfidPayment({
-    gateId: gateCode,
-    gateOutId: selectedGate.value.id,
-    cardNumber: cardNumber.trim(),
-  })
-  if (success) {
-    sound.paymentSuccess()
-    transactionCount.value++
-  }
-}
-
-function connectBooth() {
-  if (boothWs) {
-    try { boothWs.close() } catch (e) { /* ignore */ }
-  }
-  boothWs = new WebSocket('ws://localhost:5678/')
-  boothWs.onopen = () => {
-    console.log('Booth bridge connected')
-    gateStore.setBoothConnected(true)
-    if (boothWsReconnectTimer) {
-      clearTimeout(boothWsReconnectTimer)
-      boothWsReconnectTimer = null
-    }
-  }
-  boothWs.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data)
-      handleBoothMessage(data)
-    } catch (e) {
-      console.error('Booth message parse error:', e)
-    }
-  }
-  boothWs.onerror = () => {
-    gateStore.setBoothConnected(false)
-  }
-  boothWs.onclose = () => {
-    gateStore.setBoothConnected(false)
-    if (!boothWsReconnectTimer) {
-      boothWsReconnectTimer = setTimeout(() => {
-        boothWsReconnectTimer = null
-        connectBooth()
-      }, 3000)
-    }
-  }
-}
-
-function disconnectBooth() {
-  if (boothWsReconnectTimer) {
-    clearTimeout(boothWsReconnectTimer)
-    boothWsReconnectTimer = null
-  }
-  if (boothWs) {
-    try { boothWs.close() } catch (e) { /* ignore */ }
-    boothWs = null
-  }
-  gateStore.setBoothConnected(false)
-}
-
-function handleBoothMessage(data) {
-  if (data.action === 'emoney_deduct_result') {
-    if (data.status === 'SUCCESS') {
-      gateStore.setEmoneyState('SUCCESS')
-      emoneyBalance.value = data.balance_after
-      sound.paymentSuccess()
-      if (selectedGate.value) {
-        const gateCode = selectedGate.value.code || `gate-out-${selectedGate.value.id}`
-        gateStore.confirmEmoneyPayment({
-          gateId: gateCode,
-          gateOutId: selectedGate.value.id,
-          cardNumber: data.card_number,
-          deductAmount: data.deduct_amount,
-          balanceBefore: data.balance_before,
-          balanceAfter: data.balance_after,
-          transactionCounter: data.transaction_counter,
-          rawResponseHex: data.raw_response_hex,
-        })
-      }
-    } else if (data.status === 'LOST_CONTACT') {
-      gateStore.setEmoneyState('LOST_CONTACT')
-      sound.paymentFailed()
-      ElMessage.warning('Tap kartu lagi untuk koreksi')
-    } else if (data.status === 'INSUFFICIENT_BALANCE') {
-      gateStore.setEmoneyState('INSUFFICIENT')
-      sound.paymentFailed()
-      ElMessage.warning('Saldo tidak cukup')
-    } else if (data.status === 'WRONG_CARD') {
-      gateStore.setEmoneyState('WRONG_CARD')
-      sound.paymentFailed()
-      ElMessage.error('Kartu tidak sesuai')
-    } else {
-      gateStore.setEmoneyState('FAILED')
-      sound.paymentFailed()
-      ElMessage.error(data.error || 'E-Money gagal')
-    }
-  }
-}
-
-function startEmoneyPayment() {
-  const tx = gateStore.currentTransaction
-  if (!tx?.card_number) {
-    ElMessage.warning('Transaksi tidak memiliki nomor kartu e-money')
-    return
-  }
-  if (!selectedGate.value) return
-
-  if (gateStore.boothConnected && boothWs) {
-    boothWs.send(JSON.stringify({
-      action: 'emoney_deduct',
-      peripheral: 'emoney_reader',
-      amount: tx.tariff,
-      expected_card_number: tx.card_number,
-    }))
-    gateStore.setEmoneyState('PROCESSING')
-    return
-  }
-
-  const gateCode = selectedGate.value.code || `gate-out-${selectedGate.value.id}`
-  gateStore.startEmoneyDeduct({
-    gateId: gateCode,
-    gateOutId: selectedGate.value.id,
-    cardNumber: tx.card_number,
-  })
-}
-
-function cancelEmoney() {
-  gateStore.setEmoneyState('IDLE')
-}
-
-function retryEmoney() {
-  gateStore.setEmoneyState('IDLE')
-  startEmoneyPayment()
-}
-
-function cancelCorrection() {
-  gateStore.setEmoneyState('IDLE')
-  ElMessage.info('Koreksi dibatalkan')
-}
-
-function overrideAction() {
-  ElMessage.warning('Override memerlukan hak admin')
-}
-
-async function openGateAction() {
-  if (!selectedGate.value) return
-  const success = await gateStore.openGate({
-    gateId: selectedGate.value.id,
-  })
-  if (success) {
-    sound.gateOpen()
-  }
-}
-
-function resetGateAction() {
-  ElMessage.info('Reset palang — kirim perintah ke daemon')
-}
-
-function vehicleLeftAction() {
-  gateStore.clearTransaction()
-  ElMessage.info('Kendaraan pergi — transaksi dibersihkan')
-}
-
-function onGateChange(gateId) {
-  if (unsubscribeWs) {
-    unsubscribeWs()
-    unsubscribeWs = null
-  }
-
-  gateStore.clearTransaction()
-
-  if (!gateId) return
-
-  const gate = websiteStore.activeGateOuts.find((g) => g.id === gateId)
-  if (!gate) return
-
-  const gateCode = gate.code || `gate-out-${gateId}`
-
-  unsubscribeWs = $ws.on(gateCode, (event) => {
-    gateStore.handleWsEvent(event)
-
-    // Sound feedback on events
-    if (event.type === 'vehicle_detected') {
-      sound.vehicleDetected()
-    } else if (event.type === 'timeout_alert') {
-      sound.timeoutAlert()
-    }
-  })
-
-  gateStore.setWsConnected($ws.isConnected(gateCode))
-  updateWebSocketStatus($ws.isConnected(gateCode))
-  updateFromGate(gate)
-}
-
-// Lifecycle
 onMounted(async () => {
-  await websiteStore.loadAll()
-
-  // Auto-detect booth by IP and assign default gate
-  try {
-    const pos = await fetchApi('/api/pos/by-ip')
-    currentPos.value = pos
-    if (pos.default_gate_id) {
-      const gate = websiteStore.activeGateOuts.find((g) => g.id === pos.default_gate_id)
-      if (gate) {
-        gateStore.setSelectedGateOutId(gate.id)
-        onGateChange(gate.id)
-        console.log(`Auto-assigned to booth ${pos.code}, gate ${gate.name}`)
-      }
-    }
-  } catch (err) {
-    console.warn('Booth auto-detection failed:', err.message)
-  }
-
-  // If no auto-assignment, pick first available
-  if (!gateStore.selectedGateOutId && websiteStore.activeGateOuts.length > 0) {
-    gateStore.setSelectedGateOutId(websiteStore.activeGateOuts[0].id)
-    onGateChange(websiteStore.activeGateOuts[0].id)
-  }
-
-  // Load shift info
-  const now = new Date()
-  const shiftName = websiteStore.getSetting('current_shift_name', '')
-  const shiftStart = websiteStore.getSetting('current_shift_start', '')
-  const shiftEnd = websiteStore.getSetting('current_shift_end', '')
-  if (shiftName) {
-    shiftInfo.value = {
-      name: shiftName,
-      timeRange: shiftStart && shiftEnd ? `${shiftStart}-${shiftEnd}` : '',
-    }
-  }
-
-  connectBooth()
-  startPolling(60000)
-
-  window.addEventListener('keydown', onKeydown)
+  await posSession.loadShiftSummary()
 })
-
-onUnmounted(() => {
-  if (unsubscribeWs) {
-    unsubscribeWs()
-  }
-  disconnectBooth()
-  stopPolling()
-  gateStore.stopDurationTimer()
-  window.removeEventListener('keydown', onKeydown)
-})
-
-// Keyboard shortcuts
-function onKeydown(e) {
-  if (e.key === ' ') {
-    e.preventDefault()
-    if (gateStore.awaitingGateOpen && !gateStore.isLoading) {
-      openGateAction()
-      return
-    }
-  }
-  if (e.key === 'F1') {
-    e.preventDefault()
-    if (gateStore.canPayCash && !gateStore.isLoading) {
-      openCashModal()
-    }
-  }
-  if (e.key === 'F2') {
-    e.preventDefault()
-    if (gateStore.canPayRfid && !gateStore.isLoading) {
-      startRfidPayment()
-    }
-  }
-  if (e.key === 'F3') {
-    e.preventDefault()
-    if (gateStore.canPayEmoney && !gateStore.isLoading) {
-      startEmoneyPayment()
-    }
-  }
-  if (e.key === 'Escape') {
-    if (paymentPanelRef.value) {
-      paymentPanelRef.value.closeModals()
-    }
-  }
-  if (e.key === 'Enter') {
-    if (paymentPanelRef.value) {
-      // Enter is handled inside PaymentPanel modals
-    }
-  }
-}
 </script>
-
-<style scoped>
-.pos-page {
-  display: grid;
-  grid-template-rows: 60px 1fr 50px;
-  height: 100vh;
-  background: var(--bg-primary);
-  overflow: hidden;
-}
-
-.main-area {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: 16px;
-  padding: 16px;
-  overflow: hidden;
-  min-height: 0;
-}
-</style>

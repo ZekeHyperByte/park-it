@@ -34,6 +34,9 @@ class EmoneyTransaction(Base, IntPKMixin, TimestampMixin):
     # Card info
     card_number: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     card_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # PASSTI card type code per V1.12 §V (0x01..0x09). 0x09 = QR Payment, excluded
+    # from bank settlement per Multibank v1.3.
+    card_type_code: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
     # Deduct details
     amount_deducted: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -51,9 +54,19 @@ class EmoneyTransaction(Base, IntPKMixin, TimestampMixin):
     # Raw response
     raw_response_hex: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Settlement payload (cardtype..CardLog per Multibank v1.3 §I)
+    settlement_payload_hex: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Settlement link
     settlement_batch_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("emoney_settlements.id"), nullable=True, index=True
+    )
+
+    # Per-transaction bank response (Multibank v1.3 §II — 00 Accepted,
+    # 01 Invalid Format, 02 Duplicate, 04 Amount mismatch, etc.)
+    bank_response_status: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    bank_response_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     # Correction tracking

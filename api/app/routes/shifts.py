@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.app.middleware.auth import require_admin
+from api.app.middleware.auth import require_admin, require_operator
 from api.app.models.shift import Shift
 from api.app.schemas.common import SuccessResponse
 from api.app.schemas.shift import ShiftCreate, ShiftResponse, ShiftUpdate
@@ -15,6 +15,18 @@ from shared.logging import get_logger
 logger = get_logger("shift_routes")
 
 router = APIRouter(prefix="/shifts", tags=["Shifts"])
+
+
+@router.get("/active", response_model=list[ShiftResponse])
+async def list_active_shifts(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_operator),
+) -> list[ShiftResponse]:
+    """List all shifts (operator-accessible, for dashboard display)."""
+    stmt = select(Shift).where(Shift.is_active == True).order_by(Shift.start_time)
+    result = await db.execute(stmt)
+    shifts = result.scalars().all()
+    return [ShiftResponse.model_validate(s) for s in shifts]
 
 
 @router.get("", response_model=list[ShiftResponse])

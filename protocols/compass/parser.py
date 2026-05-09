@@ -1,28 +1,30 @@
 """Compass controller STAT response parser.
 
 Parses controller responses to extract:
-- Input states (IN1, IN2, IN3, IN4)
+- Input states (IN1–IN4) from both STAT binary format and RSS push events
+- Output states (OUT1–OUT4) from STAT binary format
 - Wiegand data (W channel = RFID, X channel = UHF)
-- Status flags
+
+Two response formats:
+  STAT polling:  STATabcdefgh  (8 binary digits, abcd=inputs, efgh=outputs)
+  RSS push:      IN1ON / IN1OFF / IN2ON / ... (text events)
 """
 
 import re
 
 
 def parse_stat(response: bytes) -> dict:
-    """Parse a STAT response from the controller.
+    """Parse a controller response — STAT binary or RSS push event.
 
     Args:
         response: Raw bytes from controller
 
     Returns:
         Dict with extracted fields:
-            - in1: bool (ticket button / vehicle present)
-            - in2: bool (vehicle detect / trigger)
-            - in3: bool (gate close sensor / vehicle passed)
-            - in4: bool (help button)
-            - wiegand_w: str | None (RFID card number)
-            - wiegand_x: str | None (UHF card number)
+            - in1..in4: bool (input pin states)
+            - out1..out4: bool (output/relay states, only from STAT binary)
+            - wiegand_w: str | None (RFID card number, decimal)
+            - wiegand_x: str | None (UHF card number, decimal)
             - raw: str (decoded raw response)
     """
     text = response.decode("latin-1", errors="ignore")
@@ -32,27 +34,50 @@ def parse_stat(response: bytes) -> dict:
         "in2": False,
         "in3": False,
         "in4": False,
+        "out1": False,
+        "out2": False,
+        "out3": False,
+        "out4": False,
         "wiegand_w": None,
         "wiegand_x": None,
         "raw": text,
     }
 
-    # Parse IN states
-    # STAT responses may contain "IN1ON", "IN2ON", etc.
-    # STAT1 = IN2 ON, STAT10 = IN1 ON (must not match STAT10 as STAT1)
-    if "IN1ON" in text or "STAT10" in text:
+    # Format 1: STAT binary response — STATabcdefgh
+    # a=in1, b=in2, c=in3, d=in4, e=out1, f=out2, g=out3, h=out4
+    stat_match = re.search(r"STAT([01]{8})", text)
+    if stat_match:
+        bits = stat_match.group(1)
+        result["in1"] = bits[0] == "1"
+        result["in2"] = bits[1] == "1"
+        result["in3"] = bits[2] == "1"
+        result["in4"] = bits[3] == "1"
+        result["out1"] = bits[4] == "1"
+        result["out2"] = bits[5] == "1"
+        result["out3"] = bits[6] == "1"
+        result["out4"] = bits[7] == "1"
+
+    # Format 2: RSS push events — IN1ON / IN1OFF / IN2ON / etc.
+    # These override the STAT binary bits for the specific input.
+    if "IN1ON" in text:
         result["in1"] = True
-    if "IN2ON" in text or re.search(r"STAT1(?!0)", text):
+    elif "IN1OFF" in text:
+        result["in1"] = False
+    if "IN2ON" in text:
         result["in2"] = True
+    elif "IN2OFF" in text:
+        result["in2"] = False
     if "IN3ON" in text:
         result["in3"] = True
+    elif "IN3OFF" in text:
+        result["in3"] = False
     if "IN4ON" in text:
         result["in4"] = True
+    elif "IN4OFF" in text:
+        result["in4"] = False
 
-    # Parse Wiegand W (RFID)
+    # Wiegand (present in both STAT and RSS responses)
     result["wiegand_w"] = _extract_wiegand(text, "W")
-
-    # Parse Wiegand X (UHF)
     result["wiegand_x"] = _extract_wiegand(text, "X")
 
     return result
@@ -72,7 +97,6 @@ def _extract_wiegand(text: str, channel: str) -> str | None:
         return None
 
     try:
-        # Split on channel letter and get hex before footer or next non-hex char
         parts = text.split(channel, 1)
         if len(parts) < 2:
             return None
@@ -81,7 +105,6 @@ def _extract_wiegand(text: str, channel: str) -> str | None:
         if not remainder:
             return None
 
-        # Extract only valid hex characters
         hex_chars = ""
         for ch in remainder:
             if ch in "0123456789abcdefABCDEF":
@@ -92,9 +115,7 @@ def _extract_wiegand(text: str, channel: str) -> str | None:
         if not hex_chars:
             return None
 
-        # Convert hex to decimal card number
-        card_num = str(int(hex_chars, 16))
-        return card_num
+        return str(int(hex_chars, 16))
     except (ValueError, IndexError):
         return None
 

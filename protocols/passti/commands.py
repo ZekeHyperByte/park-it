@@ -10,20 +10,10 @@ from protocols.passti.frame import (
     CMD_GET_LAST_TRANSACTION,
     CMD_INIT,
     CARD_TYPES,
+    _bcd_timeout,
+    _to_bcd,
     build_frame,
 )
-
-
-def _to_bcd(digits: str) -> bytes:
-    """Convert decimal string to BCD bytes."""
-    if len(digits) % 2:
-        digits = "0" + digits
-    return bytes(int(digits[i : i + 2], 16) for i in range(0, len(digits), 2))
-
-
-def _bcd_timeout(sec: int) -> bytes:
-    """Convert seconds to BCD timeout bytes."""
-    return bytes([sec // 100, sec % 100])
 
 
 def cmd_init(key: bytes) -> bytes:

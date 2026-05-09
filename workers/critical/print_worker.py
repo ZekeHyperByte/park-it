@@ -160,6 +160,61 @@ def _build_escpos_receipt(
     return b"".join(lines)
 
 
+async def _get_print_config(gate_id: str, gate_type: str = "OUT") -> dict[str, Any]:
+    """Resolve printer connection config from DB for the given gate.
+
+    Returns a print_config dict ready for _print_via_* functions.
+    Falls back to CONTROLLER_PASSTHROUGH using the gate's own controller details.
+    """
+    try:
+        from sqlalchemy import select
+        from api.app.database import async_session_factory
+        from api.app.models.gate import Gate
+        from api.app.models.printer import Printer
+
+        async with async_session_factory() as db:
+            printer_result = await db.execute(
+                select(Printer).where(
+                    Printer.gate_id == gate_id,
+                    Printer.gate_type == gate_type,
+                    Printer.is_active == True,  # noqa: E712
+                )
+            )
+            printer = printer_result.scalar_one_or_none()
+
+            gate_result = await db.execute(select(Gate).where(Gate.code == gate_id))
+            gate = gate_result.scalar_one_or_none()
+
+            if printer is None or printer.mode == "CONTROLLER_PASSTHROUGH":
+                # Fall back to controller passthrough using gate connection details
+                cfg: dict[str, Any] = {"mode": "CONTROLLER_PASSTHROUGH"}
+                if gate:
+                    cfg["protocol"] = gate.protocol
+                    cfg["controller_host"] = gate.controller_host
+                    cfg["controller_port"] = gate.controller_port
+                return cfg
+
+            if printer.mode == "NETWORK":
+                return {
+                    "mode": "NETWORK",
+                    "printer_ip_address": printer.ip_address,
+                    "printer_port": printer.port or 9100,
+                }
+
+            if printer.mode == "SERIAL":
+                return {
+                    "mode": "SERIAL",
+                    "printer_device": printer.serial_device,
+                    "baudrate": printer.baudrate,
+                }
+
+            return {"mode": printer.mode}
+
+    except Exception as e:
+        logger.error("get_print_config_failed", gate_id=gate_id, error=str(e))
+        return {"mode": "CONTROLLER_PASSTHROUGH"}
+
+
 async def print_ticket(
     ctx: dict[str, Any],
     gate_id: str,
@@ -186,7 +241,8 @@ async def print_ticket(
             - printer_ip_address, printer_port (for network)
             - printer_device, baudrate (for serial)
     """
-    print_config = print_config or {}
+    if not print_config:
+        print_config = await _get_print_config(gate_id, gate_type="IN")
     mode = print_config.get("mode", "CONTROLLER_PASSTHROUGH")
 
     # Paper counter check
@@ -247,7 +303,8 @@ async def print_receipt(
         location_name: Parking location name
         print_config: Same format as print_ticket
     """
-    print_config = print_config or {}
+    if not print_config:
+        print_config = await _get_print_config(gate_id, gate_type="OUT")
     mode = print_config.get("mode", "CONTROLLER_PASSTHROUGH")
 
     # Paper counter check

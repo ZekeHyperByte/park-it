@@ -16,20 +16,30 @@ from typing import Any
 from protocols.compass.parser import parse_stat
 from protocols.compass.protocol import (
     CompassTransport,
+    SerialTransport,
+    cmd_ack_in1off,
+    cmd_ack_in1on,
+    cmd_ack_in3off,
+    cmd_ack_in3on,
+    cmd_ack_wiegand,
+    cmd_close1,
     cmd_ds,
     cmd_dsu,
     cmd_mt,
+    cmd_open1,
+    cmd_rss,
     cmd_stat,
+    cmd_stop1,
     cmd_trig1,
-    cmd_trig2,
 )
-from protocols.passti.transport import ControllerPassthroughTransport
+from protocols.passti.transport import ControllerPassthroughTransport, DirectSerialTransport
 from shared.events import (
     BaseEvent,
     DeductResultEvent,
     DeductStatus,
     GateOpenedEvent,
     PasstiCardTapEvent,
+    PlayAudioEvent,
     RfidCardReadEvent,
     TimeoutAlertEvent,
     VehicleDetectedEvent,
@@ -49,8 +59,6 @@ STATE_WAITING_PAYMENT = "WAITING_PAYMENT"
 STATE_TIMEOUT_ALERT = "TIMEOUT_ALERT"
 STATE_OPENING = "OPENING"
 
-# Poll interval for controller STAT
-STAT_POLL_INTERVAL_MS = 100
 
 
 class GateOutDaemon(BaseDaemon):
@@ -58,14 +66,18 @@ class GateOutDaemon(BaseDaemon):
 
     def __init__(self, gate_id: str, config: dict[str, Any]) -> None:
         super().__init__(gate_id, config)
-        self.controller: CompassTransport | None = None
+        self.hw = config.get("hardware_config", {})
+        self.has_rfid = self.hw.get("rfid", {}).get("enabled", False)
+        self.has_emoney = self.hw.get("emoney", {}).get("enabled", False)
+        self.controller: CompassTransport | SerialTransport | None = None
         self._controller_lock = asyncio.Lock()
         self._poll_task: asyncio.Task | None = None
         self._payment_task: asyncio.Task | None = None
         self._cash_payment_event = asyncio.Event()
         self._debounce_event: asyncio.Event | None = None
-        self.passti_transport: ControllerPassthroughTransport | None = None
-        self.has_emoney = self.config.get("hardware_config", {}).get("emoney", {}).get("enabled", False)
+        self._wiegand_event = asyncio.Event()
+        self._wiegand_data: tuple[str, str] | None = None
+        self.passti_transport: ControllerPassthroughTransport | DirectSerialTransport | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle overrides
@@ -78,6 +90,7 @@ class GateOutDaemon(BaseDaemon):
 
     async def _on_started(self) -> None:
         """Start controller polling after base sets _running=True."""
+        await self._initialize_gate_position()
         await self._start_polling()
 
     async def stop(self) -> None:
@@ -97,18 +110,43 @@ class GateOutDaemon(BaseDaemon):
     # ------------------------------------------------------------------
 
     async def _connect_controller(self) -> None:
-        """Connect to Compass TCP controller."""
-        host = self.config.get("controller_host")
-        port = self.config.get("controller_port")
-        if not host or not port:
-            logger.warning("no_controller_config", gate_id=self.gate_id)
-            return
+        """Connect to gate controller (TCP or serial based on protocol config)."""
+        protocol = self.config.get("protocol", "compass")
         try:
-            self.controller = CompassTransport(host, port)
-            self.controller.connect(timeout=5.0)
+            if protocol == "serial":
+                device = self.config.get("controller_device")
+                baudrate = self.config.get("controller_baudrate", 9600)
+                if not device:
+                    logger.warning("no_controller_config", gate_id=self.gate_id, protocol=protocol)
+                    return
+                self.controller = SerialTransport(device, baudrate)
+                self.controller.connect(timeout=5.0)
+                logger.info("controller_connected", gate_id=self.gate_id, device=device, baudrate=baudrate)
+            else:
+                host = self.config.get("controller_host")
+                port = self.config.get("controller_port")
+                if not host or not port:
+                    logger.warning("no_controller_config", gate_id=self.gate_id, protocol=protocol)
+                    return
+                self.controller = CompassTransport(host, port)
+                self.controller.connect(timeout=5.0)
+                logger.info("controller_connected", gate_id=self.gate_id, host=host, port=port)
+
+            # Wire PASSTI transport (resolved after controller connects)
             if self.has_emoney:
-                self.passti_transport = ControllerPassthroughTransport(self.controller._sock)
-            logger.info("controller_connected", gate_id=self.gate_id, host=host, port=port)
+                emoney_cfg = self.hw.get("emoney", {})
+                if emoney_cfg.get("connection", "controller") == "direct_serial":
+                    emoney_device = emoney_cfg.get("device")
+                    emoney_baudrate = emoney_cfg.get("baudrate", 38400)
+                    if emoney_device:
+                        self.passti_transport = DirectSerialTransport(emoney_device, emoney_baudrate)
+                        logger.info("passti_direct_serial", gate_id=self.gate_id, device=emoney_device)
+                    else:
+                        logger.warning("passti_direct_serial_no_device", gate_id=self.gate_id)
+                elif protocol != "serial":
+                    # Controller passthrough requires TCP socket — not available on serial controller
+                    self.passti_transport = ControllerPassthroughTransport(self.controller._sock)
+
         except Exception as e:
             logger.error("controller_connect_failed", gate_id=self.gate_id, error=str(e))
             self.controller = None
@@ -121,62 +159,154 @@ class GateOutDaemon(BaseDaemon):
             logger.info("controller_disconnected", gate_id=self.gate_id)
 
     # ------------------------------------------------------------------
-    # Main polling loop
+    # Relay mode helpers
+    # ------------------------------------------------------------------
+
+    async def _relay_open(self) -> None:
+        """Open gate using relay_mode-appropriate command."""
+        relay_mode = self.config.get("relay_mode", "SINGLE")
+        if relay_mode == "SINGLE":
+            await self._send_controller_command(cmd_trig1())
+        else:
+            await self._send_controller_command(cmd_open1())
+
+    async def _relay_close(self) -> None:
+        """Close gate using relay_mode-appropriate command. No-op for SINGLE."""
+        relay_mode = self.config.get("relay_mode", "SINGLE")
+        if relay_mode in ("DUAL", "TRIPLE"):
+            await self._send_controller_command(cmd_close1())
+
+    async def _relay_brake(self) -> None:
+        """Brake gate motor. Only valid for TRIPLE relay mode."""
+        if self.config.get("relay_mode") == "TRIPLE":
+            await self._send_controller_command(cmd_stop1())
+
+    # ------------------------------------------------------------------
+    # Gate position initialization
+    # ------------------------------------------------------------------
+
+    async def _initialize_gate_position(self) -> None:
+        """Ensure gate is physically closed on daemon startup."""
+        relay_mode = self.config.get("relay_mode", "SINGLE")
+        has_close_sensor = self.config.get("has_close_sensor", False)
+
+        if relay_mode in ("DUAL", "TRIPLE"):
+            await self._relay_close()
+            logger.info("gate_initialized_closed", gate_id=self.gate_id, mode=relay_mode)
+        elif has_close_sensor:
+            if self.controller and self.controller.is_connected():
+                async with self._controller_lock:
+                    response = self.controller.send_recv(cmd_stat(), timeout=0.5)
+                parsed = parse_stat(response or b"")
+                if not parsed["in3"]:
+                    await self._relay_open()
+                    logger.info("gate_initialized_closed", gate_id=self.gate_id, mode="SINGLE_SENSOR")
+                else:
+                    logger.info("gate_already_closed", gate_id=self.gate_id, mode="SINGLE_SENSOR")
+        else:
+            logger.warning(
+                "gate_init_state_unknown",
+                gate_id=self.gate_id,
+                mode="SINGLE_NO_SENSOR",
+                note="trusting hardware power-on default",
+            )
+
+    # ------------------------------------------------------------------
+    # RSS listener (replaces STAT poll)
     # ------------------------------------------------------------------
 
     async def _start_polling(self) -> None:
-        """Start the controller polling loop."""
-        self._poll_task = asyncio.create_task(self._poll_controller(), name="poll")
+        """Start RSS listener task and optional direct serial RFID reader."""
+        self._poll_task = asyncio.create_task(self._rss_listener(), name="poll")
         self._tasks.append(self._poll_task)
+        if self.has_rfid and self.hw.get("rfid", {}).get("connection") == "direct_serial":
+            task = asyncio.create_task(self._rfid_serial_reader_task(), name="rfid_serial")
+            self._tasks.append(task)
 
-    async def _poll_controller(self) -> None:
-        """Poll controller STAT and handle state transitions."""
+    async def _setup_rss(self) -> None:
+        """Send RSS config — controller will push input events automatically."""
+        if self.controller and self.controller.is_connected():
+            async with self._controller_lock:
+                self.controller.send(cmd_rss(interval_100ms=2))
+            logger.info("rss_configured", gate_id=self.gate_id)
+
+    async def _rss_listener(self) -> None:
+        """Read RSS push events from controller. No STAT polling needed."""
+        await self._setup_rss()
+        buffer = b""
         while self._running:
             try:
                 if self.controller and self.controller.is_connected():
-                    async with self._controller_lock:
-                        response = self.controller.send_recv(cmd_stat(), timeout=0.5)
-                    await self._handle_stat_response(response or b"")
-                await asyncio.sleep(STAT_POLL_INTERVAL_MS / 1000.0)
+                    chunk = await self.controller.recv_async(timeout=0.5)
+                    if chunk:
+                        buffer += chunk
+                        buffer = await self._process_rss_buffer(buffer)
+                else:
+                    await asyncio.sleep(0.1)
             except asyncio.CancelledError:
-                logger.debug("poll_cancelled", gate_id=self.gate_id)
+                logger.debug("rss_listener_cancelled", gate_id=self.gate_id)
                 raise
             except Exception as e:
-                logger.error("poll_error", gate_id=self.gate_id, error=str(e))
+                logger.error("rss_listener_error", gate_id=self.gate_id, error=str(e))
                 await asyncio.sleep(1)
 
-    # ------------------------------------------------------------------
-    # STAT response handler
-    # ------------------------------------------------------------------
+    async def _process_rss_buffer(self, buffer: bytes) -> bytes:
+        """Parse framed messages from buffer, dispatch each. Returns unconsumed bytes."""
+        while len(buffer) >= 2:
+            try:
+                start = buffer.index(0xA6)
+            except ValueError:
+                return b""
+            try:
+                end = buffer.index(0xA9, start + 1)
+            except ValueError:
+                break
+            msg = buffer[start: end + 1]
+            buffer = buffer[end + 1:]
+            await self._dispatch_rss_message(msg)
+        return buffer
 
-    async def _handle_stat_response(self, response: bytes) -> None:
-        """Process a STAT response based on current state."""
-        parsed = parse_stat(response)
+    async def _dispatch_rss_message(self, msg: bytes) -> None:
+        """Route RSS message to appropriate state handler."""
+        text = msg.decode("latin-1", errors="ignore")
 
-        if self.state == STATE_IDLE:
-            if parsed["in1"]:
-                # Start debounce timer
+        # Ignore command responses
+        if text.rstrip("\xa9").endswith("OK"):
+            return
+
+        if "IN1ON" in text:
+            await self._send_controller_command(cmd_ack_in1on())
+            if self.state == STATE_IDLE:
                 if self._debounce_event is None or self._debounce_event.is_set():
                     self._debounce_event = asyncio.Event()
                     asyncio.create_task(self._vehicle_debounce_timer(0.5))
 
-        elif self.state == STATE_VEHICLE_PRESENT:
-            # Debounce completed; waiting for snapshot / payment start
-            pass
-
-        elif self.state == STATE_WAITING_PAYMENT:
-            # Payment tasks handle their own inputs
-            pass
-
-        elif self.state == STATE_TIMEOUT_ALERT:
-            if not parsed["in1"]:
-                # Vehicle left without payment
+        elif "IN1OFF" in text:
+            await self._send_controller_command(cmd_ack_in1off())
+            if self.state == STATE_OPENING:
+                await self._on_vehicle_passed()
+            elif self.state == STATE_TIMEOUT_ALERT:
                 await self._on_vehicle_left(reason="abandoned")
 
-        elif self.state == STATE_OPENING:
-            # Wait for vehicle to pass
-            if parsed["in3"] or not parsed["in1"]:
+        elif "IN3ON" in text:
+            await self._send_controller_command(cmd_ack_in3on())
+            if self.state == STATE_OPENING:
                 await self._on_vehicle_passed()
+
+        elif "IN3OFF" in text:
+            await self._send_controller_command(cmd_ack_in3off())
+            if self.state == STATE_OPENING:
+                await self._on_vehicle_passed()
+
+        else:
+            parsed = parse_stat(msg)
+            if parsed["wiegand_w"] or parsed["wiegand_x"]:
+                await self._send_controller_command(cmd_ack_wiegand())
+                if parsed["wiegand_w"]:
+                    self._wiegand_data = (parsed["wiegand_w"], "W")
+                else:
+                    self._wiegand_data = (parsed["wiegand_x"], "X")
+                self._wiegand_event.set()
 
     # ------------------------------------------------------------------
     # State transition handlers
@@ -260,21 +390,20 @@ class GateOutDaemon(BaseDaemon):
             logger.error("payment_resolution_error", gate_id=self.gate_id, error=str(e))
 
     async def _wait_for_wiegand(self) -> None:
-        """Poll controller until Wiegand card is read."""
+        """Wait for Wiegand card via RSS event (set by _dispatch_rss_message)."""
+        self._wiegand_event.clear()
+        self._wiegand_data = None
         while self.state == STATE_WAITING_PAYMENT and self._running:
-            if self.controller and self.controller.is_connected():
-                async with self._controller_lock:
-                    response = self.controller.send_recv(cmd_stat(), timeout=0.5)
-                parsed = parse_stat(response)
-                if parsed["wiegand_w"]:
-                    self.state_data["rfid_card"] = parsed["wiegand_w"]
-                    self.state_data["rfid_channel"] = "W"
+            try:
+                await asyncio.wait_for(self._wiegand_event.wait(), timeout=1.0)
+                if self._wiegand_data:
+                    self.state_data["rfid_card"] = self._wiegand_data[0]
+                    self.state_data["rfid_channel"] = self._wiegand_data[1]
+                    self._wiegand_event.clear()
+                    self._wiegand_data = None
                     return
-                if parsed["wiegand_x"]:
-                    self.state_data["rfid_card"] = parsed["wiegand_x"]
-                    self.state_data["rfid_channel"] = "X"
-                    return
-            await asyncio.sleep(0.1)
+            except asyncio.TimeoutError:
+                continue
 
     async def _wait_for_pos_confirm(self) -> None:
         """Wait for cash payment confirmed signal from handle_command."""
@@ -326,10 +455,8 @@ class GateOutDaemon(BaseDaemon):
                 waiting_seconds=waiting_seconds,
             )
         )
-        await self._send_controller_command(
-            cmd_ds("Mohon Hubungi Petugas", "")
-        )
-        await self._send_controller_command(cmd_mt("00008"))  # Track 8
+        await self._send_controller_command(cmd_ds("Mohon Hubungi Petugas", ""))
+        await self._cmd_play_audio(8)
         logger.warning("payment_timeout", gate_id=self.gate_id, seconds=waiting_seconds)
 
     async def _on_vehicle_left(self, reason: str) -> None:
@@ -391,6 +518,9 @@ class GateOutDaemon(BaseDaemon):
             elif command_type == "close_gate":
                 await self._cmd_close_gate()
 
+            elif command_type == "brake_gate":
+                await self._cmd_brake_gate()
+
             elif command_type == "play_audio":
                 track = int(command_data.get("track", 1))
                 await self._cmd_play_audio(track)
@@ -440,19 +570,25 @@ class GateOutDaemon(BaseDaemon):
 
     async def _cmd_open_gate(self, duration_seconds: int | None = None) -> None:
         """Open the gate."""
-        await self._send_controller_command(cmd_trig1())
+        await self._relay_open()
+        await self._cmd_play_audio(10)  # pembayaran_berhasil
         if self.state in (STATE_WAITING_PAYMENT, STATE_TIMEOUT_ALERT):
             await self._on_gate_opened()
 
     async def _cmd_close_gate(self) -> None:
-        """Close the gate (DUAL relay mode)."""
-        if self.config.get("relay_mode") == "DUAL":
-            await self._send_controller_command(cmd_trig2())
+        """Close the gate (DUAL/TRIPLE relay mode)."""
+        await self._relay_close()
+
+    async def _cmd_brake_gate(self) -> None:
+        """Brake the gate motor mid-travel (TRIPLE relay mode only)."""
+        await self._relay_brake()
 
     async def _cmd_play_audio(self, track: int) -> None:
-        """Play audio track."""
-        track_str = f"{track:05d}"
-        await self._send_controller_command(cmd_mt(track_str))
+        """Play audio track — via controller MP3 module (TCP) or browser (serial)."""
+        if self.config.get("protocol", "compass") == "serial":
+            await self.publish_event(PlayAudioEvent(gate_id=self.gate_id, track=track))
+        else:
+            await self._send_controller_command(cmd_mt(f"{track:05d}"))
 
     async def _cmd_display_text(self, line1: str, line2: str) -> None:
         """Display text on LED."""
@@ -568,11 +704,13 @@ class GateOutDaemon(BaseDaemon):
                 status=DeductStatus.SUCCESS,
                 card_number=deduct_data.get("card_number", ""),
                 card_type=deduct_data.get("card_type", ""),
+                card_type_code=deduct_data.get("card_type_code", 0),
                 deduct_amount=deduct_data.get("deducted", 0),
                 balance_before=deduct_data.get("remaining", 0) + deduct_data.get("deducted", 0),
                 balance_after=deduct_data.get("remaining", 0),
                 transaction_counter=deduct_data.get("trans_counter", 0),
                 raw_response_hex=result.get("raw", ""),
+                settlement_payload_hex=result.get("body_hex", ""),
             )
         )
 
@@ -593,6 +731,45 @@ class GateOutDaemon(BaseDaemon):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    async def _rfid_serial_reader_task(self) -> None:
+        """Read card numbers from a directly-connected serial RFID reader.
+
+        Sets _wiegand_event identical to controller RSS path — _wait_for_wiegand
+        works unchanged regardless of which source fires the event.
+        """
+        rfid_cfg = self.hw.get("rfid", {})
+        device = rfid_cfg.get("device")
+        baudrate = rfid_cfg.get("baudrate", 9600)
+        if not device:
+            logger.error("rfid_serial_no_device", gate_id=self.gate_id)
+            return
+
+        loop = asyncio.get_event_loop()
+        try:
+            import serial as _serial
+            ser = _serial.Serial(port=device, baudrate=baudrate, timeout=0.5)
+        except Exception as e:
+            logger.error("rfid_serial_open_failed", gate_id=self.gate_id, error=str(e))
+            return
+
+        logger.info("rfid_serial_reader_started", gate_id=self.gate_id, device=device)
+        try:
+            while self._running:
+                try:
+                    raw = await loop.run_in_executor(None, ser.readline)
+                    card_number = raw.decode("ascii", errors="ignore").strip()
+                    if card_number:
+                        self._wiegand_data = (card_number, "S")
+                        self._wiegand_event.set()
+                        logger.info("rfid_serial_card_read", gate_id=self.gate_id, card=card_number)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    logger.error("rfid_serial_read_error", gate_id=self.gate_id, error=str(e))
+                    await asyncio.sleep(1)
+        finally:
+            ser.close()
 
     async def _send_controller_command(self, command: bytes) -> None:
         """Send a command to the Compass controller."""

@@ -101,7 +101,12 @@ if prompt "Set up application in $APP_DIR?"; then
             "$SCRIPT_DIR/" "$APP_DIR/"
     else
         log_info "Cloning from git..."
-        git clone <REPO_URL> "$APP_DIR"
+        read -rp "Git repository URL: " repo_url
+        if [[ -z "$repo_url" ]]; then
+            echo -e "${RED}ERROR: Repository URL required${NC}"
+            exit 1
+        fi
+        git clone "$repo_url" "$APP_DIR"
     fi
     
     chown -R "$USER:$USER" "$APP_DIR"
@@ -149,6 +154,16 @@ if prompt "Install systemd services?"; then
     log_ok "Services installed"
 fi
 
+# Phase 8.5: Initialize .env
+if [[ ! -f "$APP_DIR/.env" ]]; then
+    if [[ -f "$APP_DIR/.env.example" ]]; then
+        cp "$APP_DIR/.env.example" "$APP_DIR/.env"
+        log_ok ".env initialized from .env.example — edit credentials before starting services"
+    else
+        log_warn ".env.example not found — create $APP_DIR/.env manually before starting services"
+    fi
+fi
+
 # Phase 9: Site Config
 if prompt "Configure site information?"; then
     read -rp "Parking site name: " site_name
@@ -192,7 +207,7 @@ fi
 
 # Phase 11: Start Services
 if prompt "Start core services?"; then
-    systemctl enable --now parking-api parking-worker-critical parking-worker-bg
+    systemctl enable --now parking-api parking-worker-critical parking-worker-bg booth-bridge
     log_ok "Services started"
 fi
 

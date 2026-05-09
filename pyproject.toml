@@ -54,6 +54,8 @@ dependencies = [
     # Reporting
     "openpyxl>=3.1.0",
     "reportlab>=4.0.0",
+    # SFTP for settlement file delivery
+    "asyncssh>=2.18.0",
 ]
 
 [project.optional-dependencies]

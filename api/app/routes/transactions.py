@@ -3,6 +3,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +19,16 @@ logger = get_logger("transaction_routes")
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
 
 
-@router.get("", response_model=list[TransactionListItem])
+class TransactionListResponse(BaseModel):
+    """Paginated transaction list — used by the admin grid for accurate totals."""
+
+    items: list[TransactionListItem]
+    total: int
+    skip: int
+    limit: int
+
+
+@router.get("", response_model=TransactionListResponse)
 async def list_transactions(
     pagination: PaginationParams = Depends(),
     status_filter: str | None = Query(None, alias="status"),
@@ -27,8 +37,12 @@ async def list_transactions(
     date_to: date | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(require_operator),
-) -> list[TransactionListItem]:
-    """List parking transactions with optional filters."""
+) -> TransactionListResponse:
+    """List parking transactions with optional filters.
+
+    Returns a real total count so the frontend grid can render accurate
+    pagination (page X of Y) instead of guessing from the result length.
+    """
     stmt = select(ParkingTransaction).order_by(ParkingTransaction.entry_time.desc())
 
     if pagination.q:
@@ -50,8 +64,15 @@ async def list_transactions(
     if date_to:
         stmt = stmt.where(ParkingTransaction.entry_time < date_to)
 
-    result = await paginated_list(db, stmt, skip=pagination.skip, limit=pagination.limit)
-    return [TransactionListItem.model_validate(t) for t in result.items]
+    result = await paginated_list(
+        db, stmt, skip=pagination.skip, limit=pagination.limit
+    )
+    return TransactionListResponse(
+        items=[TransactionListItem.model_validate(t) for t in result.items],
+        total=result.total,
+        skip=result.skip,
+        limit=result.limit,
+    )
 
 
 @router.get("/{tx_id}", response_model=TransactionListItem)

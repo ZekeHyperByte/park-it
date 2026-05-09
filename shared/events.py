@@ -110,6 +110,12 @@ class TicketButtonPressedEvent(BaseEvent):
     event_type: Literal["ticket_button_pressed"] = "ticket_button_pressed"
 
 
+class HelpButtonPressedEvent(BaseEvent):
+    """IN4 help button pressed — operator assistance requested."""
+
+    event_type: Literal["help_button_pressed"] = "help_button_pressed"
+
+
 class VehiclePassedEvent(BaseEvent):
     """Vehicle has passed through gate."""
 
@@ -139,11 +145,13 @@ class DeductResultEvent(BaseEvent):
     status: DeductStatus
     card_number: str
     card_type: str
+    card_type_code: int = 0
     deduct_amount: int
     balance_before: int
     balance_after: int
     transaction_counter: int
     raw_response_hex: str
+    settlement_payload_hex: str = ""
 
 
 class CancelCorrectionResultEvent(BaseEvent):
@@ -169,6 +177,13 @@ class VehicleLeftEvent(BaseEvent):
     reason: str  # passed, abandoned
 
 
+class PlayAudioEvent(BaseEvent):
+    """Request frontend to play audio locally (serial/booth gates only)."""
+
+    event_type: Literal["play_audio"] = "play_audio"
+    track: int
+
+
 class ReaderErrorEvent(BaseEvent):
     """E-money reader error."""
 
@@ -192,6 +207,7 @@ RedisEvent = (
     | RfidCardReadEvent
     | PasstiCardTapEvent
     | TicketButtonPressedEvent
+    | HelpButtonPressedEvent
     | VehiclePassedEvent
     | EmoneyPrintDecisionEvent
     | GateOpenedEvent
@@ -199,6 +215,7 @@ RedisEvent = (
     | CancelCorrectionResultEvent
     | TimeoutAlertEvent
     | VehicleLeftEvent
+    | PlayAudioEvent
     | ReaderErrorEvent
     | HeartbeatEvent
 )
@@ -264,6 +281,14 @@ class PrintTicketCommand(BaseCommand):
     barcode_format: str = "CODE39"
 
 
+class PrintTicketThenOpenCommand(BaseCommand):
+    """Print entry ticket then open gate (cash flow)."""
+
+    command_type: Literal["print_ticket_then_open"] = "print_ticket_then_open"
+    barcode: str
+    gate_name: str
+
+
 class PrintReceiptCommand(BaseCommand):
     """Print exit receipt."""
 
@@ -323,6 +348,7 @@ RedisCommand = (
     | DisplayTextCommand
     | BuzzerCommand
     | PrintTicketCommand
+    | PrintTicketThenOpenCommand
     | PrintReceiptCommand
     | CheckBalanceCommand
     | DeductCommand

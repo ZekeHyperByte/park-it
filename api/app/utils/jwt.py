@@ -1,5 +1,6 @@
 """JWT token utilities using PyJWT."""
 
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -19,7 +20,7 @@ def create_access_token(data: dict[str, Any]) -> str:
     """Create a short-lived JWT access token."""
     to_encode = data.copy()
     expire = _now() + timedelta(minutes=settings.jwt_access_token_expire_minutes)
-    to_encode.update({"exp": expire, "type": "access"})
+    to_encode.update({"exp": expire, "type": "access", "jti": uuid.uuid4().hex})
     return jwt.encode(
         to_encode,
         settings.jwt_secret,
@@ -31,7 +32,7 @@ def create_refresh_token(data: dict[str, Any]) -> str:
     """Create a long-lived JWT refresh token."""
     to_encode = data.copy()
     expire = _now() + timedelta(days=settings.jwt_refresh_token_expire_days)
-    to_encode.update({"exp": expire, "type": "refresh"})
+    to_encode.update({"exp": expire, "type": "refresh", "jti": uuid.uuid4().hex})
     return jwt.encode(
         to_encode,
         settings.jwt_secret,

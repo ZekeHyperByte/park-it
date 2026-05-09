@@ -34,9 +34,16 @@ __all__ = ["Base", "engine", "AsyncSessionLocal", "get_db"]
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Yield an async database session for FastAPI dependency injection."""
+    """Yield an async database session for FastAPI dependency injection.
+
+    Automatically commits on success or rolls back on exception.
+    """
     async with AsyncSessionLocal() as session:
         try:
             yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
         finally:
             await session.close()

@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -73,6 +73,27 @@ class Settings(BaseSettings):
     # Settlement
     settlement_schedule: str = Field(default="0 2 * * *", alias="SETTLEMENT_SCHEDULE")
     settlement_auto_upload: bool = Field(default=False, alias="SETTLEMENT_AUTO_UPLOAD")
+    # Multibank settlement is in operational timezone (Asia/Jakarta).
+    app_timezone: str = Field(default="Asia/Jakarta", alias="APP_TIMEZONE")
+    # Settlement SFTP delivery (Multibank v1.3 §I)
+    settlement_sftp_host: str = Field(default="", alias="SETTLEMENT_SFTP_HOST")
+    settlement_sftp_port: int = Field(default=22, alias="SETTLEMENT_SFTP_PORT")
+    settlement_sftp_username: str = Field(default="", alias="SETTLEMENT_SFTP_USERNAME")
+    settlement_sftp_key_path: str = Field(default="", alias="SETTLEMENT_SFTP_KEY_PATH")
+    settlement_sftp_known_hosts: str = Field(
+        default="", alias="SETTLEMENT_SFTP_KNOWN_HOSTS"
+    )
+    """Path to SSH known_hosts file. Empty string disables host-key checking
+    (NOT recommended in production — leaves you open to MITM)."""
+    settlement_sftp_remote_dir: str = Field(
+        default="/incoming", alias="SETTLEMENT_SFTP_REMOTE_DIR"
+    )
+    settlement_sftp_response_dir: str = Field(
+        default="/incoming", alias="SETTLEMENT_SFTP_RESPONSE_DIR"
+    )
+    settlement_sftp_connect_timeout: int = Field(
+        default=30, alias="SETTLEMENT_SFTP_CONNECT_TIMEOUT"
+    )
 
     # Telegram
     telegram_bot_token: str | None = Field(default=None, alias="TELEGRAM_BOT_TOKEN")
@@ -109,6 +130,19 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_format: str = Field(default="json", alias="LOG_FORMAT")
+
+    @model_validator(mode="after")
+    def _validate_production_settings(self) -> "Settings":
+        """Ensure critical settings are configured in production."""
+        if self.app_env == "production":
+            if not self.internal_api_key:
+                raise ValueError(
+                    "INTERNAL_API_KEY must be set in production — "
+                    "booth bridge endpoints will be unprotected without it"
+                )
+            if self.jwt_secret in ("dev-secret", ""):
+                raise ValueError("JWT_SECRET must be changed from default in production")
+        return self
 
     @property
     def database_url(self) -> str:

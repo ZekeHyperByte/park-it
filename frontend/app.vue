@@ -2,6 +2,12 @@
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
+  <!-- Global toast surface — registered by plugins/toast.client.js. -->
+  <Toaster
+    position="top-right"
+    rich-colors
+    close-button
+  />
 </template>
 
 <script setup>

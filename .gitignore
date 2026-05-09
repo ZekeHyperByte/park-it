@@ -34,6 +34,9 @@ venv.bak/
 # IDEs
 .vscode/
 .idea/
+
+# Claude Code local settings
+.claude/settings.local.json
 *.swp
 *.swo
 *~
@@ -78,3 +81,19 @@ Thumbs.db
 
 # v1 legacy system — excluded from v2 repo
 parking-system/
+
+# Runtime
+pids/
+*.pid
+
+# Type checking / linting caches
+.mypy_cache/
+.ruff_cache/
+
+# Temp / misc
+*.tmp
+*.bak
+*.orig
+
+# Graphify output
+graphify-out/

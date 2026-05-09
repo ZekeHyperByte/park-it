@@ -144,6 +144,7 @@ export const useGateStore = defineStore('gate', () => {
 
   /**
    * Confirm cash payment.
+   * Returns { success, change_amount, message } — caller handles notifications.
    */
   async function confirmCashPayment({ gateId, gateOutId, paidAmount }) {
     isLoading.value = true
@@ -162,15 +163,11 @@ export const useGateStore = defineStore('gate', () => {
       if (res.success) {
         changeAmount.value = res.change_amount || 0
         awaitingGateOpen.value = true
-        ElMessage.success('Pembayaran berhasil. Tekan Space untuk buka palang.')
         return res
-      } else {
-        ElMessage.error(res.message)
-        return null
       }
+      return res
     } catch (err) {
-      ElMessage.error(err.message || 'Pembayaran tunai gagal')
-      return null
+      return { success: false, message: err.message || 'Pembayaran tunai gagal' }
     } finally {
       isLoading.value = false
     }
@@ -178,6 +175,7 @@ export const useGateStore = defineStore('gate', () => {
 
   /**
    * Open the gate manually (two-step flow after cash payment).
+   * Returns { success, message } — caller handles notifications.
    */
   async function openGate({ gateId }) {
     isLoading.value = true
@@ -189,16 +187,12 @@ export const useGateStore = defineStore('gate', () => {
       })
       if (res.success) {
         awaitingGateOpen.value = false
-        ElMessage.success('Palang pintu dibuka')
         clearTransaction()
-        return true
-      } else {
-        ElMessage.error(res.message || 'Gagal membuka palang')
-        return false
+        return res
       }
+      return res
     } catch (err) {
-      ElMessage.error(err.message || 'Gagal membuka palang')
-      return false
+      return { success: false, message: err.message || 'Gagal membuka palang' }
     } finally {
       isLoading.value = false
     }
@@ -206,6 +200,7 @@ export const useGateStore = defineStore('gate', () => {
 
   /**
    * Process RFID payment.
+   * Returns { success, message } — caller handles notifications.
    */
   async function processRfidPayment({ gateId, gateOutId, cardNumber }) {
     isLoading.value = true
@@ -220,16 +215,11 @@ export const useGateStore = defineStore('gate', () => {
         }),
       })
       if (res.success) {
-        ElMessage.success(res.message)
         clearTransaction()
-        return true
-      } else {
-        ElMessage.error(res.message)
-        return false
       }
+      return res
     } catch (err) {
-      ElMessage.error(err.message || 'Pembayaran RFID gagal')
-      return false
+      return { success: false, message: err.message || 'Pembayaran RFID gagal' }
     } finally {
       isLoading.value = false
     }
@@ -237,6 +227,7 @@ export const useGateStore = defineStore('gate', () => {
 
   /**
    * Initiate e-money deduct.
+   * Returns { success, message } — caller handles notifications.
    */
   async function startEmoneyDeduct({ gateId, gateOutId, cardNumber }) {
     isLoading.value = true
@@ -252,16 +243,13 @@ export const useGateStore = defineStore('gate', () => {
       })
       if (res.success) {
         emoneyPaymentState.value = 'PROCESSING'
-        return true
       } else {
         emoneyPaymentState.value = 'FAILED'
-        ElMessage.error(res.message)
-        return false
       }
+      return res
     } catch (err) {
-      ElMessage.error(err.message || 'E-money deduct gagal')
       emoneyPaymentState.value = 'FAILED'
-      return false
+      return { success: false, message: err.message || 'E-money deduct gagal' }
     } finally {
       isLoading.value = false
     }
@@ -269,7 +257,7 @@ export const useGateStore = defineStore('gate', () => {
 
   /**
    * Confirm e-money payment (called after booth bridge deduct success).
-   * Bug fix #4: Use balance_before from response, not calculated from tariff.
+   * Returns { success, message } — caller handles notifications.
    */
   async function confirmEmoneyPayment({ gateId, gateOutId, cardNumber, deductAmount, balanceBefore, balanceAfter, transactionCounter, rawResponseHex }) {
     isLoading.value = true
@@ -290,16 +278,11 @@ export const useGateStore = defineStore('gate', () => {
         }),
       })
       if (res.success) {
-        ElMessage.success(res.message)
         clearTransaction()
-        return res
-      } else {
-        ElMessage.error(res.message)
-        return null
       }
+      return res
     } catch (err) {
-      ElMessage.error(err.message || 'E-money payment failed')
-      return null
+      return { success: false, message: err.message || 'E-money payment failed' }
     } finally {
       isLoading.value = false
     }
@@ -308,12 +291,34 @@ export const useGateStore = defineStore('gate', () => {
   /**
    * Handle incoming WebSocket event.
    */
-  function handleWsEvent(event) {
+  const AUDIO_TRACK_MAP = {
+    1: '001_selamat_datang.mp3',
+    2: '002_ambil_tiket.mp3',
+    3: '003_kartu_tidak_valid.mp3',
+    4: '004_member_tidak_aktif.mp3',
+    5: '005_tunggu_petugas.mp3',
+    6: '006_saldo_kurang.mp3',
+    7: '007_kartu_salah.mp3',
+    8: '008_hubungi_petugas.mp3',
+    9: '009_terima_kasih.mp3',
+    10: '010_pembayaran_berhasil.mp3',
+    11: '011_transaksi_gagal.mp3',
+    12: '012_waktu_habis.mp3',
+  }
+
+  function playAudioTrack(track) {
+    const filename = AUDIO_TRACK_MAP[track]
+    if (filename) {
+      new Audio(`/audio/${filename}`).play().catch(() => {})
+    }
+  }
+
+  async function handleWsEvent(event) {
     switch (event.type) {
       case 'vehicle_detected':
         paymentState.value = 'VEHICLE_PRESENT'
         if (event.card_number) {
-          lookupTransaction({ cardNumber: event.card_number })
+          await lookupTransaction({ cardNumber: event.card_number })
         }
         break
       case 'gate_closed':
@@ -346,6 +351,14 @@ export const useGateStore = defineStore('gate', () => {
         if (event.card_number && currentTransaction.value) {
           // RFID handled server-side; POS gets notified
         }
+        break
+      case 'camera_snapshot':
+        if (event.snapshot_type === 'exit') {
+          cameraSnapshot.value = event.snapshot_url
+        }
+        break
+      case 'play_audio':
+        playAudioTrack(event.track)
         break
       default:
         break

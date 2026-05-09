@@ -1,117 +1,163 @@
 <template>
-  <el-container class="layout-container">
+  <div class="flex h-screen overflow-hidden bg-background text-foreground">
     <!-- Sidebar -->
-    <el-aside
+    <aside
       v-if="authStore.isLoggedIn"
-      width="220px"
-      class="layout-sidebar"
+      :class="[
+        'flex shrink-0 flex-col border-r border-border transition-all duration-200',
+        collapsed ? 'w-16' : 'w-60',
+      ]"
     >
-      <div class="sidebar-logo">
-        <el-icon><Promotion /></el-icon>
-        <span>E-Parking</span>
-      </div>
-
-      <el-menu
-        :default-active="$route.path"
-        router
-        class="sidebar-menu"
-        background-color="#1a1a2e"
-        text-color="#b0b3c7"
-        active-text-color="#67c23a"
+      <!-- Logo -->
+      <div
+        class="flex h-14 items-center gap-3 border-b border-border px-4 cursor-pointer"
+        @click="collapsed = !collapsed"
       >
-        <el-menu-item index="/">
-          <el-icon><Money /></el-icon>
-          <span>POS</span>
-        </el-menu-item>
-
-        <el-menu-item index="/gate-in">
-          <el-icon><ArrowRight /></el-icon>
-          <span>Gate In</span>
-        </el-menu-item>
-
-        <el-menu-item index="/transaksi">
-          <el-icon><Document /></el-icon>
-          <span>Transaksi</span>
-        </el-menu-item>
-
-        <el-menu-item index="/member">
-          <el-icon><User /></el-icon>
-          <span>Member</span>
-        </el-menu-item>
-
-        <el-menu-item index="/report">
-          <el-icon><DataLine /></el-icon>
-          <span>Laporan</span>
-        </el-menu-item>
-
-        <el-menu-item index="/notification">
-          <el-icon><Bell /></el-icon>
-          <span>Notifikasi</span>
-        </el-menu-item>
-
-        <el-sub-menu v-if="authStore.isAdmin" index="/admin">
-          <template #title>
-            <el-icon><Tools /></el-icon>
-            <span>Admin</span>
-          </template>
-          <el-menu-item index="/setting">Pengaturan</el-menu-item>
-          <el-menu-item index="/device">Perangkat</el-menu-item>
-        </el-sub-menu>
-      </el-menu>
-
-      <div class="sidebar-footer">
-        <el-button type="danger" plain size="small" class="w-full" @click="logout">
-          <el-icon><SwitchButton /></el-icon>
-          Keluar
-        </el-button>
+        <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path d="M8 12h8M12 8v8" />
+          </svg>
+        </div>
+        <Transition name="fade-text">
+          <span v-show="!collapsed" class="text-sm font-bold">E-Parking</span>
+        </Transition>
       </div>
-    </el-aside>
+
+      <!-- Navigation -->
+      <nav class="flex-1 overflow-y-auto p-2 space-y-0.5">
+        <NuxtLink
+          v-for="item in menuItems"
+          :key="item.path"
+          :to="item.path"
+          :class="[
+            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+            isActive(item.path)
+              ? 'bg-primary/10 text-primary font-medium'
+              : 'text-muted-foreground hover:bg-surface hover:text-foreground',
+          ]"
+          :title="item.label"
+        >
+          <component :is="item.icon" class="h-5 w-5 shrink-0" :stroke-width="2" />
+          <Transition name="fade-text">
+            <span v-show="!collapsed">{{ item.label }}</span>
+          </Transition>
+        </NuxtLink>
+
+        <!-- Admin section -->
+        <template v-if="authStore.isAdmin">
+          <div v-show="!collapsed" class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Admin
+          </div>
+          <div v-show="collapsed" class="mx-auto my-2 h-1 w-1 rounded-full bg-muted-foreground" />
+          <NuxtLink
+            v-for="item in adminItems"
+            :key="item.path"
+            :to="item.path"
+            :class="[
+              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+              isActive(item.path)
+                ? 'bg-primary/10 text-primary font-medium'
+                : 'text-muted-foreground hover:bg-surface hover:text-foreground',
+            ]"
+            :title="item.label"
+          >
+            <component :is="item.icon" class="h-5 w-5 shrink-0" :stroke-width="2" />
+            <Transition name="fade-text">
+              <span v-show="!collapsed">{{ item.label }}</span>
+            </Transition>
+          </NuxtLink>
+        </template>
+      </nav>
+
+      <!-- Footer -->
+      <div class="border-t border-border p-2">
+        <button
+          class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10"
+          @click="logout"
+        >
+          <svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+          </svg>
+          <Transition name="fade-text">
+            <span v-show="!collapsed">Keluar</span>
+          </Transition>
+        </button>
+      </div>
+    </aside>
 
     <!-- Main area -->
-    <el-container class="layout-main-area">
-      <!-- Header (only when logged in) -->
-      <el-header v-if="authStore.isLoggedIn" class="layout-header" height="56px">
-        <div class="header-breadcrumb">
-          <el-breadcrumb>
-            <el-breadcrumb-item>{{ pageTitle }}</el-breadcrumb-item>
-          </el-breadcrumb>
-        </div>
-        <div class="header-user">
-          <el-tag :type="authStore.isAdmin ? 'danger' : 'primary'" size="small" class="mr-2">
+    <div class="flex flex-1 flex-col overflow-hidden min-w-0">
+      <!-- Header -->
+      <header v-if="authStore.isLoggedIn" class="flex h-14 shrink-0 items-center justify-between border-b border-border px-6">
+        <h1 class="text-base font-semibold text-foreground">{{ pageTitle }}</h1>
+        <div class="flex items-center gap-4">
+          <span class="font-mono text-xs text-muted-foreground">{{ clock }}</span>
+          <span :class="[
+            'rounded-full px-2 py-0.5 text-xs font-semibold uppercase',
+            authStore.isAdmin ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary',
+          ]">
             {{ authStore.user?.role }}
-          </el-tag>
-          <span class="username">{{ authStore.user?.username }}</span>
+          </span>
+          <div class="flex items-center gap-2">
+            <div class="flex h-7 w-7 items-center justify-center rounded-full bg-primary/20 text-xs font-semibold text-primary">
+              {{ avatarInitial }}
+            </div>
+            <span class="text-sm text-muted-foreground">{{ authStore.user?.username }}</span>
+          </div>
         </div>
-      </el-header>
+      </header>
 
-      <!-- Main content -->
-      <el-main class="layout-main">
+      <!-- Content -->
+      <main class="flex-1 overflow-y-auto p-6">
         <slot />
-      </el-main>
-    </el-container>
-  </el-container>
+      </main>
+    </div>
+  </div>
 </template>
 
 <script setup>
+import { ref, computed, onMounted, onUnmounted, markRaw } from 'vue'
 import {
-  Promotion,
-  Money,
-  ArrowRight,
-  Document,
-  User,
-  DataLine,
+  LayoutGrid,
+  Monitor,
+  LogIn,
+  FileText,
+  Users,
+  BarChart3,
   Bell,
-  Tools,
-  SwitchButton,
-} from '@element-plus/icons-vue'
+  Settings,
+  Cpu,
+} from 'lucide-vue-next'
 
 const authStore = useAuthStore()
-const router = useRouter()
 const route = useRoute()
+const router = useRouter()
+
+const collapsed = ref(false)
+const clock = ref('')
+let clockTimer = null
+
+// markRaw on icon components — they never need reactivity tracking.
+const menuItems = [
+  { path: '/', label: 'Dashboard', icon: markRaw(LayoutGrid) },
+  { path: '/pos', label: 'POS Kiosk', icon: markRaw(Monitor) },
+  { path: '/gate-in', label: 'Gate In', icon: markRaw(LogIn) },
+  { path: '/transaksi', label: 'Transaksi', icon: markRaw(FileText) },
+  { path: '/member', label: 'Member', icon: markRaw(Users) },
+  { path: '/report', label: 'Laporan', icon: markRaw(BarChart3) },
+  { path: '/notification', label: 'Notifikasi', icon: markRaw(Bell) },
+]
+
+const adminItems = [
+  { path: '/setting', label: 'Pengaturan', icon: markRaw(Settings) },
+  { path: '/device', label: 'Perangkat', icon: markRaw(Cpu) },
+]
 
 const pageTitle = computed(() => {
   const titles = {
-    '/': 'POS — Gate Out',
+    '/': 'Dashboard',
+    '/pos': 'POS — Gate Out',
     '/gate-in': 'Gate In Monitor',
     '/transaksi': 'Transaksi',
     '/setting': 'Pengaturan',
@@ -124,6 +170,34 @@ const pageTitle = computed(() => {
   return titles[route.path] || 'E-Parking'
 })
 
+const avatarInitial = computed(() => {
+  const name = authStore.user?.username || '?'
+  return name.charAt(0).toUpperCase()
+})
+
+function isActive(path) {
+  if (path === '/') return route.path === '/'
+  if (path === '/pos') return route.path === '/pos'
+  return route.path.startsWith(path)
+}
+
+function updateClock() {
+  clock.value = new Date().toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+onMounted(() => {
+  updateClock()
+  clockTimer = setInterval(updateClock, 1000)
+})
+
+onUnmounted(() => {
+  if (clockTimer) clearInterval(clockTimer)
+})
+
 async function logout() {
   await authStore.logout()
   router.push('/login')
@@ -131,74 +205,8 @@ async function logout() {
 </script>
 
 <style scoped>
-.layout-container {
-  height: 100vh;
-  display: flex;
-}
-
-.layout-sidebar {
-  background: #1a1a2e;
-  display: flex;
-  flex-direction: column;
-}
-
-.sidebar-logo {
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: #fff;
-  font-size: 18px;
-  font-weight: 600;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.sidebar-logo .el-icon {
-  font-size: 22px;
-  color: #67c23a;
-}
-
-.sidebar-menu {
-  flex: 1;
-  border-right: none;
-}
-
-.sidebar-footer {
-  padding: 12px 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.layout-main-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.layout-header {
-  background: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-  z-index: 1;
-}
-
-.header-user {
-  display: flex;
-  align-items: center;
-}
-
-.username {
-  font-size: 14px;
-  color: #606266;
-}
-
-.layout-main {
-  background: #f5f7fa;
-  padding: 20px;
-  overflow-y: auto;
-}
+.fade-text-enter-active { transition: opacity 0.15s ease, transform 0.15s ease; }
+.fade-text-leave-active { transition: opacity 0.1s ease, transform 0.1s ease; }
+.fade-text-enter-from { opacity: 0; transform: translateX(-4px); }
+.fade-text-leave-to { opacity: 0; transform: translateX(-4px); }
 </style>

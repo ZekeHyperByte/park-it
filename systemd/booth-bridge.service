@@ -5,9 +5,10 @@ After=network.target
 [Service]
 Type=simple
 User=parking
-WorkingDirectory=/opt/parking
-Environment=PYTHONPATH=/opt/parking
-ExecStart=/opt/parking/.venv/bin/python -m booth_bridge.main --config /etc/parking/booth.json
+WorkingDirectory=/opt/parking-system-v2
+Environment=PYTHONPATH=/opt/parking-system-v2
+EnvironmentFile=/opt/parking-system-v2/.env
+ExecStart=/opt/parking-system-v2/.venv/bin/python -m booth_bridge.main --config /etc/parking/booth.json
 Restart=always
 RestartSec=5
 

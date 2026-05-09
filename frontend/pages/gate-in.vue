@@ -1,51 +1,63 @@
 <template>
   <div>
-    <h1 class="text-xl font-semibold mb-4">Monitor Gate Masuk</h1>
+    <h1 class="mb-4 text-xl font-semibold text-foreground">Monitor Gate Masuk</h1>
 
-    <el-row :gutter="16">
-      <el-col
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div
         v-for="gate in websiteStore.activeGateIns"
         :key="gate.id"
-        :xs="24" :sm="12" :md="8" :lg="6"
-        class="mb-4"
+        :class="[
+          'rounded-lg border border-border bg-surface p-4 transition-all',
+          gateCardClass(gate.code),
+        ]"
       >
-        <el-card shadow="hover" :class="['gate-card', gateStatusClass(gate.code)]">
-          <template #header>
-            <div class="flex justify-between items-center">
-              <strong>{{ gate.name }}</strong>
-              <el-tag :type="gateStateTag(gate.code)" size="small">
-                {{ gateStateLabel(gate.code) }}
-              </el-tag>
-            </div>
-          </template>
+        <!-- Header -->
+        <div class="mb-3 flex items-center justify-between">
+          <span class="font-semibold text-foreground">{{ gate.name }}</span>
+          <span :class="[
+            'rounded-full px-2 py-0.5 text-xs font-medium',
+            stateTagClass(gate.code),
+          ]">
+            {{ gateStateLabel(gate.code) }}
+          </span>
+        </div>
 
-          <div class="gate-info">
-            <div class="mb-2">
-              <el-tag :type="wsTagType(gate.code)" size="small" effect="plain">
-                {{ wsConnected(gate.code) ? 'Online' : 'Offline' }}
-              </el-tag>
-              <el-tag type="info" size="small" effect="plain" class="ml-2">
-                {{ gate.protocol?.toUpperCase() || 'N/A' }}
-              </el-tag>
-            </div>
-
-            <div class="state-display mb-2">
-              <strong>{{ stateLabel(gate.code) }}</strong>
-            </div>
-
-            <div class="stats text-sm" style="color: #909399;">
-              <div>Kendaraan masuk: {{ vehicleCount(gate.code) }}</div>
-              <div v-if="lastCard(gate.code)">Kartu: {{ lastCard(gate.code) }}</div>
-              <div v-if="lastEvent(gate.code)">Event: {{ lastEvent(gate.code) }}</div>
-            </div>
+        <!-- Status -->
+        <div class="mb-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <span :class="[
+              'h-2 w-2 rounded-full',
+              wsConnected(gate.code) ? 'bg-green-500 animate-pulse' : 'bg-red-500',
+            ]" />
+            <span class="text-xs text-muted-foreground">
+              {{ wsConnected(gate.code) ? 'Online' : 'Offline' }}
+            </span>
+            <span class="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+              {{ gate.protocol?.toUpperCase() || 'N/A' }}
+            </span>
           </div>
-        </el-card>
-      </el-col>
 
-      <el-col v-if="websiteStore.activeGateIns.length === 0" :span="24">
-        <el-empty description="Tidak ada gate masuk terdaftar" />
-      </el-col>
-    </el-row>
+          <div class="text-base font-medium text-foreground">
+            {{ stateLabel(gate.code) }}
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="border-t border-border pt-2 text-xs text-muted-foreground space-y-1">
+          <div>Kendaraan masuk: <span class="font-mono text-foreground">{{ vehicleCount(gate.code) }}</span></div>
+          <div v-if="lastCard(gate.code)">Kartu: <span class="font-mono text-foreground">{{ lastCard(gate.code) }}</span></div>
+          <div v-if="lastEvent(gate.code)">Event: <span class="text-foreground">{{ lastEvent(gate.code) }}</span></div>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div
+        v-if="websiteStore.activeGateIns.length === 0"
+        class="col-span-full py-12 text-center text-muted-foreground"
+      >
+        Tidak ada gate masuk terdaftar
+      </div>
+    </div>
   </div>
 </template>
 
@@ -77,40 +89,16 @@ const stateLabels = {
   TIMEOUT_ALERT: 'Timeout',
 }
 
-const stateTags = {
-  IDLE: 'info',
-  VEHICLE_PRESENT: 'primary',
-  GATE_CLOSED: 'info',
-  WAITING_BUTTON: 'warning',
-  WAITING_CARD: 'warning',
-  VALIDATING: 'warning',
-  CHECKING_BALANCE: 'warning',
-  WAITING_PRINT_DECISION: 'warning',
-  PROCESSING: 'warning',
-  OPENING: 'success',
-  ERROR: 'danger',
-  TIMEOUT_ALERT: 'danger',
-}
-
 let unsubscribers = []
 
 function stateLabel(code) {
-  return stateLabels[gateStates[code]?.state] || gateStates[code]?.state || '—'
+  return stateLabels[gateStates[code]?.state] || gateStates[code]?.state || '\u2014'
 }
 
 function gateStateLabel(code) {
   const s = gateStates[code]?.state
-  if (!s) return '—'
+  if (!s) return '\u2014'
   return stateLabels[s] || s
-}
-
-function gateStateTag(code) {
-  const s = gateStates[code]?.state
-  return stateTags[s] || 'info'
-}
-
-function wsTagType(code) {
-  return wsConnected(code) ? 'success' : 'danger'
 }
 
 function wsConnected(code) {
@@ -129,23 +117,29 @@ function lastEvent(code) {
   return lastEvents[code] || null
 }
 
-function gateStatusClass(code) {
+function gateCardClass(code) {
   const s = gateStates[code]?.state
-  if (s === 'OPENING') return 'gate-card-opening'
-  if (s?.includes('WAITING') || s === 'VEHICLE_PRESENT' || s === 'PROCESSING') return 'gate-card-active'
+  if (s === 'OPENING') return 'border-l-4 border-l-green-500'
+  if (s?.includes('WAITING') || s === 'VEHICLE_PRESENT' || s === 'PROCESSING') return 'border-l-4 border-l-primary'
   return ''
+}
+
+function stateTagClass(code) {
+  const s = gateStates[code]?.state
+  if (s === 'OPENING') return 'bg-green-500/10 text-green-500'
+  if (s === 'ERROR' || s === 'TIMEOUT_ALERT') return 'bg-destructive/10 text-destructive'
+  if (s?.includes('WAITING') || s === 'VEHICLE_PRESENT' || s === 'PROCESSING') return 'bg-primary/10 text-primary'
+  return 'bg-muted text-muted-foreground'
 }
 
 function handleEvent(code, event) {
   const type = event.event_type || event.type
 
-  // Update state from heartbeat_state events
   if (type === 'heartbeat_state') {
     gateStates[code] = { state: event.state, ...event }
     return
   }
 
-  // Update state from state machine events
   const stateMap = {
     'vehicle_detected': 'VEHICLE_PRESENT',
     'gate_closed': 'GATE_CLOSED',
@@ -164,14 +158,10 @@ function handleEvent(code, event) {
 
   lastEvents[code] = type
 
-  switch (type) {
-    case 'vehicle_detected':
-      vehicleCounts[code] = (vehicleCounts[code] || 0) + 1
-      break
-    case 'rfid_card_read':
-    case 'passti_card_tap':
-      lastCards[code] = event.card_number || event.card_type
-      break
+  if (type === 'vehicle_detected') {
+    vehicleCounts[code] = (vehicleCounts[code] || 0) + 1
+  } else if (type === 'rfid_card_read' || type === 'passti_card_tap') {
+    lastCards[code] = event.card_number || event.card_type
   }
 }
 
@@ -193,31 +183,3 @@ onUnmounted(() => {
   unsubscribers = []
 })
 </script>
-
-<style scoped>
-.gate-card {
-  transition: border-left-color 0.3s ease;
-}
-
-.gate-card-opening {
-  border-left: 4px solid #67c23a;
-}
-
-.gate-card-active {
-  border-left: 4px solid #409eff;
-}
-
-.state-display {
-  font-size: 16px;
-  padding: 8px 0;
-}
-
-.stats {
-  border-top: 1px solid #ebeef5;
-  padding-top: 8px;
-}
-
-.ml-2 {
-  margin-left: 8px;
-}
-</style>

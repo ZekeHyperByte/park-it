@@ -38,10 +38,10 @@ class ParkingTransaction(Base, IntPKMixin, TimestampMixin):
 
     # Gate references (unified gates table)
     gate_in_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("gates.id"), nullable=True
+        BigInteger, ForeignKey("gates.id"), nullable=True, index=True
     )
     gate_out_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("gates.id"), nullable=True
+        BigInteger, ForeignKey("gates.id"), nullable=True, index=True
     )
 
     # Timestamps

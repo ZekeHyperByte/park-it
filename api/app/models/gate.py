@@ -66,3 +66,13 @@ class Gate(Base, IntPKMixin, TimestampMixin):
     def is_peripheral_enabled(self, key: str) -> bool:
         """Check if a peripheral is enabled."""
         return self.get_peripheral(key).get("enabled", False)
+
+    def get_cameras(self) -> list[dict]:
+        """Return active camera configs. Supports cameras[] array and legacy camera.url."""
+        cameras = self.hardware_config.get("cameras", [])
+        if cameras:
+            return [c for c in cameras if c.get("url") and c.get("enabled", True)]
+        cam = self.hardware_config.get("camera", {})
+        if cam.get("enabled", False) and cam.get("url"):
+            return [{"url": cam["url"], "label": None}]
+        return []

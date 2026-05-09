@@ -18,11 +18,11 @@ logger = get_logger("security_headers")
 # Default Content Security Policy for the parking system
 DEFAULT_CSP = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+    "script-src 'self' 'unsafe-inline'; "
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: blob:; "
     "connect-src 'self' ws: wss:; "
-    "font-src 'self'; "
+    "font-src 'self' https://fonts.gstatic.com; "
     "frame-ancestors 'none'; "
     "base-uri 'self'; "
     "form-action 'self';"

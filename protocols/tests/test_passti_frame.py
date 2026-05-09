@@ -5,6 +5,7 @@ import pytest
 from protocols.passti.frame import (
     CARD_TYPES,
     STATUS_MESSAGES,
+    _bcd_timeout,
     build_frame,
     parse_response,
 )
@@ -103,3 +104,28 @@ class TestParseResponse:
         }
         for card_type in expected:
             assert card_type in CARD_TYPES, f"Missing card type {card_type:02X}"
+
+
+class TestBcdTimeout:
+    """Test BCD timeout encoding per V1.12 §III.B."""
+
+    @pytest.mark.parametrize(
+        "sec, expected",
+        [
+            (0, b"\x00\x00"),
+            (1, b"\x00\x01"),
+            (10, b"\x00\x10"),  # V1.12 §III.B example
+            (99, b"\x00\x99"),
+            (100, b"\x01\x00"),
+            (1234, b"\x12\x34"),
+            (9999, b"\x99\x99"),
+        ],
+    )
+    def test_bcd_timeout(self, sec, expected):
+        assert _bcd_timeout(sec) == expected
+
+    def test_bcd_timeout_rejects_out_of_range(self):
+        with pytest.raises(ValueError):
+            _bcd_timeout(-1)
+        with pytest.raises(ValueError):
+            _bcd_timeout(10000)

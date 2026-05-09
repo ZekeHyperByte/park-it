@@ -77,14 +77,19 @@ class EventConsumer:
 
         if event_type == "passti_card_tap":
             await self._handle_passti_card_tap(payload)
+        elif event_type == "ticket_button_pressed":
+            await self._handle_ticket_button_pressed(payload)
+        elif event_type == "rfid_card_read":
+            await self._handle_rfid_card_read(payload)
         elif event_type == "emoney_print_decision":
             await self._handle_emoney_print_decision(payload)
         elif event_type == "deduct_result":
             await self._handle_deduct_result(payload)
         elif event_type == "vehicle_detected":
             await self._handle_vehicle_detected(payload)
+        elif event_type == "help_button_pressed":
+            await self._handle_help_button_pressed(payload)
         else:
-            # Other events are broadcast-only; no server-side action needed
             pass
 
     async def _handle_passti_card_tap(self, payload: dict) -> None:
@@ -184,7 +189,20 @@ class EventConsumer:
                     balance_after=payload.get("balance_after", 0),
                     transaction_counter=payload.get("transaction_counter", 0),
                     raw_response_hex=payload.get("raw_response_hex", ""),
+                    settlement_payload_hex=payload.get("settlement_payload_hex", ""),
+                    card_type=payload.get("card_type"),
+                    card_type_code=(
+                        payload.get("card_type_code") or None
+                    ),
                 )
+
+                from api.app.services.gate_command import publish_command
+                from shared.events import PlayAudioCommand
+                if status == DeductStatus.WRONG_CARD:
+                    await publish_command(PlayAudioCommand(gate_id=gate_id, track=7))
+                elif status == DeductStatus.INSUFFICIENT_BALANCE:
+                    await publish_command(PlayAudioCommand(gate_id=gate_id, track=6))
+
                 logger.info(
                     "deduct_result_processed",
                     gate_id=gate_id,
@@ -199,43 +217,154 @@ class EventConsumer:
                 )
 
 
-    async def _handle_vehicle_detected(self, payload: dict) -> None:
-        """Handle vehicle_detected event — enqueue exit snapshot if camera configured."""
-        gate_id = payload.get("gate_id", "")
+    async def _handle_ticket_button_pressed(self, payload: dict) -> None:
+        """Cash entry: create transaction, send print_ticket_then_open to daemon."""
+        import uuid
         from sqlalchemy import select
 
         from api.app.models import Gate
+        from api.app.services.gate_command import publish_command
+        from api.app.services.transaction import create_entry_transaction
         from api.database import AsyncSessionLocal
-        from shared.redis import get_arq_redis
+        from shared.events import PrintTicketThenOpenCommand
 
-        logger.info("vehicle_detected_received", gate_id=gate_id)
+        gate_code = payload.get("gate_id", "")
+        logger.info("ticket_button_pressed_received", gate_id=gate_code)
 
         async with AsyncSessionLocal() as db:
             try:
-                result = await db.execute(select(Gate).where(Gate.code == gate_id))
+                result = await db.execute(select(Gate).where(Gate.code == gate_code))
                 gate = result.scalar_one_or_none()
                 if gate is None:
-                    logger.error("vehicle_detected_gate_not_found", gate_id=gate_id)
+                    logger.error("ticket_button_gate_not_found", gate_id=gate_code)
                     return
 
-                if gate.is_peripheral_enabled("camera"):
-                    camera_config = gate.get_peripheral("camera")
-                    camera_url = camera_config.get("url")
-                    if camera_url:
-                        arq_redis = await get_arq_redis()
-                        await arq_redis.enqueue_job(
-                            "take_snapshot",
-                            gate_id=gate_id,
-                            camera_url=camera_url,
-                            snapshot_type="exit" if gate.direction == "OUT" else "entry",
-                        )
-                        logger.info(
-                            "vehicle_detected_snapshot_enqueued",
-                            gate_id=gate_id,
-                            direction=gate.direction,
-                        )
+                barcode = uuid.uuid4().hex[:12].upper()
+                tx = await create_entry_transaction(
+                    db,
+                    barcode=barcode,
+                    gate_in_id=gate.id,
+                    payment_method="CASH",
+                )
+                await db.commit()
+
+                await publish_command(
+                    PrintTicketThenOpenCommand(
+                        gate_id=gate_code,
+                        barcode=tx.barcode,
+                        gate_name=gate.name,
+                    )
+                )
+                logger.info("cash_entry_ticket_sent", gate_id=gate_code, barcode=tx.barcode)
             except Exception as e:
-                logger.error("vehicle_detected_snapshot_error", gate_id=gate_id, error=str(e))
+                logger.error("ticket_button_error", gate_id=gate_code, error=str(e))
+
+    async def _handle_rfid_card_read(self, payload: dict) -> None:
+        """RFID/UHF card read — branches on gate direction: entry creates tx, exit closes tx."""
+        from datetime import date
+        from sqlalchemy import select
+
+        from api.app.models import Gate, Member, ParkingTransaction
+        from api.app.services.gate_command import publish_command
+        from api.app.services.transaction import create_entry_transaction
+        from api.database import AsyncSessionLocal
+        from shared.events import DisplayTextCommand, OpenGateCommand, PlayAudioCommand
+
+        gate_code = payload.get("gate_id", "")
+        card_number = payload.get("card_number", "")
+        logger.info("rfid_card_read_received", gate_id=gate_code, card=card_number)
+
+        async with AsyncSessionLocal() as db:
+            try:
+                gate_result = await db.execute(select(Gate).where(Gate.code == gate_code))
+                gate = gate_result.scalar_one_or_none()
+                if gate is None:
+                    logger.error("rfid_gate_not_found", gate_id=gate_code)
+                    return
+
+                if gate.direction == "OUT":
+                    # Exit: close active transaction, fee=0, open gate
+                    from api.app.services.payment import process_rfid_payment
+                    try:
+                        await process_rfid_payment(
+                            db,
+                            gate_id=gate_code,
+                            gate_out_id=gate.id,
+                            card_number=card_number,
+                        )
+                        await db.commit()
+                        logger.info("rfid_exit_gate_opened", gate_id=gate_code)
+                    except ValueError as e:
+                        msg = str(e)
+                        if "No active transaction" in msg:
+                            await publish_command(DisplayTextCommand(gate_id=gate_code, line1="Tidak Ada", line2="Transaksi Aktif"))
+                        else:
+                            await publish_command(DisplayTextCommand(gate_id=gate_code, line1="Kartu Tidak", line2="Valid"))
+                        await publish_command(PlayAudioCommand(gate_id=gate_code, track=3))
+                        logger.warning("rfid_exit_rejected", gate_id=gate_code, reason=msg)
+                    return
+
+                # Entry: validate member, create transaction, open gate
+                member_result = await db.execute(
+                    select(Member).where(Member.card_number == card_number)
+                )
+                member = member_result.scalar_one_or_none()
+
+                if member is None:
+                    await publish_command(DisplayTextCommand(gate_id=gate_code, line1="Kartu Tidak", line2="Terdaftar"))
+                    await publish_command(PlayAudioCommand(gate_id=gate_code, track=3))
+                    logger.info("rfid_member_not_found", gate_id=gate_code, card=card_number)
+                    return
+
+                if not member.is_active:
+                    await publish_command(DisplayTextCommand(gate_id=gate_code, line1="Kartu Tidak", line2="Aktif"))
+                    await publish_command(PlayAudioCommand(gate_id=gate_code, track=4))
+                    return
+
+                if member.valid_until and member.valid_until < date.today():
+                    await publish_command(DisplayTextCommand(gate_id=gate_code, line1="Kartu Expired", line2=""))
+                    await publish_command(PlayAudioCommand(gate_id=gate_code, track=3))
+                    logger.info("rfid_member_expired", gate_id=gate_code, card=card_number)
+                    return
+
+                # Check for unclosed active transaction
+                unclosed = await db.execute(
+                    select(ParkingTransaction).where(
+                        ParkingTransaction.card_number == card_number,
+                        ParkingTransaction.status == "ACTIVE",
+                    )
+                )
+                if unclosed.scalar_one_or_none():
+                    await publish_command(DisplayTextCommand(gate_id=gate_code, line1="Transaksi", line2="Belum Selesai"))
+                    await publish_command(PlayAudioCommand(gate_id=gate_code, track=11))
+                    logger.info("rfid_unclosed_transaction", gate_id=gate_code, card=card_number)
+                    return
+
+                await create_entry_transaction(
+                    db,
+                    card_number=card_number,
+                    gate_in_id=gate.id,
+                    payment_method="RFID_MEMBER",
+                    member_id=member.id,
+                    vehicle_type_id=member.vehicle_type_id,
+                    plate_number=member.plate_number,
+                )
+                await db.commit()
+
+                await publish_command(OpenGateCommand(gate_id=gate_code))
+                logger.info("rfid_entry_gate_opened", gate_id=gate_code, member_id=member.id)
+            except Exception as e:
+                logger.error("rfid_card_read_error", gate_id=gate_code, error=str(e))
+
+    async def _handle_help_button_pressed(self, payload: dict) -> None:
+        """Operator assistance requested at gate."""
+        gate_id = payload.get("gate_id", "")
+        logger.warning("help_button_pressed", gate_id=gate_id)
+
+    async def _handle_vehicle_detected(self, payload: dict) -> None:
+        """Handle vehicle_detected event — logged for monitoring."""
+        gate_id = payload.get("gate_id", "")
+        logger.info("vehicle_detected_received", gate_id=gate_id)
 
 
 # Global instance

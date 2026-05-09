@@ -1,295 +1,172 @@
 <template>
   <div>
-    <h1>Laporan</h1>
-    <p class="text-secondary mb-3">Ringkasan transaksi dan settlement e-money.</p>
+    <h1 class="text-xl font-semibold text-foreground">Laporan</h1>
+    <p class="mb-4 text-sm text-muted-foreground">Ringkasan transaksi dan settlement e-money.</p>
 
-    <!-- Date Range Filter -->
-    <el-card class="mb-3">
-      <el-button-group class="mb-2">
-        <el-button @click="setToday">Hari Ini</el-button>
-        <el-button @click="setThisWeek">Minggu Ini</el-button>
-        <el-button @click="setThisMonth">Bulan Ini</el-button>
-        <el-button @click="setLastMonth">Bulan Lalu</el-button>
-      </el-button-group>
-      <div class="filter-row">
-        <el-date-picker
-          v-model="dateRange"
-          type="daterange"
-          range-separator="s/d"
-          start-placeholder="Tanggal Mulai"
-          end-placeholder="Tanggal Akhir"
-          format="YYYY-MM-DD"
-          value-format="YYYY-MM-DD"
-          style="width: 320px"
-        />
-        <el-button type="primary" :loading="loading" @click="loadReports">
-          <el-icon><Search /></el-icon> Tampilkan
-        </el-button>
+    <!-- Date filter -->
+    <div class="mb-4 rounded-lg border border-border bg-surface p-4">
+      <div class="mb-3 flex gap-2">
+        <Button size="sm" variant="outline" @click="setToday">Hari Ini</Button>
+        <Button size="sm" variant="outline" @click="setThisWeek">Minggu Ini</Button>
+        <Button size="sm" variant="outline" @click="setThisMonth">Bulan Ini</Button>
+        <Button size="sm" variant="outline" @click="setLastMonth">Bulan Lalu</Button>
       </div>
-    </el-card>
+      <div class="flex items-center gap-3">
+        <input v-model="dateFrom" type="date" class="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground" />
+        <span class="text-muted-foreground">s/d</span>
+        <input v-model="dateTo" type="date" class="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground" />
+        <Button size="sm" :disabled="loading" @click="loadReports">Tampilkan</Button>
+      </div>
+    </div>
 
-    <el-tabs v-model="activeTab" type="border-card">
-      <!-- Summary Report -->
-      <el-tab-pane label="Ringkasan" name="summary">
-        <div v-if="summaryReport" class="stats-grid">
-          <el-card class="stat-card">
-            <div class="stat-label">Total Transaksi</div>
-            <div class="stat-value">{{ summaryReport.total_transactions.toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Total Pendapatan</div>
-            <div class="stat-value">Rp {{ summaryReport.total_revenue.toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Pendapatan Cash</div>
-            <div class="stat-value">Rp {{ summaryReport.cash_revenue.toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Pendapatan E-Money</div>
-            <div class="stat-value">Rp {{ summaryReport.emoney_revenue.toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Pendapatan RFID</div>
-            <div class="stat-value">Rp {{ summaryReport.rfid_revenue.toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Tarif Rata-rata</div>
-            <div class="stat-value">Rp {{ Math.round(summaryReport.average_fee).toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Transaksi Aktif</div>
-            <div class="stat-value">{{ summaryReport.active_transactions.toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Transaksi Selesai</div>
-            <div class="stat-value">{{ summaryReport.completed_transactions.toLocaleString() }}</div>
-          </el-card>
-        </div>
-        <el-empty v-else description="Pilih rentang tanggal untuk melihat laporan" />
-        <el-divider />
-        <el-button-group>
-          <el-button @click="exportReport('csv')">Export CSV</el-button>
-          <el-button @click="exportReport('xlsx')">Export Excel</el-button>
-          <el-button @click="exportReport('pdf')">Export PDF</el-button>
-        </el-button-group>
-      </el-tab-pane>
+    <!-- Tabs -->
+    <div class="mb-4 flex gap-1 border-b border-border">
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        :class="['px-4 py-2 text-sm font-medium transition-colors -mb-px', activeTab === tab.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground']"
+        @click="activeTab = tab.key"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
 
-      <!-- Shift Report -->
-      <el-tab-pane label="Per Shift" name="shift">
-        <div v-if="shiftReport" class="stats-grid">
-          <el-card v-for="item in shiftReport.items" :key="`${item.shift_id}-${item.date}`" class="stat-card">
-            <div class="stat-label">{{ item.shift_name }} - {{ item.date }}</div>
-            <div class="stat-value">{{ item.total_transactions.toLocaleString() }} transaksi</div>
-            <div class="stat-value">Rp {{ item.total_revenue.toLocaleString() }}</div>
-            <div class="text-small text-secondary">Operator: {{ item.operator_name || '-' }}</div>
-          </el-card>
-        </div>
-        <el-empty v-else description="Pilih rentang tanggal untuk melihat laporan" />
-      </el-tab-pane>
+    <!-- Summary tab -->
+    <div v-if="activeTab === 'summary'">
+      <div v-if="summaryReport" class="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard label="Total Transaksi" :value="summaryReport.total_transactions.toLocaleString()" />
+        <StatCard label="Total Pendapatan" :value="`Rp ${summaryReport.total_revenue.toLocaleString()}`" />
+        <StatCard label="Pendapatan Cash" :value="`Rp ${summaryReport.cash_revenue.toLocaleString()}`" />
+        <StatCard label="Pendapatan E-Money" :value="`Rp ${summaryReport.emoney_revenue.toLocaleString()}`" />
+        <StatCard label="Pendapatan RFID" :value="`Rp ${summaryReport.rfid_revenue.toLocaleString()}`" />
+        <StatCard label="Tarif Rata-rata" :value="`Rp ${Math.round(summaryReport.average_fee).toLocaleString()}`" />
+        <StatCard label="Transaksi Aktif" :value="summaryReport.active_transactions.toLocaleString()" />
+        <StatCard label="Transaksi Selesai" :value="summaryReport.completed_transactions.toLocaleString()" />
+      </div>
+      <div v-else class="py-12 text-center text-muted-foreground">Pilih rentang tanggal untuk melihat laporan</div>
+      <div class="flex gap-2">
+        <Button size="sm" variant="outline" @click="exportReport('csv')">Export CSV</Button>
+        <Button size="sm" variant="outline" @click="exportReport('xlsx')">Export Excel</Button>
+        <Button size="sm" variant="outline" @click="exportReport('pdf')">Export PDF</Button>
+      </div>
+    </div>
 
-      <!-- E-Money Report -->
-      <el-tab-pane label="E-Money" name="emoney">
-        <div v-if="emoneyReport" class="stats-grid">
-          <el-card class="stat-card">
-            <div class="stat-label">Transaksi E-Money</div>
-            <div class="stat-value">{{ emoneyReport.total_emoney_transactions.toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Total Deducted</div>
-            <div class="stat-value">Rp {{ emoneyReport.total_deducted.toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Berhasil</div>
-            <div class="stat-value stat-success">{{ emoneyReport.success_count.toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Gagal</div>
-            <div class="stat-value stat-danger">{{ emoneyReport.failed_count.toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Lost Contact</div>
-            <div class="stat-value stat-warning">{{ emoneyReport.lost_contact_count.toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Rata-rata Deduct</div>
-            <div class="stat-value">Rp {{ Math.round(emoneyReport.average_deduct_amount).toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Belum Settlement</div>
-            <div class="stat-value">{{ emoneyReport.unsettled_count.toLocaleString() }}</div>
-          </el-card>
-          <el-card class="stat-card">
-            <div class="stat-label">Sudah Settlement</div>
-            <div class="stat-value">{{ emoneyReport.settled_count.toLocaleString() }}</div>
-          </el-card>
+    <!-- Shift tab -->
+    <div v-if="activeTab === 'shift'">
+      <div v-if="shiftReport" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div v-for="item in shiftReport.items" :key="`${item.shift_id}-${item.date}`" class="rounded-lg border border-border bg-surface p-4 text-center">
+          <div class="text-sm text-muted-foreground">{{ item.shift_name }} - {{ item.date }}</div>
+          <div class="text-lg font-semibold text-foreground">{{ item.total_transactions.toLocaleString() }} transaksi</div>
+          <div class="text-lg font-bold text-foreground">Rp {{ item.total_revenue.toLocaleString() }}</div>
+          <div class="text-xs text-muted-foreground">Operator: {{ item.operator_name || '-' }}</div>
         </div>
-        <el-empty v-else description="Pilih rentang tanggal untuk melihat laporan" />
-        <el-divider />
-        <el-button-group>
-          <el-button @click="exportReport('csv')">Export CSV</el-button>
-          <el-button @click="exportReport('xlsx')">Export Excel</el-button>
-          <el-button @click="exportReport('pdf')">Export PDF</el-button>
-        </el-button-group>
-      </el-tab-pane>
-    </el-tabs>
+      </div>
+      <div v-else class="py-12 text-center text-muted-foreground">Pilih rentang tanggal untuk melihat laporan</div>
+    </div>
+
+    <!-- E-Money tab -->
+    <div v-if="activeTab === 'emoney'">
+      <div v-if="emoneyReport" class="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard label="Transaksi E-Money" :value="emoneyReport.total_emoney_transactions.toLocaleString()" />
+        <StatCard label="Total Deducted" :value="`Rp ${emoneyReport.total_deducted.toLocaleString()}`" />
+        <StatCard label="Berhasil" :value="emoneyReport.success_count.toLocaleString()" variant="success" />
+        <StatCard label="Gagal" :value="emoneyReport.failed_count.toLocaleString()" variant="destructive" />
+        <StatCard label="Lost Contact" :value="emoneyReport.lost_contact_count.toLocaleString()" variant="warning" />
+        <StatCard label="Rata-rata Deduct" :value="`Rp ${Math.round(emoneyReport.average_deduct_amount).toLocaleString()}`" />
+        <StatCard label="Belum Settlement" :value="emoneyReport.unsettled_count.toLocaleString()" />
+        <StatCard label="Sudah Settlement" :value="emoneyReport.settled_count.toLocaleString()" />
+      </div>
+      <div v-else class="py-12 text-center text-muted-foreground">Pilih rentang tanggal untuk melihat laporan</div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { Search } from '@element-plus/icons-vue'
+import { Button } from '~/components/ui/button'
 
-definePageMeta({
-  middleware: 'auth',
-})
+definePageMeta({ middleware: 'auth' })
 
 const { fetchApi } = useApi()
 
-const activeTab = ref('summary')
+const tabs = [
+  { key: 'summary', label: 'Ringkasan' },
+  { key: 'shift', label: 'Per Shift' },
+  { key: 'emoney', label: 'E-Money' },
+]
 
-// Default date range: start of current month to today
+const activeTab = ref('summary')
+const loading = ref(false)
+
 const today = new Date()
 const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-const dateRange = ref([
-  firstDayOfMonth.toISOString().split('T')[0],
-  today.toISOString().split('T')[0],
-])
+const dateFrom = ref(firstDayOfMonth.toISOString().split('T')[0])
+const dateTo = ref(today.toISOString().split('T')[0])
 
-const loading = ref(false)
 const summaryReport = ref(null)
 const emoneyReport = ref(null)
 const shiftReport = ref(null)
 
-// Auto-load on mount with default range
-onMounted(() => {
-  loadReports()
-})
+onMounted(() => { loadReports() })
 
 async function loadReports() {
-  if (!dateRange.value || dateRange.value.length !== 2) {
-    ElMessage.warning('Pilih rentang tanggal terlebih dahulu')
-    return
-  }
-
+  if (!dateFrom.value || !dateTo.value) return
   loading.value = true
   try {
-    const [date_from, date_to] = dateRange.value
-    const qs = new URLSearchParams({ date_from, date_to })
-
+    const qs = new URLSearchParams({ date_from: dateFrom.value, date_to: dateTo.value })
     const [summary, emoney, shift] = await Promise.all([
-      fetchApi(`/api/reports/summary?${qs.toString()}`),
-      fetchApi(`/api/reports/emoney?${qs.toString()}`),
-      fetchApi(`/api/reports/shift?${qs.toString()}`),
+      fetchApi(`/api/reports/summary?${qs}`),
+      fetchApi(`/api/reports/emoney?${qs}`),
+      fetchApi(`/api/reports/shift?${qs}`),
     ])
-
     summaryReport.value = summary
     emoneyReport.value = emoney
     shiftReport.value = shift
   } catch (err) {
-    ElMessage.error('Gagal memuat laporan')
+    console.error('Gagal memuat laporan:', err)
   } finally {
     loading.value = false
   }
 }
 
-function setToday() {
-  const today = new Date().toISOString().split('T')[0]
-  dateRange.value = [today, today]
-  loadReports()
-}
-
-function setThisWeek() {
-  const now = new Date()
-  const monday = new Date(now.setDate(now.getDate() - now.getDay() + 1))
-  const sunday = new Date(now.setDate(monday.getDate() + 6))
-  dateRange.value = [
-    monday.toISOString().split('T')[0],
-    sunday.toISOString().split('T')[0],
-  ]
-  loadReports()
-}
-
-function setThisMonth() {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), now.getMonth(), 1)
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  dateRange.value = [
-    start.toISOString().split('T')[0],
-    end.toISOString().split('T')[0],
-  ]
-  loadReports()
-}
-
-function setLastMonth() {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  const end = new Date(now.getFullYear(), now.getMonth(), 0)
-  dateRange.value = [
-    start.toISOString().split('T')[0],
-    end.toISOString().split('T')[0],
-  ]
-  loadReports()
-}
+function setToday() { const d = new Date().toISOString().split('T')[0]; dateFrom.value = d; dateTo.value = d; loadReports() }
+function setThisWeek() { const now = new Date(); const mon = new Date(now.setDate(now.getDate() - now.getDay() + 1)); dateFrom.value = mon.toISOString().split('T')[0]; dateTo.value = new Date().toISOString().split('T')[0]; loadReports() }
+function setThisMonth() { const now = new Date(); dateFrom.value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]; dateTo.value = new Date().toISOString().split('T')[0]; loadReports() }
+function setLastMonth() { const now = new Date(); dateFrom.value = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0]; dateTo.value = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0]; loadReports() }
 
 async function exportReport(format) {
-  if (!dateRange.value || dateRange.value.length !== 2) {
-    ElMessage.warning('Pilih rentang tanggal terlebih dahulu')
-    return
-  }
-  const [from, to] = dateRange.value
-  const url = `/api/reports/summary/export?format=${format}&date_from=${from}&date_to=${to}`
-
   try {
+    const url = `/api/reports/summary/export?format=${format}&date_from=${dateFrom.value}&date_to=${dateTo.value}`
     const response = await fetchApi(url, { responseType: 'blob' })
     const blob = new Blob([response.data])
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.download = `EParking_Report_Summary_${from}_${to}.${format}`
+    link.download = `EParking_Report_${dateFrom.value}_${dateTo.value}.${format}`
     link.click()
-    ElMessage.success(`Report exported as ${format.toUpperCase()}`)
-  } catch (e) {
-    ElMessage.error('Export failed')
-  }
+  } catch (e) { console.error('Export failed:', e) }
 }
 </script>
 
-<style scoped>
-.filter-row {
-  display: flex;
-  gap: 12px;
-  align-items: center;
+<script>
+// StatCard inline component
+const StatCard = {
+  props: {
+    label: String,
+    value: String,
+    variant: { type: String, default: '' },
+  },
+  template: `
+    <div class="rounded-lg border border-border bg-surface p-4 text-center">
+      <div class="mb-1 text-xs text-muted-foreground">{{ label }}</div>
+      <div :class="['text-xl font-bold font-mono', variantClass]">{{ value }}</div>
+    </div>
+  `,
+  computed: {
+    variantClass() {
+      if (this.variant === 'success') return 'text-green-500'
+      if (this.variant === 'destructive') return 'text-destructive'
+      if (this.variant === 'warning') return 'text-amber-500'
+      return 'text-foreground'
+    },
+  },
 }
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
-}
-
-.stat-card {
-  text-align: center;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: #909399;
-  margin-bottom: 8px;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.stat-success {
-  color: #67c23a;
-}
-
-.stat-danger {
-  color: #f56c6c;
-}
-
-.stat-warning {
-  color: #e6a23c;
-}
-</style>
+</script>

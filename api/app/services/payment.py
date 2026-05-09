@@ -31,6 +31,36 @@ from shared.logging import get_logger
 logger = get_logger("payment_service")
 
 
+async def _enqueue_exit_snapshot(db: AsyncSession, gate_id: str, transaction_id: int) -> None:
+    """Fire-and-forget: enqueue exit snapshot for every camera on this gate."""
+    try:
+        from sqlalchemy import select
+
+        from api.app.models import Gate
+        from shared.redis import get_arq_redis
+
+        gate_result = await db.execute(select(Gate).where(Gate.code == gate_id))
+        gate = gate_result.scalar_one_or_none()
+        if gate is None:
+            return
+        cameras = gate.get_cameras()
+        if not cameras:
+            return
+        arq_redis = await get_arq_redis()
+        for cam in cameras:
+            await arq_redis.enqueue_job(
+                "take_snapshot",
+                gate_id=gate_id,
+                camera_url=cam["url"],
+                transaction_id=transaction_id,
+                snapshot_type="exit",
+                camera_label=cam.get("label"),
+            )
+        logger.info("exit_snapshot_enqueued", gate_id=gate_id, transaction_id=transaction_id, count=len(cameras))
+    except Exception as e:
+        logger.warning("exit_snapshot_enqueue_failed", gate_id=gate_id, transaction_id=transaction_id, error=str(e))
+
+
 # ---------------------------------------------------------------------------
 # Cash Payment
 # ---------------------------------------------------------------------------
@@ -65,10 +95,13 @@ async def process_cash_payment(
         ValueError: If no active transaction found
     """
     tx = await find_active_transaction(
-        db, barcode=barcode, card_number=card_number, plate_number=plate_number
+        db, barcode=barcode, card_number=card_number, plate_number=plate_number,
+        for_update=True,
     )
     if tx is None:
         raise ValueError("No active transaction found")
+
+    await _enqueue_exit_snapshot(db, gate_id, tx.id)
 
     fee = await calculate_transaction_fee(db, tx)
     shift = await get_current_shift(db)
@@ -162,9 +195,11 @@ async def process_rfid_payment(
     if member is None:
         raise ValueError("Invalid or inactive member card")
 
-    tx = await find_active_transaction(db, card_number=card_number)
+    tx = await find_active_transaction(db, card_number=card_number, for_update=True)
     if tx is None:
         raise ValueError("No active transaction found for this card")
+
+    await _enqueue_exit_snapshot(db, gate_id, tx.id)
 
     shift = await get_current_shift(db)
 
@@ -232,7 +267,7 @@ async def process_emoney_deduct(
     """
     from shared.events import DeductCommand
 
-    tx = await find_active_transaction(db, card_number=card_number)
+    tx = await find_active_transaction(db, card_number=card_number, for_update=True)
     if tx is None:
         raise ValueError("No active transaction found for this card")
 
@@ -282,6 +317,9 @@ async def process_emoney_result(
     balance_after: int,
     transaction_counter: int,
     raw_response_hex: str,
+    settlement_payload_hex: str = "",
+    card_type: str | None = None,
+    card_type_code: int | None = None,
     operator_id: int | None = None,
 ) -> dict:
     """Process the result of an e-money deduct operation.
@@ -307,7 +345,7 @@ async def process_emoney_result(
     """
     from api.app.models import EmoneyTransaction
 
-    tx = await find_active_transaction(db, card_number=card_number)
+    tx = await find_active_transaction(db, card_number=card_number, for_update=True)
     if tx is None:
         raise ValueError("No active transaction found for this card")
 
@@ -315,11 +353,14 @@ async def process_emoney_result(
     emoney_tx = EmoneyTransaction(
         parking_transaction_id=tx.id,
         card_number=card_number,
+        card_type=card_type,
+        card_type_code=card_type_code,
         amount_deducted=deduct_amount,
         balance_before=balance_before,
         balance_after=balance_after,
         transaction_counter=transaction_counter,
         raw_response_hex=raw_response_hex,
+        settlement_payload_hex=settlement_payload_hex or None,
         status=status.value,
     )
     db.add(emoney_tx)
@@ -350,6 +391,8 @@ async def process_emoney_result(
             operator_id=operator_id,
             shift_id=shift.id if shift else None,
         )
+
+        await _enqueue_exit_snapshot(db, gate_id, tx.id)
 
         # Open gate + print receipt
         await publish_command(OpenGateCommand(gate_id=gate_id))

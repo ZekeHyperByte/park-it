@@ -41,7 +41,8 @@ export default defineNuxtPlugin((nuxtApp) => {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data)
-          this._emit(gateId, { ...data, gate_id: gateId })
+          // Normalize Pydantic event_type → type so handlers can use event.type consistently
+          this._emit(gateId, { type: data.event_type, ...data, gate_id: gateId })
         } catch {
           this._emit(gateId, { type: 'ws_raw', data: event.data, gate_id: gateId })
         }

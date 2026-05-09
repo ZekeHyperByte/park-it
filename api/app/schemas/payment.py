@@ -23,7 +23,7 @@ class RfidPaymentRequest(BaseModel):
 
     gate_id: str = Field(..., description="Daemon gate ID")
     gate_out_id: int = Field(..., description="Gate-out database ID")
-    card_number: str = Field(..., description="Member card number")
+    card_number: str = Field(..., min_length=4, max_length=32, description="Member card number")
 
 
 class EmoneyDeductRequest(BaseModel):
@@ -31,7 +31,7 @@ class EmoneyDeductRequest(BaseModel):
 
     gate_id: str = Field(..., description="Daemon gate ID")
     gate_out_id: int = Field(..., description="Gate-out database ID")
-    card_number: str = Field(..., description="E-money card number")
+    card_number: str = Field(..., min_length=4, max_length=32, description="E-money card number")
     expected_transaction_counter: int = Field(default=0, description="Expected transaction counter")
 
 
@@ -40,26 +40,32 @@ class EmoneyResultRequest(BaseModel):
 
     gate_id: str = Field(..., description="Daemon gate ID")
     gate_out_id: int = Field(..., description="Gate-out database ID")
-    card_number: str = Field(..., description="E-money card number")
+    card_number: str = Field(..., min_length=4, max_length=32, description="E-money card number")
+    card_type: str | None = Field(default=None, description="Card type name")
+    card_type_code: int | None = Field(default=None, ge=0, le=255, description="PASSTI card type code")
     status: str = Field(..., description="Deduct result status")
     deduct_amount: int = Field(..., ge=0)
     balance_before: int = Field(..., ge=0)
     balance_after: int = Field(..., ge=0)
     transaction_counter: int = Field(..., ge=0)
     raw_response_hex: str = Field(default="")
+    settlement_payload_hex: str = Field(default="")
 
 
 class EmoneyBoothResultRequest(BaseModel):
     """E-money result from booth bridge (machine-to-machine)."""
     gate_id: str = Field(..., description="Daemon gate ID")
     gate_out_id: int = Field(..., description="Gate-out database ID")
-    card_number: str = Field(..., description="E-money card number")
+    card_number: str = Field(..., min_length=4, max_length=32, description="E-money card number")
+    card_type: str | None = Field(default=None, description="Card type name")
+    card_type_code: int | None = Field(default=None, ge=0, le=255, description="PASSTI card type code")
     status: str = Field(..., description="Deduct result status")
     deduct_amount: int = Field(..., ge=0)
     balance_before: int = Field(..., ge=0)
     balance_after: int = Field(..., ge=0)
     transaction_counter: int = Field(..., ge=0)
     raw_response_hex: str = Field(default="")
+    settlement_payload_hex: str = Field(default="")
 
 
 class TransactionLookupRequest(BaseModel):

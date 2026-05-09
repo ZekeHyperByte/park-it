@@ -102,7 +102,19 @@ export const useAuthStore = defineStore('auth', () => {
   async function initAuth() {
     try {
       await fetchUser()
-    } catch {
+    } catch (err) {
+      // Access token may be expired — try refreshing
+      if (err?.status === 401) {
+        const refreshed = await refreshToken()
+        if (refreshed) {
+          try {
+            await fetchUser()
+            return
+          } catch {
+            // Refresh succeeded but user fetch failed — give up
+          }
+        }
+      }
       user.value = null
     }
   }

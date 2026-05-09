@@ -25,18 +25,29 @@ class EmoneySettlement(Base, IntPKMixin, TimestampMixin):
     total_transactions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    # Status
+    # Status: GENERATED → UPLOADED → ACKED_OK | ACKED_NOK | PARTIAL | FAILED
+    # (Pre-existing rows may carry PENDING/ACCEPTED/REJECTED.)
     status: Mapped[str] = mapped_column(
-        String(20), default="PENDING", nullable=False
-    )  # PENDING, UPLOADED, ACCEPTED, REJECTED
+        String(20), default="GENERATED", nullable=False
+    )
 
-    # Bank response
+    # Upload tracking
+    uploaded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Bank response tracking (Multibank v1.3 §II)
     bank_response_file: Mapped[str | None] = mapped_column(String(255), nullable=True)
     bank_response_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     bank_response_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     bank_response_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    response_received_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    response_extension: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    """'OK' or 'NOK' — which response file the bank returned."""
 
     # Settlement file content (for audit)
     file_content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)

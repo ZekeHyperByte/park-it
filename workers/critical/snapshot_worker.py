@@ -1,5 +1,6 @@
 """Critical snapshot worker job."""
 
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -9,7 +10,6 @@ from shared.logging import get_logger
 
 logger = get_logger("snapshot_worker")
 
-# Local snapshot storage directory
 SNAPSHOT_DIR = Path("/var/lib/parking/snapshots")
 SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -20,16 +20,12 @@ async def take_snapshot(
     camera_url: str,
     transaction_id: int | None = None,
     snapshot_type: str = "entry",
+    camera_label: str | None = None,
 ) -> dict:
-    """Download or capture camera snapshot and save locally.
+    """Download or capture camera snapshot, save locally, and record in DB.
 
     Supports both HTTP snapshot URLs and RTSP streams.
-
-    Args:
-        gate_id: Gate identifier
-        camera_url: HTTP URL or RTSP URL (e.g. http://cam1/snapshot.jpg, rtsp://cam1/stream)
-        transaction_id: Optional parking transaction ID to link snapshot
-        snapshot_type: 'entry' or 'exit'
+    Broadcasts camera_snapshot WS event for exit snapshots so POS updates live.
     """
     logger.info(
         "take_snapshot_job",
@@ -39,7 +35,6 @@ async def take_snapshot(
         snapshot_type=snapshot_type,
     )
 
-    # Determine capture method based on URL scheme
     is_rtsp = camera_url.lower().startswith("rtsp://")
 
     if is_rtsp:
@@ -50,12 +45,11 @@ async def take_snapshot(
     if image_data is None:
         return {"status": "error", "message": "Snapshot capture failed"}
 
-    # Generate filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{gate_id}_{snapshot_type}_{timestamp}.jpg"
+    label_part = f"_{camera_label}" if camera_label else ""
+    filename = f"{gate_id}_{snapshot_type}{label_part}_{timestamp}.jpg"
     filepath = SNAPSHOT_DIR / filename
 
-    # Save to filesystem
     try:
         filepath.write_bytes(image_data)
     except Exception as e:
@@ -64,12 +58,98 @@ async def take_snapshot(
 
     logger.info("snapshot_saved", filepath=str(filepath), size=len(image_data))
 
+    snapshot_id = await _save_snapshot_record(
+        gate_id=gate_id,
+        filename=filename,
+        filepath=str(filepath),
+        file_size=len(image_data),
+        snapshot_type=snapshot_type,
+        transaction_id=transaction_id,
+        camera_label=camera_label,
+    )
+
+    if snapshot_id and snapshot_type == "exit":
+        await _broadcast_exit_snapshot(gate_id, snapshot_id)
+
     return {
         "status": "success",
         "filepath": str(filepath),
         "filename": filename,
         "size": len(image_data),
+        "snapshot_id": snapshot_id,
     }
+
+
+async def _save_snapshot_record(
+    *,
+    gate_id: str,
+    filename: str,
+    filepath: str,
+    file_size: int,
+    snapshot_type: str,
+    transaction_id: int | None,
+    camera_label: str | None,
+) -> int | None:
+    """Create Snapshot row and update ParkingTransaction snapshot link."""
+    try:
+        from sqlalchemy import select
+
+        from api.app.models import Gate, ParkingTransaction, Snapshot
+        from api.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            gate_result = await db.execute(select(Gate).where(Gate.code == gate_id))
+            gate = gate_result.scalar_one_or_none()
+            if gate is None:
+                logger.error("snapshot_gate_not_found", gate_id=gate_id)
+                return None
+
+            snapshot = Snapshot(
+                parking_transaction_id=transaction_id,
+                gate_id=gate.id,
+                gate_type="out" if gate.direction == "OUT" else "in",
+                snapshot_type=snapshot_type,
+                filename=filename,
+                file_path=filepath,
+                file_size=file_size,
+                camera_name=camera_label,
+            )
+            db.add(snapshot)
+            await db.flush()
+            await db.refresh(snapshot)
+            snapshot_id = snapshot.id
+
+            if transaction_id:
+                tx = await db.get(ParkingTransaction, transaction_id)
+                if tx:
+                    if snapshot_type == "entry" and tx.entry_snapshot_id is None:
+                        tx.entry_snapshot_id = snapshot_id
+                    elif snapshot_type == "exit" and tx.exit_snapshot_id is None:
+                        tx.exit_snapshot_id = snapshot_id
+
+            await db.commit()
+            logger.info("snapshot_db_saved", snapshot_id=snapshot_id, transaction_id=transaction_id)
+            return snapshot_id
+    except Exception as e:
+        logger.error("snapshot_db_failed", error=str(e), gate_id=gate_id)
+        return None
+
+
+async def _broadcast_exit_snapshot(gate_id: str, snapshot_id: int) -> None:
+    """Publish camera_snapshot to Redis so broadcaster pushes it to POS WebSocket."""
+    try:
+        from shared.redis import redis_client
+
+        await redis_client.connect()
+        payload = json.dumps({
+            "type": "camera_snapshot",
+            "snapshot_type": "exit",
+            "snapshot_url": f"/api/snapshots/{snapshot_id}/image",
+        })
+        await redis_client.client.publish(f"parking.events.{gate_id}", payload)
+        logger.info("exit_snapshot_broadcast", gate_id=gate_id, snapshot_id=snapshot_id)
+    except Exception as e:
+        logger.error("exit_snapshot_broadcast_failed", error=str(e), gate_id=gate_id)
 
 
 async def _download_http(camera_url: str) -> bytes | None:

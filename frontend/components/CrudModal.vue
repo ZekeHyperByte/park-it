@@ -1,120 +1,137 @@
 <template>
-  <el-dialog
-    v-model="visible"
-    :title="title"
-    width="600px"
-    destroy-on-close
-    @close="handleClose"
-  >
-    <el-form
-      ref="formRef"
-      :model="formData"
-      :rules="formRules"
-      label-position="top"
-      @submit.prevent
-    >
-      <el-form-item
-        v-for="field in fields"
-        :key="field.prop"
-        :label="field.label"
-        :prop="field.prop"
-      >
-        <!-- Text / Number input -->
-        <el-input
-          v-if="field.type === 'text' || field.type === 'number'"
-          v-model="formData[field.prop]"
-          :type="field.inputType || 'text'"
-          :placeholder="field.placeholder || ''"
-          :disabled="field.disabled"
-          clearable
-        />
+  <Dialog :open="modelValue" @update:open="$emit('update:modelValue', $event)">
+    <DialogContent class="max-w-lg">
+      <DialogHeader>
+        <DialogTitle>{{ title }}</DialogTitle>
+      </DialogHeader>
 
-        <!-- Textarea -->
-        <el-input
-          v-else-if="field.type === 'textarea'"
-          v-model="formData[field.prop]"
-          type="textarea"
-          :rows="field.rows || 3"
-          :placeholder="field.placeholder || ''"
-          :disabled="field.disabled"
-        />
-
-        <!-- Select / Enum -->
-        <el-select
-          v-else-if="field.type === 'select'"
-          v-model="formData[field.prop]"
-          :placeholder="field.placeholder || ''"
-          :disabled="field.disabled"
-          style="width: 100%"
+      <form @submit.prevent="handleSubmit" class="space-y-6 max-h-[60vh] overflow-y-auto pr-1">
+        <fieldset
+          v-for="(group, gIdx) in groups"
+          :key="group.title || gIdx"
+          class="space-y-4"
+          :class="group.title ? 'rounded-lg border border-border p-4' : ''"
         >
-          <el-option
-            v-for="opt in field.options"
-            :key="opt.value"
-            :label="opt.label"
-            :value="opt.value"
-          />
-        </el-select>
+          <legend
+            v-if="group.title"
+            class="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+          >
+            {{ group.title }}
+          </legend>
 
-        <!-- Switch / Boolean -->
-        <el-switch
-          v-else-if="field.type === 'boolean'"
-          v-model="formData[field.prop]"
-          :disabled="field.disabled"
-          active-text="Ya"
-          inactive-text="Tidak"
-        />
+          <div v-for="field in group.items" :key="field.prop" class="space-y-2">
+            <label class="text-sm font-medium text-foreground">
+              {{ field.label }}
+              <span v-if="field.required" class="text-destructive">*</span>
+            </label>
 
-        <!-- Time picker -->
-        <el-time-picker
-          v-else-if="field.type === 'time'"
-          v-model="formData[field.prop]"
-          :placeholder="field.placeholder || ''"
-          :disabled="field.disabled"
-          format="HH:mm"
-          value-format="HH:mm:ss"
-          style="width: 100%"
-        />
+            <!-- Text / Number / Password -->
+            <Input
+              v-if="field.type === 'text' || field.type === 'number' || field.type === 'password'"
+              v-model="formData[field.prop]"
+              :type="field.type === 'password' ? 'password' : (field.inputType || 'text')"
+              :placeholder="field.placeholder || ''"
+              :disabled="field.disabled"
+            />
 
-        <!-- Date picker -->
-        <el-date-picker
-          v-else-if="field.type === 'date'"
-          v-model="formData[field.prop]"
-          type="date"
-          :placeholder="field.placeholder || ''"
-          :disabled="field.disabled"
-          format="YYYY-MM-DD"
-          value-format="YYYY-MM-DD"
-          style="width: 100%"
-        />
+            <!-- Textarea -->
+            <textarea
+              v-else-if="field.type === 'textarea'"
+              v-model="formData[field.prop]"
+              :rows="field.rows || 3"
+              :placeholder="field.placeholder || ''"
+              :disabled="field.disabled"
+              class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
 
-        <!-- Password -->
-        <el-input
-          v-else-if="field.type === 'password'"
-          v-model="formData[field.prop]"
-          type="password"
-          :placeholder="field.placeholder || ''"
-          :disabled="field.disabled"
-          show-password
-          clearable
-        />
-      </el-form-item>
-    </el-form>
+            <!-- Select -->
+            <select
+              v-else-if="field.type === 'select'"
+              v-model="formData[field.prop]"
+              :disabled="field.disabled"
+              class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="" disabled>{{ field.placeholder || 'Pilih...' }}</option>
+              <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
 
-    <template #footer>
-      <el-button @click="handleClose">Batal</el-button>
-      <el-button type="primary" :loading="submitting" @click="handleSubmit">
-        Simpan
-      </el-button>
-    </template>
-  </el-dialog>
+            <!-- Boolean / Switch -->
+            <div v-else-if="field.type === 'boolean'" class="flex items-center gap-3">
+              <button
+                type="button"
+                :class="[
+                  'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
+                  formData[field.prop] ? 'bg-primary' : 'bg-muted',
+                ]"
+                @click="formData[field.prop] = !formData[field.prop]"
+              >
+                <span
+                  :class="[
+                    'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform',
+                    formData[field.prop] ? 'translate-x-5' : 'translate-x-0',
+                  ]"
+                />
+              </button>
+              <span class="text-sm text-muted-foreground">
+                {{ formData[field.prop] ? 'Ya' : 'Tidak' }}
+              </span>
+            </div>
+
+            <!-- Time -->
+            <Input
+              v-else-if="field.type === 'time'"
+              v-model="formData[field.prop]"
+              type="time"
+              :disabled="field.disabled"
+            />
+
+            <!-- Date -->
+            <Input
+              v-else-if="field.type === 'date'"
+              v-model="formData[field.prop]"
+              type="date"
+              :disabled="field.disabled"
+            />
+
+            <!-- Validation error -->
+            <p v-if="errors[field.prop]" class="text-xs text-destructive">
+              {{ errors[field.prop] }}
+            </p>
+          </div>
+        </fieldset>
+      </form>
+
+      <DialogFooter>
+        <Button variant="outline" @click="handleClose">Batal</Button>
+        <Button :disabled="submitting" @click="handleSubmit">
+          {{ submitting ? 'Menyimpan...' : 'Simpan' }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup>
-import { ref, reactive, watch, nextTick } from 'vue'
+import { computed, nextTick, reactive, watch } from 'vue'
+import { Button } from '~/components/ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog'
+import { Input } from '~/components/ui/input'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   title: { type: String, default: 'Form' },
+  /**
+   * Either a flat field array (legacy):
+   *   [{prop, label, type, ...}, ...]
+   *
+   * or a grouped form for entities with many fields:
+   *   [
+   *     { group: 'Identitas', items: [{prop, label, ...}, ...] },
+   *     { group: 'Kontak',    items: [...] },
+   *   ]
+   */
   fields: { type: Array, required: true },
   initialData: { type: Object, default: () => ({}) },
   submitting: { type: Boolean, default: false },
@@ -122,65 +139,58 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'submit'])
 
-const visible = computed({
-  get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val),
-})
-
-const formRef = ref()
-const formData = reactive({})
-
-// Build validation rules from fields
-const formRules = computed(() => {
-  const rules = {}
-  for (const field of props.fields) {
-    if (field.required) {
-      rules[field.prop] = [
-        { required: true, message: `${field.label} wajib diisi`, trigger: 'blur' },
-      ]
-      if (field.minLength) {
-        rules[field.prop].push({
-          min: field.minLength,
-          message: `Minimal ${field.minLength} karakter`,
-          trigger: 'blur',
-        })
-      }
-    }
-    if (field.type === 'number') {
-      rules[field.prop] = rules[field.prop] || []
-      rules[field.prop].push({
-        type: 'number',
-        message: 'Harus berupa angka',
-        trigger: 'blur',
-      })
-    }
+// Normalise fields into the grouped form so the template has one shape.
+const groups = computed(() => {
+  if (!props.fields.length) return []
+  const first = props.fields[0]
+  const isGrouped = first && typeof first === 'object' && 'group' in first && Array.isArray(first.items)
+  if (isGrouped) {
+    return props.fields.map((g) => ({ title: g.group, items: g.items }))
   }
-  return rules
+  return [{ title: '', items: props.fields }]
 })
 
-// Reset form when opening
+const flatFields = computed(() => groups.value.flatMap((g) => g.items))
+
+const formData = reactive({})
+const errors = reactive({})
+
 watch(
   () => props.modelValue,
   async (val) => {
     if (val) {
       await nextTick()
-      formRef.value?.resetFields?.()
-      // Populate initial data
-      for (const field of props.fields) {
-        formData[field.prop] = props.initialData[field.prop] ?? (field.type === 'boolean' ? false : '')
+      Object.keys(errors).forEach((k) => delete errors[k])
+      for (const field of flatFields.value) {
+        formData[field.prop] =
+          props.initialData[field.prop] ?? (field.type === 'boolean' ? false : '')
       }
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 function handleClose() {
-  visible.value = false
+  emit('update:modelValue', false)
 }
 
-async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
+function validate() {
+  let valid = true
+  Object.keys(errors).forEach((k) => delete errors[k])
+  for (const field of flatFields.value) {
+    if (field.required) {
+      const val = formData[field.prop]
+      if (val === undefined || val === null || val === '') {
+        errors[field.prop] = `${field.label} wajib diisi`
+        valid = false
+      }
+    }
+  }
+  return valid
+}
+
+function handleSubmit() {
+  if (!validate()) return
   emit('submit', { ...formData })
 }
 </script>

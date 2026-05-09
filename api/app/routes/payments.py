@@ -1,6 +1,8 @@
 """Payment routes."""
 
-from fastapi import APIRouter, Depends, Request, status
+import json
+
+from fastapi import APIRouter, Depends, Header, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.middleware.api_key import require_api_key
@@ -26,11 +28,43 @@ from api.app.services.transaction import calculate_transaction_fee, find_active_
 from api.database import get_db
 from shared.events import DeductStatus
 from shared.logging import get_logger
+from shared.redis import redis_client
 from api.app.middleware.metrics import payment_attempts_total, payment_success_total
 
 logger = get_logger("payment_routes")
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
+
+IDEMPOTENCY_TTL = 300  # 5 minutes
+
+
+async def _check_idempotency(idempotency_key: str | None) -> PaymentResponse | None:
+    """Check if a payment with this idempotency key was already processed."""
+    if not idempotency_key:
+        return None
+    try:
+        await redis_client.connect()
+        cached = await redis_client.get(f"idempotency:{idempotency_key}")
+        if cached:
+            return PaymentResponse(**json.loads(cached))
+    except Exception:
+        pass
+    return None
+
+
+async def _store_idempotency(idempotency_key: str | None, response: PaymentResponse) -> None:
+    """Cache a payment response for idempotency deduplication."""
+    if not idempotency_key:
+        return
+    try:
+        await redis_client.connect()
+        await redis_client.set(
+            f"idempotency:{idempotency_key}",
+            response.model_dump_json(),
+            ex=IDEMPOTENCY_TTL,
+        )
+    except Exception:
+        pass
 
 
 def _get_operator_id(user: dict) -> int | None:
@@ -45,8 +79,13 @@ async def cash_payment(
     payment: CashPaymentRequest,
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(require_operator),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
 ) -> PaymentResponse:
     """Process cash payment and open gate."""
+    cached = await _check_idempotency(x_idempotency_key)
+    if cached:
+        return cached
+
     payment_attempts_total.labels(method="cash").inc()
     try:
         result = await process_cash_payment(
@@ -59,7 +98,7 @@ async def cash_payment(
             operator_id=_get_operator_id(user),
         )
         payment_success_total.labels(method="cash").inc()
-        return PaymentResponse(
+        resp = PaymentResponse(
             success=True,
             message="Payment successful. Receipt printed.",
             transaction_id=result["transaction"].id,
@@ -68,6 +107,8 @@ async def cash_payment(
             payment_method="CASH",
             receipt_queued=True,
         )
+        await _store_idempotency(x_idempotency_key, resp)
+        return resp
     except ValueError as e:
         logger.warning("cash_payment_failed", error=str(e), gate_id=payment.gate_id)
         return PaymentResponse(
@@ -82,8 +123,13 @@ async def rfid_payment(
     payment: RfidPaymentRequest,
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(require_operator),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
 ) -> PaymentResponse:
     """Process RFID member payment and open gate."""
+    cached = await _check_idempotency(x_idempotency_key)
+    if cached:
+        return cached
+
     payment_attempts_total.labels(method="rfid").inc()
     try:
         result = await process_rfid_payment(
@@ -94,7 +140,7 @@ async def rfid_payment(
             operator_id=_get_operator_id(user),
         )
         payment_success_total.labels(method="rfid").inc()
-        return PaymentResponse(
+        resp = PaymentResponse(
             success=True,
             message="RFID payment successful",
             transaction_id=result["transaction"].id,
@@ -102,6 +148,8 @@ async def rfid_payment(
             change_amount=0,
             payment_method="RFID_MEMBER",
         )
+        await _store_idempotency(x_idempotency_key, resp)
+        return resp
     except ValueError as e:
         logger.warning("rfid_payment_failed", error=str(e), gate_id=payment.gate_id)
         return PaymentResponse(
@@ -172,6 +220,9 @@ async def emoney_result(
             balance_after=result.balance_after,
             transaction_counter=result.transaction_counter,
             raw_response_hex=result.raw_response_hex,
+            settlement_payload_hex=result.settlement_payload_hex,
+            card_type=result.card_type,
+            card_type_code=result.card_type_code,
             operator_id=_get_operator_id(user),
         )
         return PaymentResponse(
@@ -217,6 +268,9 @@ async def emoney_booth_result(
             balance_after=result.balance_after,
             transaction_counter=result.transaction_counter,
             raw_response_hex=result.raw_response_hex,
+            settlement_payload_hex=result.settlement_payload_hex,
+            card_type=result.card_type,
+            card_type_code=result.card_type_code,
             operator_id=None,
         )
         return PaymentResponse(

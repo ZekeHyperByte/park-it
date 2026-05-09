@@ -66,8 +66,13 @@ def _to_bcd(digits: str) -> bytes:
 
 
 def _bcd_timeout(sec: int) -> bytes:
-    """Convert seconds to BCD timeout bytes."""
-    return bytes([sec // 100, sec % 100])
+    """Encode a timeout (0-9999 seconds) as 2-byte BCD per V1.12 §III.B.
+
+    Examples: 10 → b"\\x00\\x10", 99 → b"\\x00\\x99", 1234 → b"\\x12\\x34".
+    """
+    if not 0 <= sec <= 9999:
+        raise ValueError(f"Timeout must be 0..9999 seconds, got {sec}")
+    return _to_bcd(f"{sec:04d}")
 
 
 def build_frame(cmd: int, data: bytes = b"") -> bytes:
@@ -131,6 +136,7 @@ def parse_response(raw: bytes) -> dict:
     body = payload[4:] if len(payload) > 4 else b""
 
     ok = resp_code == 0x00 and status == (0x00, 0x00, 0x00)
+    body_hex = body.hex().upper()
 
     return {
         "ok": ok,
@@ -138,5 +144,6 @@ def parse_response(raw: bytes) -> dict:
         "status": status,
         "status_msg": STATUS_MESSAGES.get(status, f"Unknown {bytes(status).hex()}"),
         "body": body,
+        "body_hex": body_hex,
         "raw": raw.hex(),
     }

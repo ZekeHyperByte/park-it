@@ -22,11 +22,14 @@ REFRESH_COOKIE_NAME = "refresh_token"
 
 def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
     """Set httpOnly auth cookies."""
+    from shared.config import get_settings
+
+    is_secure = get_settings().app_env == "production"
     response.set_cookie(
         key=ACCESS_COOKIE_NAME,
         value=access_token,
         httponly=True,
-        secure=False,  # Set True in production (HTTPS)
+        secure=is_secure,
         samesite="lax",
         max_age=1800,  # 30 minutes
     )
@@ -34,7 +37,7 @@ def _set_auth_cookies(response: Response, access_token: str, refresh_token: str)
         key=REFRESH_COOKIE_NAME,
         value=refresh_token,
         httponly=True,
-        secure=False,
+        secure=is_secure,
         samesite="lax",
         max_age=604800,  # 7 days
     )
@@ -118,7 +121,10 @@ async def me(
     if user_payload is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-    user_id = int(user_payload["sub"])
+    try:
+        user_id = int(user_payload["sub"])
+    except (KeyError, ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
     user = await get_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")

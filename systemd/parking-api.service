@@ -1,6 +1,7 @@
 [Unit]
 Description=E-Parking API (FastAPI + Gunicorn)
-After=network.target
+After=network.target redis.service postgresql.service
+Wants=redis.service postgresql.service
 
 [Service]
 Type=simple

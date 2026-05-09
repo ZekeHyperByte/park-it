@@ -3,9 +3,10 @@
 import hashlib
 import os
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from shared.logging import get_logger
 from workers.background.settlement_file import generate_filename, build_settlement_content
@@ -14,6 +15,18 @@ logger = get_logger("settlement_worker")
 
 # Settlement files storage path
 SETTLEMENT_DIR = os.environ.get("SETTLEMENT_DIR", "/var/lib/parking/settlements")
+
+# Multibank v1.3 §I header has TrxCount(3 digits) → max 999 trx per file.
+MAX_TRX_PER_FILE = 999
+
+# All settlement timestamps and batch counters are in Asia/Jakarta. The bank
+# expects local-time filenames, and the daily batch counter must reset on the
+# operational day boundary (not UTC midnight).
+JAKARTA_TZ = ZoneInfo(os.environ.get("APP_TIMEZONE", "Asia/Jakarta"))
+
+# PASSTI card type code for QR Payment. Multibank v1.3 §I states cardtype 09
+# does NOT need to be settled with the bank.
+QR_CARD_TYPE_CODE = 0x09
 
 
 async def generate_settlement_file(ctx, db=None) -> dict:
@@ -47,13 +60,19 @@ async def generate_settlement_file(ctx, db=None) -> dict:
                 yield session
 
     async with _session() as db:
-        # Find all readers with unsettled SUCCESS transactions
+        # Find all readers with unsettled SUCCESS transactions, excluding QR.
+        # Multibank v1.3 §I: cardtype 09 (QR Payment) doesn't need to settle
+        # with the bank (settled by the QR provider separately).
         reader_ids_result = await db.execute(
             select(EmoneyTransaction.emoney_reader_id)
             .where(
                 EmoneyTransaction.settlement_batch_id.is_(None),
                 EmoneyTransaction.status == "SUCCESS",
                 EmoneyTransaction.emoney_reader_id.isnot(None),
+                or_(
+                    EmoneyTransaction.card_type_code != QR_CARD_TYPE_CODE,
+                    EmoneyTransaction.card_type_code.is_(None),
+                ),
             )
             .distinct()
         )
@@ -63,6 +82,9 @@ async def generate_settlement_file(ctx, db=None) -> dict:
             logger.info("generate_settlement_no_transactions")
             return {"status": "success", "files_generated": 0, "total_transactions": 0}
 
+        now_jkt = datetime.now(JAKARTA_TZ)
+        date_jkt_iso = now_jkt.date().isoformat()
+
         for reader_id in reader_ids:
             # Get reader details
             reader = await db.get(EmoneyReader, reader_id)
@@ -70,85 +92,93 @@ async def generate_settlement_file(ctx, db=None) -> dict:
                 logger.warning("generate_settlement_skip_no_mid_tid", reader_id=reader_id)
                 continue
 
-            # Get unsettled transactions for this reader
+            # Fetch settle-eligible transactions for this reader (excluding QR).
             tx_result = await db.execute(
                 select(EmoneyTransaction)
                 .where(
                     EmoneyTransaction.settlement_batch_id.is_(None),
                     EmoneyTransaction.status == "SUCCESS",
                     EmoneyTransaction.emoney_reader_id == reader_id,
+                    or_(
+                        EmoneyTransaction.card_type_code != QR_CARD_TYPE_CODE,
+                        EmoneyTransaction.card_type_code.is_(None),
+                    ),
                 )
                 .order_by(EmoneyTransaction.created_at)
             )
-            transactions = tx_result.scalars().all()
+            transactions = list(tx_result.scalars().all())
 
             if not transactions:
                 continue
 
-            # Get next batch number from Redis (resets daily)
             redis = ctx.get("redis")
-            batch_number = 1
-            if redis:
-                try:
-                    batch_key = f"settlement:batch:{reader_id}:{date.today().isoformat()}"
-                    current = await redis.get(batch_key)
-                    if current:
-                        batch_number = int(current) + 1
-                    await redis.set(batch_key, str(batch_number), ex=86400)
-                except Exception:
-                    pass
 
-            now = datetime.now(timezone.utc)
-            total_amount = sum(tx.amount_deducted for tx in transactions)
+            # Multibank v1.3 §I: max 999 trx per file. Chunk and emit one file
+            # per chunk with monotonically increasing batch_number (resets daily).
+            for chunk_start in range(0, len(transactions), MAX_TRX_PER_FILE):
+                chunk = transactions[chunk_start : chunk_start + MAX_TRX_PER_FILE]
 
-            filename = generate_filename(
-                settlement_datetime=now,
-                mid=reader.mid,
-                tid=reader.tid,
-                batch_number=batch_number,
-            )
+                batch_number = await _next_batch_number(redis, reader_id, date_jkt_iso)
 
-            tx_dicts = [{"raw_response_hex": tx.raw_response_hex or ""} for tx in transactions]
-            content = build_settlement_content(tx_dicts, total_amount)
+                chunk_total = sum(tx.amount_deducted for tx in chunk)
 
-            # Write file
-            file_path = os.path.join(SETTLEMENT_DIR, filename)
-            with open(file_path, "w", encoding="ascii") as f:
-                f.write(content)
+                filename = generate_filename(
+                    settlement_datetime=now_jkt,
+                    mid=reader.mid,
+                    tid=reader.tid,
+                    batch_number=batch_number,
+                )
 
-            # Compute hash
-            file_hash = hashlib.sha256(content.encode("ascii")).hexdigest()
+                tx_dicts = [
+                    {"settlement_payload_hex": tx.settlement_payload_hex or ""}
+                    for tx in chunk
+                ]
+                content = build_settlement_content(tx_dicts, chunk_total)
 
-            # Create settlement record
-            settlement = EmoneySettlement(
-                filename=filename,
-                file_path=file_path,
-                batch_date=date.today(),
-                batch_number=batch_number,
-                total_transactions=len(transactions),
-                total_amount=total_amount,
-                status="GENERATED",
-                file_content_hash=file_hash,
-            )
-            db.add(settlement)
-            await db.flush()  # Get settlement.id
+                # Write file
+                file_path = os.path.join(SETTLEMENT_DIR, filename)
+                with open(file_path, "w", encoding="ascii") as f:
+                    f.write(content)
 
-            # Link transactions to settlement
-            for tx in transactions:
-                tx.settlement_batch_id = settlement.id
+                # Compute hash
+                file_hash = hashlib.sha256(content.encode("ascii")).hexdigest()
 
-            await db.commit()
+                # Create settlement record
+                settlement = EmoneySettlement(
+                    filename=filename,
+                    file_path=file_path,
+                    batch_date=now_jkt.date(),
+                    batch_number=batch_number,
+                    total_transactions=len(chunk),
+                    total_amount=chunk_total,
+                    status="GENERATED",
+                    file_content_hash=file_hash,
+                )
+                db.add(settlement)
+                await db.flush()  # Get settlement.id
 
-            files_generated += 1
-            total_transactions += len(transactions)
+                # Link transactions to settlement
+                for tx in chunk:
+                    tx.settlement_batch_id = settlement.id
 
-            logger.info(
-                "generate_settlement_file_created",
-                filename=filename,
-                reader_id=reader_id,
-                transactions=len(transactions),
-                amount=total_amount,
-            )
+                await db.commit()
+
+                files_generated += 1
+                total_transactions += len(chunk)
+
+                logger.info(
+                    "generate_settlement_file_created",
+                    filename=filename,
+                    reader_id=reader_id,
+                    transactions=len(chunk),
+                    amount=chunk_total,
+                    batch_number=batch_number,
+                )
+
+                # Hand off to the upload job. ARQ will retry on failure
+                # (and won't double-upload because the upload_settlement_job
+                # checks current status before sending).
+                await _enqueue_upload(ctx, settlement.id)
 
     logger.info(
         "generate_settlement_job_complete",
@@ -161,3 +191,54 @@ async def generate_settlement_file(ctx, db=None) -> dict:
         "files_generated": files_generated,
         "total_transactions": total_transactions,
     }
+
+
+async def _enqueue_upload(ctx: dict, settlement_id: int) -> None:
+    """Enqueue the SFTP upload job for a freshly generated settlement.
+
+    Best-effort: if the ARQ redis client isn't in ctx, log and skip — the
+    settlement file is already on disk and the next cron tick will retry.
+    """
+    arq_redis = ctx.get("redis")
+    if arq_redis is None:
+        logger.warning("settlement_upload_no_arq_redis", settlement_id=settlement_id)
+        return
+    try:
+        # ARQ context's `redis` is its own ArqRedis instance; it has enqueue_job.
+        if hasattr(arq_redis, "enqueue_job"):
+            await arq_redis.enqueue_job(
+                "upload_settlement_job",
+                settlement_id,
+                _queue_name="arq:queue:background",
+            )
+        else:
+            # In tests we may pass a plain mock — silently no-op.
+            logger.debug("settlement_upload_skipped_no_arq", settlement_id=settlement_id)
+    except Exception as e:
+        logger.warning(
+            "settlement_upload_enqueue_failed",
+            settlement_id=settlement_id,
+            error=str(e),
+        )
+
+
+async def _next_batch_number(redis, reader_id: int, date_iso: str) -> int:
+    """Atomically allocate the next daily batch number for a reader.
+
+    Multibank v1.3 §I: batch_no resets daily (in operational timezone). Uses
+    Redis INCR for atomicity so concurrent settlement runs never collide.
+    Falls back to 1 if redis is unavailable (acceptable: subsequent runs may
+    reuse the number, but the bank dedupes by file content hash).
+    """
+    if redis is None:
+        return 1
+    try:
+        batch_key = f"settlement:batch:{reader_id}:{date_iso}"
+        n = await redis.incr(batch_key)
+        # Set expiry only on the first INCR (n == 1) to avoid extending it.
+        if n == 1:
+            await redis.expire(batch_key, 172800)  # 48h: covers late-night settles
+        return int(n)
+    except Exception:
+        logger.warning("settlement_batch_redis_unavailable", reader_id=reader_id)
+        return 1

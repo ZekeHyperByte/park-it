@@ -1,11 +1,13 @@
-"""Rate limiting middleware using Redis token bucket.
+"""Rate limiting middleware using Redis with in-memory fallback.
 
 Provides configurable rate limits per endpoint path pattern.
+Falls back to in-memory tracking when Redis is unavailable.
 """
 
 from __future__ import annotations
 
 import time
+from collections import defaultdict
 from typing import Callable
 
 from fastapi import Request, Response
@@ -49,6 +51,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.limits = limits or DEFAULT_LIMITS
         self.fallback_limit = fallback_limit or DEFAULT_FALLBACK
+        # In-memory fallback when Redis is unavailable
+        self._mem_buckets: dict[str, list[float]] = defaultdict(list)
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         path = request.url.path
@@ -155,6 +159,29 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return True, 0
 
         except Exception as e:
-            # If Redis is unavailable, allow the request (fail open)
-            logger.error("rate_limit_redis_error", error=str(e), redis_key=redis_key)
-            return True, 0
+            # Redis unavailable — fall back to in-memory rate limiting
+            logger.warning("rate_limit_redis_fallback", error=str(e), redis_key=redis_key)
+            return self._check_limit_memory(redis_key, max_requests, window)
+
+    def _check_limit_memory(
+        self,
+        key: str,
+        max_requests: int,
+        window: int,
+    ) -> tuple[bool, int]:
+        """In-memory fallback rate limiter (per-process, not distributed)."""
+        now = time.time()
+        window_start = now - window
+
+        # Clean old entries
+        self._mem_buckets[key] = [
+            ts for ts in self._mem_buckets[key] if ts > window_start
+        ]
+
+        if len(self._mem_buckets[key]) >= max_requests:
+            oldest = self._mem_buckets[key][0] if self._mem_buckets[key] else now
+            retry_after = max(1, int(oldest + window - now))
+            return False, retry_after
+
+        self._mem_buckets[key].append(now)
+        return True, 0
