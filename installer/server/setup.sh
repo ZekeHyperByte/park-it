@@ -236,6 +236,39 @@ done
 mkdir -p /var/lib/parking/{snapshots,settlements,logs}
 chown -R parking:parking /var/lib/parking
 
+# ── 11b. Drop sudoers rule for setup wizard ────────────────────────────────────
+step "11b/12 — Sudoers Drop for Wizard"
+
+cat > /etc/sudoers.d/parking-setup <<EOF
+# Allow the parking user to invoke setup wizard helpers without a password.
+# Audited by /etc/audit/rules.d if enabled.
+parking ALL=(root) NOPASSWD: ${PROJECT_ROOT}/scripts/detect-serial-devices.sh
+parking ALL=(root) NOPASSWD: ${PROJECT_ROOT}/scripts/enable-gate-daemons.sh
+parking ALL=(root) NOPASSWD: /usr/bin/systemctl start parking-daemon-gate-*
+parking ALL=(root) NOPASSWD: /usr/bin/systemctl enable parking-daemon-gate-*
+parking ALL=(root) NOPASSWD: /usr/bin/systemctl restart parking-daemon-gate-*
+parking ALL=(root) NOPASSWD: /usr/bin/udevadm control --reload-rules
+parking ALL=(root) NOPASSWD: /usr/bin/udevadm trigger *
+parking ALL=(root) NOPASSWD: /usr/bin/udevadm settle *
+EOF
+chmod 0440 /etc/sudoers.d/parking-setup
+if ! visudo -cf /etc/sudoers.d/parking-setup >/dev/null; then
+    error "sudoers drop failed validation; aborting."
+    rm -f /etc/sudoers.d/parking-setup
+    exit 1
+fi
+ok "Sudoers drop installed at /etc/sudoers.d/parking-setup"
+
+# ── 11c. Generate one-time setup token ─────────────────────────────────────────
+step "11c/12 — Setup Wizard Token"
+
+mkdir -p /etc/parking
+SETUP_TOKEN=$(openssl rand -hex 32)
+echo -n "$SETUP_TOKEN" > /etc/parking/setup-token
+chown root:parking /etc/parking/setup-token
+chmod 0640 /etc/parking/setup-token
+ok "Token written to /etc/parking/setup-token"
+
 # ── 12. Configure nginx ─────────────────────────────────────────────────────────
 step "12/12 — Configuring Nginx"
 
@@ -304,18 +337,19 @@ info "  systemctl status parking-worker-critical"
 info "  systemctl status parking-worker-bg"
 info "  systemctl status nginx"
 echo ""
-warn "Next steps:"
-echo "  1. Log in as admin at http://${SERVER_IP}"
-echo "  2. Go to Device → Gates and add your gates (GIN01, GIN02, GOUT01, GOUT02)"
-echo "  3. Go to Device → Booth POS and add booth records"
-echo "  4. Link gates to booths"
-echo "  5. Start gate daemons (reads config from DB):"
-echo "       cd /opt/parking-system-v2 && ./scripts/enable-gate-daemons.sh --run"
-echo "     Or manually:"
-echo "       sudo systemctl enable --now parking-daemon-gate-in@GIN01"
-echo "       sudo systemctl enable --now parking-daemon-gate-in@GIN02"
-echo "       sudo systemctl enable --now parking-daemon-gate-out@GOUT01"
-echo "       sudo systemctl enable --now parking-daemon-gate-out@GOUT02"
+SETUP_URL="http://${SERVER_IP}/setup?token=${SETUP_TOKEN}"
 echo ""
-echo "  Daemons auto-start on boot after 'enable'. You only need to do this once."
+echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${GREEN}  OPEN THIS LINK ON THE INSTALLER LAPTOP TO FINISH CONFIGURATION${NC}"
+echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo "  ${SETUP_URL}"
+echo ""
+echo "  Token expires when redeemed or after 24h, whichever comes first."
+echo "  Regenerate by re-running this script if you lose it."
+
+# Auto-launch Chrome if a desktop session is present.
+if [[ -n "${DISPLAY:-}" ]] && command -v google-chrome &>/dev/null; then
+    sudo -u "${SUDO_USER:-parking}" google-chrome "$SETUP_URL" >/dev/null 2>&1 &
+    ok "Launched Chrome at ${SETUP_URL}"
+fi
 echo ""

@@ -432,19 +432,56 @@
       <Button variant="outline" @click="form.booths.push({ name: '', gate_code: '', host: '', port: 22, local_peripherals: false })">+ Tambah booth</Button>
     </section>
 
-    <section v-else-if="step === 'finalize'" class="space-y-4">
+    <section v-else-if="step === 'finalize'" class="space-y-5">
       <header class="space-y-1">
         <h2 class="text-xl font-bold text-foreground">Siap aktifkan</h2>
         <p class="text-sm text-muted-foreground">
-          Klik "Aktifkan Gate & Selesai" untuk menjalankan daemons dan menandai setup selesai.
+          Tinjau konfigurasi, lalu klik "Aktifkan Gate &amp; Selesai" untuk menjalankan
+          daemon dan menandai setup selesai.
         </p>
       </header>
+
       <ul class="rounded-lg border border-border bg-background p-4 text-sm text-foreground space-y-1">
-        <li>✓ Site: {{ form.site.name || '—' }}</li>
+        <li>✓ Lokasi: {{ form.site.name || '—' }}</li>
+        <li>✓ {{ gates.length }} gate ({{ form.topology.in_count }} masuk · {{ form.topology.out_count }} keluar)</li>
+        <li>✓ {{ form.booths.length }} booth</li>
         <li>✓ {{ form.tariff.items.length }} jenis kendaraan</li>
         <li>✓ {{ form.areas.length }} area parkir</li>
       </ul>
-      <p v-if="finalizeError" class="text-sm text-destructive">{{ finalizeError }}</p>
+
+      <section class="space-y-2">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-foreground">Pemeriksaan koneksi</h3>
+          <Button variant="outline" size="sm" :disabled="finalizeChecking" @click="runFinalizeChecks">
+            {{ finalizeChecking ? 'Memeriksa…' : 'Periksa ulang' }}
+          </Button>
+        </div>
+        <div v-if="!finalizeChecks.length" class="text-sm text-muted-foreground">
+          Klik "Periksa ulang" untuk menguji controller dan peripheral setiap gate.
+        </div>
+        <ul v-else class="space-y-1 text-sm">
+          <li
+            v-for="check in finalizeChecks"
+            :key="check.id"
+            class="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2"
+          >
+            <span class="font-medium">{{ check.label }}</span>
+            <StatusPill :status="check.status" :label="check.detail" />
+          </li>
+        </ul>
+      </section>
+
+      <section v-if="finalizing || finalizeLog.length" class="space-y-2">
+        <h3 class="text-sm font-semibold text-foreground">Aktivasi</h3>
+        <div class="max-h-64 overflow-y-auto rounded-lg border border-border bg-black/40 p-4 font-mono text-xs text-foreground">
+          <p v-for="(line, i) in finalizeLog" :key="i">{{ line }}</p>
+          <p v-if="finalizing" class="text-muted-foreground">⟳ Mengaktifkan layanan…</p>
+        </div>
+      </section>
+
+      <p v-if="finalizeError" class="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+        {{ finalizeError }}
+      </p>
     </section>
 
     <!-- Generic error banner -->
@@ -468,6 +505,7 @@ import TariffPresetCard from '~/components/setup/TariffPresetCard.vue'
 import TopologyCard from '~/components/setup/TopologyCard.vue'
 import DeviceProbeRow from '~/components/setup/DeviceProbeRow.vue'
 import PeripheralAccordion from '~/components/setup/PeripheralAccordion.vue'
+import StatusPill from '~/components/setup/StatusPill.vue'
 import WizardField from '~/components/setup/WizardField.vue'
 import { useTariffPresets } from '~/composables/useTariffPresets'
 
@@ -526,6 +564,10 @@ const tokenError = ref('')
 const preflight = reactive({ checks: [], passed: 0, warnings: 0, failed: 0 })
 const preflightLoading = ref(false)
 const finalizeError = ref('')
+const finalizeChecks = ref([])
+const finalizeChecking = ref(false)
+const finalizing = ref(false)
+const finalizeLog = ref([])
 
 const form = reactive({
   admin: { username: 'admin', full_name: '', email: '', password: '', confirm: '' },
@@ -904,14 +946,72 @@ function onNavigate(idx) {
   if (idx <= currentIndex.value) currentIndex.value = idx
 }
 
+async function runFinalizeChecks() {
+  finalizeChecking.value = true
+  const checks = []
+  try {
+    for (const g of gates.value) {
+      const id = `${g.code}-controller`
+      const body = g.protocol === 'serial'
+        ? { type: 'serial', device: g.controller_device || '', baudrate: g.controller_baudrate || 9600 }
+        : { type: 'tcp', host: g.controller_host || '', port: g.controller_port || 0 }
+      if (!body.device && !(body.host && body.port)) {
+        checks.push({ id, label: `${g.code} controller`, status: 'warning', detail: 'belum diatur' })
+        continue
+      }
+      try {
+        const res = await fetchApi('/api/setup/test-device', { method: 'POST', body: JSON.stringify(body) })
+        checks.push({
+          id,
+          label: `${g.code} controller`,
+          status: res.ok ? 'online' : 'offline',
+          detail: res.ok ? `${Math.round(res.latency_ms || 0)}ms` : (res.error || 'gagal'),
+        })
+      } catch (err) {
+        checks.push({ id, label: `${g.code} controller`, status: 'offline', detail: err.message })
+      }
+
+      for (const [name, cfg] of Object.entries(g.peripherals)) {
+        if (!cfg.enabled || !cfg.device) continue
+        try {
+          const res = await fetchApi('/api/setup/test-device', {
+            method: 'POST',
+            body: JSON.stringify({ type: 'serial', device: cfg.device, baudrate: cfg.baudrate || 9600 }),
+          })
+          checks.push({
+            id: `${g.code}-${name}`,
+            label: `${g.code} ${name}`,
+            status: res.ok ? 'online' : 'offline',
+            detail: res.ok ? 'siap' : (res.error || 'gagal'),
+          })
+        } catch (err) {
+          checks.push({ id: `${g.code}-${name}`, label: `${g.code} ${name}`, status: 'offline', detail: err.message })
+        }
+      }
+    }
+  } finally {
+    finalizeChecks.value = checks
+    finalizeChecking.value = false
+  }
+}
+
 async function onFinalize() {
   finalizeError.value = ''
+  finalizing.value = true
+  finalizeLog.value = []
   busy.value = true
   try {
-    // P3 endpoint — wired in a later commit. Optimistically attempt it.
-    await fetchApi('/api/setup/finalize', { method: 'POST' }).catch(() => null)
+    const res = await fetchApi('/api/setup/finalize', { method: 'POST' })
+    if (res.log) finalizeLog.value = res.log
+    if (!res.ok) {
+      finalizeError.value = res.error || 'Aktivasi gagal.'
+      return
+    }
     await router.push('/')
+  } catch (err) {
+    finalizeError.value = err.message
   } finally {
+    finalizing.value = false
     busy.value = false
   }
 }
