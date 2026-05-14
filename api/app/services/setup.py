@@ -6,9 +6,15 @@ import asyncio
 import hmac
 import secrets
 import shlex
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
+
+# Installer-generated setup tokens auto-expire after this many seconds — even
+# if never redeemed. Protects against tokens leaked into shell history that
+# the operator forgot about.
+SETUP_TOKEN_MAX_AGE_SECONDS = 24 * 60 * 60
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,10 +31,30 @@ SETUP_TOPOLOGY = Literal["combo", "server_only", "booth_only", "unknown"]
 
 
 def read_setup_token() -> str | None:
-    """Read installer-generated setup token from disk."""
+    """Read installer-generated setup token from disk.
+
+    Returns None if absent, unreadable, empty, or older than
+    SETUP_TOKEN_MAX_AGE_SECONDS. Stale tokens are unlinked as a side effect
+    so they don't accumulate.
+    """
     path = Path(get_settings().setup_token_path)
     if not path.exists():
         return None
+    try:
+        stat = path.stat()
+    except OSError as exc:
+        logger.warning("setup_token_stat_failed", error=str(exc))
+        return None
+
+    age = time.time() - stat.st_mtime
+    if age > SETUP_TOKEN_MAX_AGE_SECONDS:
+        logger.warning("setup_token_expired", age_seconds=int(age))
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return None
+
     try:
         token = path.read_text(encoding="utf-8").strip()
     except OSError as exc:

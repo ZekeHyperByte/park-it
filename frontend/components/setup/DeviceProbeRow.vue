@@ -47,8 +47,27 @@
         {{ testing ? 'Menguji…' : 'Test' }}
       </Button>
 
+      <Button
+        v-if="canPin"
+        type="button"
+        variant="outline"
+        size="sm"
+        :disabled="pinning"
+        class="h-10"
+        @click="confirmPin"
+      >
+        {{ pinning ? 'Memasang…' : pinLabel }}
+      </Button>
+
       <StatusPill v-if="testStatus" :status="testStatus" :label="testLabel" />
     </div>
+
+    <p v-if="pinConfirmFor" class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+      Pasang {{ pinConfirmFor }} sebagai <span class="font-mono">/dev/parking-{{ role }}</span>?
+      Akan tulis aturan udev permanen.
+      <button class="ml-2 underline" @click="doPin">Pasang</button>
+      <button class="ml-2 underline" @click="pinConfirmFor = ''">Batal</button>
+    </p>
 
     <div v-else class="flex flex-wrap items-end gap-2">
       <WizardField label="Host / IP" class="flex-1 min-w-[200px]">
@@ -93,6 +112,8 @@ const baudrates = [9600, 19200, 38400, 57600, 115200]
 const candidates = ref([])
 const detecting = ref(false)
 const testing = ref(false)
+const pinning = ref(false)
+const pinConfirmFor = ref('')
 const testStatus = ref('')
 const testLabel = ref('')
 const errorDetail = ref('')
@@ -114,6 +135,12 @@ const effectiveDevice = computed(() =>
 
 const hasDevice = computed(() => !!effectiveDevice.value)
 
+const isPinned = computed(() => (effectiveDevice.value || '').startsWith('/dev/parking-'))
+
+const canPin = computed(() => props.type === 'serial' && !!props.role && hasDevice.value && !isPinned.value)
+
+const pinLabel = computed(() => `Pasang /dev/parking-${props.role}`)
+
 function emitUpdate() {
   if (props.type === 'serial') {
     emit('update:device', effectiveDevice.value)
@@ -130,12 +157,13 @@ async function detect() {
   try {
     const res = await fetchApi('/api/setup/detect-serial', { method: 'POST' })
     candidates.value = res.candidates || []
+    // Pre-select a suggested-role match in the dropdown but DO NOT write
+    // udev or commit any persistent change. Tech still has to click Test +
+    // explicit "Pasang" to make the symlink permanent.
     const match = candidates.value.find((c) => c.suggested_role === props.role)
     if (match && !localDevice.value) {
       localDevice.value = match.port
       emitUpdate()
-      // Persist a stable symlink for the suggested role.
-      if (props.role) writeUdev(match.port)
     }
   } catch (err) {
     errorDetail.value = `Gagal deteksi: ${err.message}`
@@ -144,8 +172,17 @@ async function detect() {
   }
 }
 
-async function writeUdev(port) {
-  if (!props.role) return
+function confirmPin() {
+  if (!hasDevice.value) return
+  pinConfirmFor.value = effectiveDevice.value
+}
+
+async function doPin() {
+  const port = pinConfirmFor.value
+  pinConfirmFor.value = ''
+  if (!port || !props.role) return
+  pinning.value = true
+  errorDetail.value = ''
   try {
     const res = await fetchApi('/api/setup/write-udev', {
       method: 'POST',
@@ -155,9 +192,13 @@ async function writeUdev(port) {
       localDevice.value = res.symlink
       emit('write-udev', res.symlink)
       emitUpdate()
+    } else {
+      errorDetail.value = res.error || 'Gagal pasang udev.'
     }
   } catch (err) {
     errorDetail.value = `Gagal pasang udev: ${err.message}`
+  } finally {
+    pinning.value = false
   }
 }
 

@@ -391,46 +391,6 @@
       </div>
     </section>
 
-    <!-- Step: Booth -->
-    <section v-else-if="step === 'booth'" class="space-y-5">
-      <header class="space-y-1">
-        <h2 class="text-xl font-bold text-foreground">Loket / Booth PC</h2>
-        <p class="text-sm text-muted-foreground">
-          Tambah PC operator untuk setiap loket. IP diuji otomatis (ping).
-        </p>
-      </header>
-
-      <div v-for="(booth, idx) in form.booths" :key="idx" class="space-y-3 rounded-lg border border-border bg-background p-4">
-        <div class="flex items-center justify-between">
-          <p class="text-sm font-semibold text-foreground">Booth #{{ idx + 1 }}</p>
-          <Button variant="ghost" size="sm" :disabled="form.booths.length <= 1" @click="form.booths.splice(idx, 1)">Hapus</Button>
-        </div>
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <WizardField label="Nama" required>
-            <Input v-model="booth.name" placeholder="Booth Utama" />
-          </WizardField>
-          <WizardField label="Gate yang dilayani">
-            <select v-model="booth.gate_code" class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono">
-              <option value="">— pilih gate —</option>
-              <option v-for="g in gates" :key="g.code" :value="g.code">{{ g.code }} ({{ g.direction }})</option>
-            </select>
-          </WizardField>
-        </div>
-        <DeviceProbeRow
-          type="tcp"
-          :host="booth.host || ''"
-          :port="booth.port || 22"
-          @update:host="(v) => booth.host = v"
-          @update:port="(v) => booth.port = v"
-        />
-        <label class="flex items-center gap-2 text-sm text-foreground">
-          <input type="checkbox" v-model="booth.local_peripherals" class="h-4 w-4 accent-primary" />
-          Booth ini punya printer/e-money lokal.
-        </label>
-      </div>
-
-      <Button variant="outline" @click="form.booths.push({ name: '', gate_code: '', host: '', port: 22, local_peripherals: false })">+ Tambah booth</Button>
-    </section>
 
     <section v-else-if="step === 'finalize'" class="space-y-5">
       <header class="space-y-1">
@@ -444,10 +404,12 @@
       <ul class="rounded-lg border border-border bg-background p-4 text-sm text-foreground space-y-1">
         <li>✓ Lokasi: {{ form.site.name || '—' }}</li>
         <li>✓ {{ gates.length }} gate ({{ form.topology.in_count }} masuk · {{ form.topology.out_count }} keluar)</li>
-        <li>✓ {{ form.booths.length }} booth</li>
         <li>✓ {{ form.tariff.items.length }} jenis kendaraan</li>
         <li>✓ {{ form.areas.length }} area parkir</li>
       </ul>
+      <p class="text-xs text-muted-foreground">
+        Booth POS dikonfigurasi dari menu Pengaturan setelah wizard selesai.
+      </p>
 
       <section class="space-y-2">
         <div class="flex items-center justify-between">
@@ -532,15 +494,18 @@ const tariffPresets = useTariffPresets()
 
 const today = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' })
 
+// Step order groups all paperwork (admin → site → tariff → areas) before any
+// physical-hardware work (topology → gates), so the tech only walks to the
+// gates once. Booth-bridge configuration is intentionally out of scope —
+// configure booths from the Pengaturan page after the wizard finishes.
 const steps = [
   { key: 'welcome', label: 'Mulai' },
   { key: 'admin', label: 'Admin' },
   { key: 'site', label: 'Lokasi' },
-  { key: 'topology', label: 'Topologi' },
-  { key: 'gates', label: 'Gate' },
-  { key: 'booth', label: 'Booth' },
   { key: 'tariff', label: 'Tarif' },
   { key: 'areas', label: 'Area' },
+  { key: 'topology', label: 'Topologi' },
+  { key: 'gates', label: 'Gate' },
   { key: 'finalize', label: 'Selesai' },
 ]
 
@@ -578,7 +543,6 @@ const form = reactive({
     items: [],
   },
   areas: [{ name: 'Area Utama', code: 'MAIN', capacity: 100 }],
-  booths: [{ name: 'Booth Utama', gate_code: '', host: '', port: 22, local_peripherals: true }],
 })
 
 const gates = ref([])
@@ -663,7 +627,6 @@ const canAdvance = computed(() => {
   if (step.value === 'site') return !!form.site.name
   if (step.value === 'topology') return (form.topology.in_count + form.topology.out_count) > 0
   if (step.value === 'gates') return gates.value.length > 0
-  if (step.value === 'booth') return form.booths.every((b) => b.name)
   if (step.value === 'tariff') return form.tariff.items.length > 0
   if (step.value === 'areas') return form.areas.every((a) => a.name && a.code && a.capacity >= 0)
   return true
@@ -891,9 +854,6 @@ async function saveCurrentStep() {
     } finally {
       busy.value = false
     }
-  } else if (step.value === 'booth') {
-    // Booth config currently lives in hardware_config; persist via setup state for now.
-    // Frontend booth-bridge configuration is out of scope for the wizard MVP.
   } else if (step.value === 'areas') {
     try {
       busy.value = true
@@ -925,7 +885,6 @@ function snapshotForStep(stepKey) {
   if (stepKey === 'site') return { ...form.site }
   if (stepKey === 'topology') return { ...form.topology }
   if (stepKey === 'gates') return { gates: gates.value }
-  if (stepKey === 'booth') return { booths: form.booths }
   if (stepKey === 'tariff') return { preset: form.tariff.preset, items: form.tariff.items }
   if (stepKey === 'areas') return { areas: form.areas }
   return {}
