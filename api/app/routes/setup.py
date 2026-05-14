@@ -11,34 +11,51 @@ Authentication model:
 
 from __future__ import annotations
 
+import asyncio
+import json
+import os
 import sys
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.middleware.auth import get_current_user
+from api.app.models.gate import Gate
 from api.app.models.setup_session import SetupSession
 from api.app.models.user import User
 from api.app.schemas.common import SuccessResponse
 from api.app.schemas.setup import (
     CreateAdminRequest,
+    DetectSerialCandidate,
+    DetectSerialResponse,
+    FinalizeResponse,
     PreflightCheckResult,
     PreflightResponse,
     RedeemTokenRequest,
     SetupStateResponse,
     SetupStateUpdate,
+    TestDeviceRequest,
+    TestDeviceResponse,
+    TopologyApplyRequest,
+    WriteUdevRequest,
+    WriteUdevResponse,
 )
 from api.app.schemas.user import UserResponse
 from api.app.services.auth import create_tokens
 from api.app.services.setup import (
     constant_time_eq,
     create_session,
+    delete_session,
     delete_setup_token,
     detect_topology,
     get_session_by_token,
     has_any_admin,
+    mark_setup_complete,
     read_setup_token,
+    run_script_json,
     save_session_step,
     setup_complete as setup_complete_q,
 )
@@ -283,3 +300,214 @@ async def read_session(
             detail="No active setup session",
         )
     return {"current_step": session.current_step, "data": session.data}
+
+
+# ────────────────────────────────────────────────────────────────────────
+# Hardware probe / apply endpoints (P2)
+# ────────────────────────────────────────────────────────────────────────
+
+
+def _script_path(name: str) -> str:
+    return str(Path(get_settings().parking_install_root) / "scripts" / name)
+
+
+def _sudo_prefix() -> list[str]:
+    """Return ['sudo', '-n'] when not running as root, else empty."""
+    if os.geteuid() == 0:
+        return []
+    return ["sudo", "-n"]
+
+
+@router.post("/detect-serial", response_model=DetectSerialResponse)
+async def detect_serial(
+    auth=Depends(require_setup_or_admin),
+) -> DetectSerialResponse:
+    """Run scripts/detect-serial-devices.sh --json (read-only, no root needed)."""
+    cmd = ["bash", _script_path("detect-serial-devices.sh"), "--json"]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=20.0)
+    except asyncio.TimeoutError:
+        proc.kill()
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="detect-serial-devices.sh timed out",
+        )
+
+    try:
+        payload = json.loads(stdout.decode("utf-8", errors="ignore") or "{}")
+    except json.JSONDecodeError:
+        logger.warning("detect_serial_bad_json", stderr=stderr.decode(errors="ignore"))
+        return DetectSerialResponse(candidates=[])
+
+    candidates = [
+        DetectSerialCandidate(**c)
+        for c in payload.get("candidates", [])
+        if c.get("port")
+    ]
+    return DetectSerialResponse(candidates=candidates)
+
+
+@router.post("/test-device", response_model=TestDeviceResponse)
+async def test_device(
+    body: TestDeviceRequest,
+    auth=Depends(require_setup_or_admin),
+) -> TestDeviceResponse:
+    """Probe serial port / TCP endpoint / ping target — returns latency or error."""
+    py = sys.executable or "python3"
+    script = _script_path("test_device.py")
+    args: list[str] = [py, script, body.type]
+
+    if body.type == "serial":
+        if not body.device:
+            raise HTTPException(status_code=400, detail="device required for serial probe")
+        args += ["--device", body.device, "--baudrate", str(body.baudrate or 9600)]
+    elif body.type == "tcp":
+        if not body.host or not body.port:
+            raise HTTPException(status_code=400, detail="host and port required for tcp probe")
+        args += ["--host", body.host, "--port", str(body.port)]
+    else:  # ping
+        if not body.host:
+            raise HTTPException(status_code=400, detail="host required for ping")
+        args += ["--host", body.host]
+
+    proc = await asyncio.create_subprocess_exec(
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+    except asyncio.TimeoutError:
+        proc.kill()
+        return TestDeviceResponse(ok=False, error="probe timed out after 10s")
+
+    try:
+        payload = json.loads(stdout.decode("utf-8", errors="ignore"))
+    except json.JSONDecodeError:
+        return TestDeviceResponse(
+            ok=False,
+            error=stderr.decode("utf-8", errors="ignore").strip() or "probe returned non-JSON",
+        )
+    return TestDeviceResponse(**payload)
+
+
+@router.post("/write-udev", response_model=WriteUdevResponse)
+async def write_udev(
+    body: WriteUdevRequest,
+    auth=Depends(require_setup_or_admin),
+) -> WriteUdevResponse:
+    """Write a single udev symlink rule, atomically, via the detection script."""
+    cmd = [
+        *_sudo_prefix(),
+        "bash",
+        _script_path("detect-serial-devices.sh"),
+        "--write-udev",
+        body.role,
+        body.port,
+    ]
+    ok, stdout, stderr = await run_script_json(*cmd, timeout=15.0)
+    try:
+        payload = json.loads(stdout or "{}")
+    except json.JSONDecodeError:
+        return WriteUdevResponse(
+            ok=False,
+            error=(stderr.strip() or stdout.strip() or "udev write returned non-JSON"),
+        )
+    payload.setdefault("ok", ok)
+    return WriteUdevResponse(**payload)
+
+
+@router.post("/topology", response_model=SuccessResponse)
+async def apply_topology(
+    body: TopologyApplyRequest,
+    db: AsyncSession = Depends(get_db),
+    auth=Depends(require_setup_or_admin),
+) -> SuccessResponse:
+    """Bulk-create gates so subsequent steps can configure each one."""
+    # Idempotent: skip codes that already exist.
+    result = await db.execute(select(Gate.code))
+    existing = {row[0] for row in result.all()}
+
+    created = 0
+    for n in range(body.in_count):
+        code = f"GIN-{n + 1:02d}"
+        if code in existing:
+            continue
+        db.add(
+            Gate(
+                name=f"Pintu Masuk {n + 1}",
+                code=code,
+                direction="IN",
+                protocol="compass",
+                hardware_config={},
+            )
+        )
+        created += 1
+    for n in range(body.out_count):
+        code = f"GOUT-{n + 1:02d}"
+        if code in existing:
+            continue
+        db.add(
+            Gate(
+                name=f"Pintu Keluar {n + 1}",
+                code=code,
+                direction="OUT",
+                protocol="compass",
+                hardware_config={},
+            )
+        )
+        created += 1
+    await db.commit()
+    return SuccessResponse(
+        message=f"Topology applied ({created} new gate(s))",
+        data={"created": created, "include_local_serial": body.include_local_serial},
+    )
+
+
+@router.post("/finalize", response_model=FinalizeResponse)
+async def finalize(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    auth=Depends(require_setup_or_admin),
+) -> FinalizeResponse:
+    """Run enable-gate-daemons.sh, flip setup_complete=true, delete session."""
+    log: list[str] = []
+
+    cookie = request.cookies.get(SETUP_COOKIE_NAME)
+    session = await get_session_by_token(db, cookie) if cookie else None
+    include_local = False
+    if session is not None:
+        include_local = bool(session.data.get("topology", {}).get("include_local_serial"))
+
+    cmd = [
+        *_sudo_prefix(),
+        "bash",
+        _script_path("enable-gate-daemons.sh"),
+        "--run",
+        "--json",
+    ]
+    if include_local:
+        cmd.append("--include-local-serial")
+
+    ok, stdout, stderr = await run_script_json(*cmd, timeout=120.0)
+    log.extend([line for line in stdout.splitlines() if line.strip()])
+    if stderr.strip():
+        log.append(f"stderr: {stderr.strip()}")
+
+    if not ok:
+        logger.warning("setup_finalize_script_failed", stderr=stderr)
+        return FinalizeResponse(ok=False, log=log, error="enable-gate-daemons.sh failed")
+
+    await mark_setup_complete(db, complete=True)
+    delete_setup_token()
+    if session is not None:
+        await delete_session(db, session)
+    _clear_setup_cookie(response)
+    logger.info("setup_finalized")
+    return FinalizeResponse(ok=True, log=log)
