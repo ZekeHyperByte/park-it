@@ -224,33 +224,212 @@
       <p v-if="errors.areas" class="text-sm text-destructive">{{ errors.areas }}</p>
     </section>
 
-    <!-- Step: Topology, gates, booth, go-live — placeholders for P2/P3 -->
-    <section v-else-if="step === 'topology'" class="space-y-4">
+    <!-- Step: Topology -->
+    <section v-else-if="step === 'topology'" class="space-y-5">
       <header class="space-y-1">
         <h2 class="text-xl font-bold text-foreground">Topologi sistem</h2>
         <p class="text-sm text-muted-foreground">
-          Akan diisi di tahap berikutnya (deteksi otomatis + pemilihan).
+          Deteksi otomatis: <span class="font-mono text-foreground">{{ topologyLabel }}</span>.
+          Pilih jumlah gate, kami buat baris di database supaya bisa diatur per gate.
         </p>
       </header>
-      <div class="rounded-lg border border-border bg-background p-6 text-sm text-muted-foreground">
-        <p>Topologi terdeteksi: <span class="font-mono text-foreground">{{ state.topology }}</span></p>
+
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <TopologyCard
+          v-for="opt in topologyPresets"
+          :key="opt.id"
+          :in-count="opt.in"
+          :out-count="opt.out"
+          :label="opt.label"
+          :description="opt.description"
+          :selected="form.topology.preset === opt.id"
+          @select="applyTopologyPreset(opt)"
+        />
       </div>
+
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <WizardField label="Jumlah pintu masuk">
+          <Input v-model.number="form.topology.in_count" type="number" min="0" max="8" />
+        </WizardField>
+        <WizardField label="Jumlah pintu keluar">
+          <Input v-model.number="form.topology.out_count" type="number" min="0" max="8" />
+        </WizardField>
+      </div>
+
+      <label class="flex items-center gap-2 text-sm text-foreground">
+        <input type="checkbox" v-model="form.topology.include_local_serial" class="h-4 w-4 accent-primary" />
+        Jalankan daemon gate lokal di mesin ini (combo PC).
+      </label>
     </section>
 
-    <section v-else-if="step === 'gates'" class="space-y-4">
+    <!-- Step: Gates -->
+    <section v-else-if="step === 'gates'" class="space-y-5">
       <header class="space-y-1">
         <h2 class="text-xl font-bold text-foreground">Perangkat per gate</h2>
         <p class="text-sm text-muted-foreground">
-          Akan diisi di tahap deteksi serial (P2).
+          Atur controller dan peripheral untuk setiap gate. Tekan Deteksi untuk
+          memetakan perangkat USB otomatis.
         </p>
       </header>
+
+      <div v-if="!gates.length" class="rounded-lg border border-border bg-background p-6 text-sm text-muted-foreground">
+        Belum ada gate. Kembali ke langkah Topologi.
+      </div>
+
+      <div v-else class="flex flex-wrap gap-2">
+        <button
+          v-for="(g, idx) in gates"
+          :key="g.code"
+          type="button"
+          :class="[
+            'rounded-full border px-3 py-1.5 text-xs font-medium',
+            idx === gateTab
+              ? 'border-primary bg-primary/10 text-primary'
+              : 'border-border bg-background text-muted-foreground hover:bg-surface-hover',
+          ]"
+          @click="gateTab = idx"
+        >
+          {{ g.code }} · {{ g.direction }}
+        </button>
+      </div>
+
+      <div v-if="activeGate" class="space-y-5 rounded-lg border border-border bg-background p-5">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <WizardField label="Nama gate" required>
+            <Input v-model="activeGate.name" />
+          </WizardField>
+          <WizardField label="Kode gate" helper="Tidak bisa diubah nanti">
+            <Input v-model="activeGate.code" class="font-mono" />
+          </WizardField>
+        </div>
+
+        <section class="space-y-3 rounded-md border border-border bg-surface p-4">
+          <h3 class="text-sm font-semibold text-foreground">Controller</h3>
+          <div class="flex gap-2">
+            <button
+              v-for="proto in ['compass', 'enet', 'serial']"
+              :key="proto"
+              type="button"
+              :class="[
+                'flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
+                activeGate.protocol === proto
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-background text-muted-foreground hover:bg-surface-hover',
+              ]"
+              @click="activeGate.protocol = proto"
+            >
+              {{ protocolLabel(proto) }}
+            </button>
+          </div>
+
+          <DeviceProbeRow
+            v-if="activeGate.protocol === 'serial'"
+            type="serial"
+            role="gate"
+            :device="activeGate.controller_device || ''"
+            :baudrate="activeGate.controller_baudrate || 9600"
+            @update:device="(v) => activeGate.controller_device = v"
+            @update:baudrate="(v) => activeGate.controller_baudrate = v"
+          />
+          <DeviceProbeRow
+            v-else
+            type="tcp"
+            :host="activeGate.controller_host || ''"
+            :port="activeGate.controller_port || 0"
+            @update:host="(v) => activeGate.controller_host = v"
+            @update:port="(v) => activeGate.controller_port = v"
+          />
+        </section>
+
+        <section class="space-y-2">
+          <h3 class="text-sm font-semibold text-foreground">Perangkat tambahan</h3>
+          <PeripheralAccordion
+            title="Pencetak struk"
+            :enabled="!!activeGate.peripherals.printer.enabled"
+            @update:enabled="(v) => togglePeripheral('printer', v)"
+          >
+            <DeviceProbeRow
+              type="serial"
+              role="printer"
+              :device="activeGate.peripherals.printer.device || ''"
+              :baudrate="activeGate.peripherals.printer.baudrate || 9600"
+              @update:device="(v) => activeGate.peripherals.printer.device = v"
+              @update:baudrate="(v) => activeGate.peripherals.printer.baudrate = v"
+            />
+          </PeripheralAccordion>
+
+          <PeripheralAccordion
+            title="Pemindai e-money (PASSTI)"
+            :enabled="!!activeGate.peripherals.emoney.enabled"
+            @update:enabled="(v) => togglePeripheral('emoney', v)"
+          >
+            <DeviceProbeRow
+              type="serial"
+              role="emoney"
+              :device="activeGate.peripherals.emoney.device || ''"
+              :baudrate="activeGate.peripherals.emoney.baudrate || 9600"
+              @update:device="(v) => activeGate.peripherals.emoney.device = v"
+              @update:baudrate="(v) => activeGate.peripherals.emoney.baudrate = v"
+            />
+          </PeripheralAccordion>
+
+          <PeripheralAccordion
+            title="RFID member"
+            :enabled="!!activeGate.peripherals.rfid.enabled"
+            @update:enabled="(v) => togglePeripheral('rfid', v)"
+          />
+          <PeripheralAccordion
+            title="Kamera"
+            :enabled="!!activeGate.peripherals.camera.enabled"
+            @update:enabled="(v) => togglePeripheral('camera', v)"
+          >
+            <WizardField label="RTSP URL">
+              <Input v-model="activeGate.peripherals.camera.url" placeholder="rtsp://user:pass@host/stream1" />
+            </WizardField>
+          </PeripheralAccordion>
+        </section>
+      </div>
     </section>
 
-    <section v-else-if="step === 'booth'" class="space-y-4">
+    <!-- Step: Booth -->
+    <section v-else-if="step === 'booth'" class="space-y-5">
       <header class="space-y-1">
         <h2 class="text-xl font-bold text-foreground">Loket / Booth PC</h2>
-        <p class="text-sm text-muted-foreground">Akan diisi setelah konfigurasi gate.</p>
+        <p class="text-sm text-muted-foreground">
+          Tambah PC operator untuk setiap loket. IP diuji otomatis (ping).
+        </p>
       </header>
+
+      <div v-for="(booth, idx) in form.booths" :key="idx" class="space-y-3 rounded-lg border border-border bg-background p-4">
+        <div class="flex items-center justify-between">
+          <p class="text-sm font-semibold text-foreground">Booth #{{ idx + 1 }}</p>
+          <Button variant="ghost" size="sm" :disabled="form.booths.length <= 1" @click="form.booths.splice(idx, 1)">Hapus</Button>
+        </div>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <WizardField label="Nama" required>
+            <Input v-model="booth.name" placeholder="Booth Utama" />
+          </WizardField>
+          <WizardField label="Gate yang dilayani">
+            <select v-model="booth.gate_code" class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono">
+              <option value="">— pilih gate —</option>
+              <option v-for="g in gates" :key="g.code" :value="g.code">{{ g.code }} ({{ g.direction }})</option>
+            </select>
+          </WizardField>
+        </div>
+        <DeviceProbeRow
+          type="tcp"
+          :host="booth.host || ''"
+          :port="booth.port || 22"
+          @update:host="(v) => booth.host = v"
+          @update:port="(v) => booth.port = v"
+        />
+        <label class="flex items-center gap-2 text-sm text-foreground">
+          <input type="checkbox" v-model="booth.local_peripherals" class="h-4 w-4 accent-primary" />
+          Booth ini punya printer/e-money lokal.
+        </label>
+      </div>
+
+      <Button variant="outline" @click="form.booths.push({ name: '', gate_code: '', host: '', port: 22, local_peripherals: false })">+ Tambah booth</Button>
     </section>
 
     <section v-else-if="step === 'finalize'" class="space-y-4">
@@ -286,8 +465,25 @@ import SetupShell from '~/components/setup/SetupShell.vue'
 import TokenGate from '~/components/setup/TokenGate.vue'
 import PreflightList from '~/components/setup/PreflightList.vue'
 import TariffPresetCard from '~/components/setup/TariffPresetCard.vue'
+import TopologyCard from '~/components/setup/TopologyCard.vue'
+import DeviceProbeRow from '~/components/setup/DeviceProbeRow.vue'
+import PeripheralAccordion from '~/components/setup/PeripheralAccordion.vue'
 import WizardField from '~/components/setup/WizardField.vue'
 import { useTariffPresets } from '~/composables/useTariffPresets'
+
+const topologyPresets = [
+  { id: '1in_1out', in: 1, out: 1, label: '1 In + 1 Out', description: 'Lokasi kecil, satu pintu masuk-keluar.' },
+  { id: '2in_2out', in: 2, out: 2, label: '2 In + 2 Out', description: 'Mall / perkantoran sedang.' },
+  { id: '1in_2out', in: 1, out: 2, label: '1 In + 2 Out', description: 'Aliran keluar lebih sibuk dari masuk.' },
+  { id: 'custom', in: 1, out: 1, label: 'Kustom', description: 'Atur sendiri jumlah pintu.' },
+]
+
+const protocolLabels = {
+  compass: 'Compass / TCP',
+  enet: 'ENET / TCP',
+  serial: 'Serial (USB)',
+}
+function protocolLabel(p) { return protocolLabels[p] || p }
 
 definePageMeta({ layout: false })
 
@@ -334,12 +530,80 @@ const finalizeError = ref('')
 const form = reactive({
   admin: { username: 'admin', full_name: '', email: '', password: '', confirm: '' },
   site: { name: '', address: '', city: '', phone: '', email: '', tax_id: '' },
+  topology: { preset: null, in_count: 1, out_count: 1, include_local_serial: false },
   tariff: {
     preset: null,
     items: [],
   },
   areas: [{ name: 'Area Utama', code: 'MAIN', capacity: 100 }],
+  booths: [{ name: 'Booth Utama', gate_code: '', host: '', port: 22, local_peripherals: true }],
 })
+
+const gates = ref([])
+const gateTab = ref(0)
+const activeGate = computed(() => gates.value[gateTab.value] || null)
+
+const topologyLabel = computed(() => {
+  return {
+    combo: 'Server + Booth lokal',
+    server_only: 'Server saja',
+    booth_only: 'Booth saja',
+    unknown: 'Belum terdeteksi',
+  }[state.topology] || state.topology
+})
+
+function applyTopologyPreset(opt) {
+  form.topology.preset = opt.id
+  if (opt.id !== 'custom') {
+    form.topology.in_count = opt.in
+    form.topology.out_count = opt.out
+  }
+}
+
+function blankPeripherals() {
+  return {
+    printer: { enabled: false, device: '', baudrate: 9600 },
+    emoney: { enabled: false, device: '', baudrate: 9600 },
+    rfid: { enabled: false },
+    camera: { enabled: false, url: '' },
+  }
+}
+
+function togglePeripheral(key, on) {
+  if (!activeGate.value) return
+  activeGate.value.peripherals[key].enabled = on
+}
+
+async function loadGatesFromBackend() {
+  try {
+    const res = await fetchApi('/api/gates')
+    const rows = Array.isArray(res) ? res : (res?.items || [])
+    gates.value = rows.map((g) => ({
+      id: g.id,
+      name: g.name,
+      code: g.code,
+      direction: g.direction,
+      protocol: g.protocol || 'compass',
+      controller_host: g.controller_host || '',
+      controller_port: g.controller_port || 0,
+      controller_device: g.controller_device || '',
+      controller_baudrate: g.controller_baudrate || 9600,
+      peripherals: hydratePeripherals(g.hardware_config),
+    }))
+    if (gateTab.value >= gates.value.length) gateTab.value = 0
+  } catch (err) {
+    console.warn('load_gates_failed', err)
+  }
+}
+
+function hydratePeripherals(hardware_config) {
+  const out = blankPeripherals()
+  const hc = hardware_config || {}
+  for (const k of ['printer', 'emoney', 'rfid', 'camera']) {
+    if (hc[k]) Object.assign(out[k], hc[k])
+  }
+  return out
+}
 
 const errors = reactive({ admin: '', tariff: '', areas: '', generic: '' })
 
@@ -355,6 +619,9 @@ const canAdvance = computed(() => {
     )
   }
   if (step.value === 'site') return !!form.site.name
+  if (step.value === 'topology') return (form.topology.in_count + form.topology.out_count) > 0
+  if (step.value === 'gates') return gates.value.length > 0
+  if (step.value === 'booth') return form.booths.every((b) => b.name)
   if (step.value === 'tariff') return form.tariff.items.length > 0
   if (step.value === 'areas') return form.areas.every((a) => a.name && a.code && a.capacity >= 0)
   return true
@@ -537,6 +804,54 @@ async function saveCurrentStep() {
     } finally {
       busy.value = false
     }
+  } else if (step.value === 'topology') {
+    try {
+      busy.value = true
+      await fetchApi('/api/setup/topology', {
+        method: 'POST',
+        body: JSON.stringify({
+          in_count: form.topology.in_count,
+          out_count: form.topology.out_count,
+          include_local_serial: form.topology.include_local_serial,
+        }),
+      })
+      await loadGatesFromBackend()
+    } catch (err) {
+      errors.generic = `Gagal apply topologi: ${err.message}`
+      return false
+    } finally {
+      busy.value = false
+    }
+  } else if (step.value === 'gates') {
+    try {
+      busy.value = true
+      for (const g of gates.value) {
+        const hc = {}
+        for (const [k, cfg] of Object.entries(g.peripherals)) {
+          if (cfg.enabled) hc[k] = { ...cfg }
+        }
+        await fetchApi(`/api/gates/${g.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: g.name,
+            protocol: g.protocol,
+            controller_host: g.controller_host || null,
+            controller_port: g.controller_port || null,
+            controller_device: g.controller_device || null,
+            controller_baudrate: g.controller_baudrate || null,
+            hardware_config: hc,
+          }),
+        })
+      }
+    } catch (err) {
+      errors.generic = `Gagal simpan gate: ${err.message}`
+      return false
+    } finally {
+      busy.value = false
+    }
+  } else if (step.value === 'booth') {
+    // Booth config currently lives in hardware_config; persist via setup state for now.
+    // Frontend booth-bridge configuration is out of scope for the wizard MVP.
   } else if (step.value === 'areas') {
     try {
       busy.value = true
@@ -566,6 +881,9 @@ function snapshotForStep(stepKey) {
     return safe
   }
   if (stepKey === 'site') return { ...form.site }
+  if (stepKey === 'topology') return { ...form.topology }
+  if (stepKey === 'gates') return { gates: gates.value }
+  if (stepKey === 'booth') return { booths: form.booths }
   if (stepKey === 'tariff') return { preset: form.tariff.preset, items: form.tariff.items }
   if (stepKey === 'areas') return { areas: form.areas }
   return {}
@@ -614,6 +932,13 @@ onMounted(async () => {
   if (state.has_admin) {
     // Skip admin creation step when an admin already exists.
     currentIndex.value = 1
+    await loadGatesFromBackend()
+  }
+})
+
+watch(() => step.value, async (next) => {
+  if (next === 'gates' && !gates.value.length) {
+    await loadGatesFromBackend()
   }
 })
 </script>
