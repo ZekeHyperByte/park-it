@@ -148,14 +148,25 @@ class DirectSerialTransport(EmoneyReaderTransport):
                 timeout=timeout,
             )
 
+        from protocols.passti.frame import parse_response
+
         try:
             self._serial.write(frame)
-            # Read response — PASSTI frame structure allows us to know when complete
-            raw = self._serial.read_until(expected=bytes([frame[-1]]))
+            # Read STX + LEN-H + LEN-L first to determine exact frame length.
+            # Do NOT use read_until(LRC) — the response LRC differs from the
+            # command LRC, and its value can appear inside encrypted card log data.
+            header = self._serial.read(3)
+            if len(header) < 3:
+                return {"ok": False, "error": "Serial timeout reading response header"}
+            if header[0] != 0x02:  # STX
+                return {"ok": False, "error": f"Bad response STX: {header[0]:#04x}"}
+            data_len = (header[1] << 8) | header[2]
+            rest = self._serial.read(data_len + 1)  # payload + LRC
+            if len(rest) < data_len + 1:
+                return {"ok": False, "error": "Serial timeout reading response payload"}
+            raw = header + rest
         except Exception as e:
             return {"ok": False, "error": f"Serial communication error: {e}"}
-
-        from protocols.passti.frame import parse_response
 
         return parse_response(raw)
 

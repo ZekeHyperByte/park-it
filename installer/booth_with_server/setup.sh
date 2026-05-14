@@ -107,6 +107,18 @@ SCANNER_DEV=${SCANNER_DEV:-/dev/ttyUSB2}
 read -rp "Barcode scanner baudrate [9600]: " SCANNER_BAUD
 SCANNER_BAUD=${SCANNER_BAUD:-9600}
 
+read -rp "Barrier gate connection type (tcp/serial) [tcp]: " GATE_TYPE
+GATE_TYPE=${GATE_TYPE:-tcp}
+
+GATE_DEV=""
+GATE_BAUD=9600
+if [[ "$GATE_TYPE" == "serial" ]]; then
+    read -rp "Barrier gate serial device [/dev/ttyUSB3]: " GATE_DEV_INPUT
+    GATE_DEV=${GATE_DEV_INPUT:-/dev/ttyUSB3}
+    read -rp "Barrier gate baudrate [9600]: " GATE_BAUD_INPUT
+    GATE_BAUD=${GATE_BAUD_INPUT:-9600}
+fi
+
 read -rp "Enable auto-login for operator? [y/N]: " AUTO_LOGIN
 AUTO_LOGIN=${AUTO_LOGIN:-n}
 
@@ -147,6 +159,61 @@ EOF
 
 chown parking:parking /etc/parking/booth.json
 ok "Booth config written"
+
+# Write install notes for technician reference
+NOTES_FILE="/etc/parking/install-notes.txt"
+cat > "$NOTES_FILE" <<EOF
+E-Parking v2 — Installation Notes
+Generated: $(date)
+════════════════════════════════════════
+
+BOOTH: ${BOOTH_NAME} (${BOOTH_CODE})
+  Default gate : ${GATE_CODE}
+  POS IP       : ${SERVER_IP}
+
+PERIPHERALS:
+  E-Money reader : ${EMONEY_DEV}  (${EMONEY_BAUD} baud)
+  Receipt printer: ${PRINTER_DEV}  (${PRINTER_BAUD} baud)
+  Barcode scanner: ${SCANNER_DEV}  (${SCANNER_BAUD} baud)
+
+BARRIER GATE (${GATE_CODE}):
+  Connection type: ${GATE_TYPE}
+EOF
+
+if [[ "$GATE_TYPE" == "serial" ]]; then
+    cat >> "$NOTES_FILE" <<EOF
+  Serial device  : ${GATE_DEV}  (${GATE_BAUD} baud)
+
+  ↳ In admin UI → Device → Gates → ${GATE_CODE}, set:
+      protocol         = serial
+      controller_device= ${GATE_DEV}
+      controller_baudrate= ${GATE_BAUD}
+EOF
+    if [[ -n "$(ls /dev/parking-rfid 2>/dev/null || true)" ]]; then
+        cat >> "$NOTES_FILE" <<EOF
+
+  RFID (serial gate — Wiegand not available):
+    Since this gate has no Wiegand port, RFID requires a direct serial reader.
+    In admin UI → Device → Gates → ${GATE_CODE} → hardware_config:
+      rfid.enabled          = true
+      rfid.connection       = direct_serial
+      rfid.device           = /dev/parking-rfid
+EOF
+    fi
+else
+    cat >> "$NOTES_FILE" <<EOF
+  TCP controller IP and port configured during server install.
+EOF
+fi
+
+cat >> "$NOTES_FILE" <<EOF
+
+════════════════════════════════════════
+View anytime: cat ${NOTES_FILE}
+EOF
+
+chown parking:parking "$NOTES_FILE"
+ok "Install notes written to ${NOTES_FILE}"
 
 # Install booth bridge service
 SERVICE_FILE="/etc/systemd/system/booth-bridge-${BOOTH_CODE,,}.service"
@@ -235,13 +302,25 @@ info "  systemctl status parking-worker-bg"
 info "  systemctl status $(basename "$SERVICE_FILE")"
 info "  systemctl status nginx"
 echo ""
+info "Install notes: cat /etc/parking/install-notes.txt"
+echo ""
 warn "Next steps:"
 echo "  1. Log in as admin at http://${SERVER_IP}"
 echo "  2. Add gate records: GIN01, GIN02, GOUT01, GOUT02"
+if [[ "$GATE_TYPE" == "serial" ]]; then
+    echo "     ↳ For the RS232/USB gate (${GATE_CODE}): set protocol=serial, controller_device=${GATE_DEV}"
+else
+    echo "     ↳ Use protocol=tcp (compass) with controller IP for each gate"
+fi
 echo "  3. Add POS record: ${BOOTH_NAME} / ${BOOTH_CODE} / IP=${SERVER_IP} / Gate=${GATE_CODE}"
-echo "  4. Link GOUT01 to POS ${BOOTH_CODE}"
+echo "  4. Link ${GATE_CODE} to POS ${BOOTH_CODE}"
 echo "  5. Set up Booth PC 2 (run installer/booth_pc/setup.sh on the 2nd PC)"
 echo "  6. Start gate daemons (reads config from DB, auto-starts on boot):"
-echo "       sudo -u parking /opt/parking-system-v2/scripts/enable-gate-daemons.sh --run"
+if [[ "$GATE_TYPE" == "serial" ]]; then
+    echo "       sudo /opt/parking-system-v2/scripts/enable-gate-daemons.sh --run --include-local-serial"
+    echo "     ↳ --include-local-serial enables RS232/USB gate daemon on this machine too"
+else
+    echo "       sudo /opt/parking-system-v2/scripts/enable-gate-daemons.sh --run"
+fi
 echo "  7. Open Parking POS shortcut on this PC to test Booth 1"
 echo ""

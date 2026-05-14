@@ -28,13 +28,11 @@
         :waiting-seconds="gateStore.waitingSeconds"
         :plate-number="gateStore.currentTransaction?.plate_number || ''"
         @manual-open="openGateAction"
-        @reset-gate="resetGateAction"
         @vehicle-left="vehicleLeftAction"
         @pay-cash="showCashDialog = true"
         @pay-rfid="showRfidDialog = true"
         @retry-emoney="retryEmoney"
         @cancel-correction="cancelCorrection"
-        @override="overrideAction"
       />
 
       <!-- UNIFIED: consistent layout for both IDLE and ACTIVE states -->
@@ -300,10 +298,6 @@ function cancelCorrection() {
   toast.info('Koreksi dibatalkan')
 }
 
-function overrideAction() {
-  toast.warning('Override memerlukan hak admin')
-}
-
 async function openGateAction() {
   if (!selectedGate.value) return
   const result = await gateStore.openGate({ gateId: selectedGate.value.id })
@@ -313,10 +307,6 @@ async function openGateAction() {
   } else {
     toast.error(result?.message || 'Gagal membuka palang')
   }
-}
-
-function resetGateAction() {
-  toast.info('Reset palang — kirim perintah ke daemon')
 }
 
 function vehicleLeftAction() {
@@ -463,6 +453,7 @@ onMounted(async () => {
   await posSession.loadShiftSummary()
 
   // Auto-detect booth by IP
+  let gateDetected = false
   try {
     const pos = await fetchApi('/api/pos/by-ip')
     if (pos.default_gate_id) {
@@ -470,6 +461,8 @@ onMounted(async () => {
       if (gate) {
         gateStore.setSelectedGateOutId(gate.id)
         onGateChange(gate.id)
+        gateDetected = true
+        toast.info(`Terhubung ke ${gate.name}`)
       }
     }
   } catch (err) {
@@ -477,9 +470,11 @@ onMounted(async () => {
   }
 
   // Fallback to first available gate
-  if (!gateStore.selectedGateOutId && websiteStore.activeGateOuts.length > 0) {
-    gateStore.setSelectedGateOutId(websiteStore.activeGateOuts[0].id)
-    onGateChange(websiteStore.activeGateOuts[0].id)
+  if (!gateDetected && websiteStore.activeGateOuts.length > 0) {
+    const fallbackGate = websiteStore.activeGateOuts[0]
+    gateStore.setSelectedGateOutId(fallbackGate.id)
+    onGateChange(fallbackGate.id)
+    toast.warning(`Auto-deteksi gagal, menggunakan ${fallbackGate.name}`)
   }
 
   connectBooth()

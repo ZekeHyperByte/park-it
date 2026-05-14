@@ -10,6 +10,32 @@
       </div>
     </div>
 
+    <!-- Live status strip -->
+    <div class="flex items-center gap-4 rounded-lg border border-border bg-surface px-4 py-3 text-sm">
+      <div class="flex items-center gap-2">
+        <span
+          :class="['h-2 w-2 rounded-full', activeCount > 0 ? 'bg-success animate-pulse' : 'bg-muted-foreground/30']"
+        />
+        <span class="text-muted-foreground">Kendaraan aktif:</span>
+        <span class="font-semibold text-foreground">{{ loadingStatus ? '...' : activeCount }}</span>
+      </div>
+      <div class="h-4 w-px bg-border" />
+      <div class="flex items-center gap-2">
+        <span
+          :class="['h-2 w-2 rounded-full', unresolvedCount > 0 ? 'bg-warning animate-pulse' : 'bg-muted-foreground/30']"
+        />
+        <span class="text-muted-foreground">Unresolved e-money:</span>
+        <span :class="['font-semibold', unresolvedCount > 0 ? 'text-warning' : 'text-foreground']">
+          {{ loadingStatus ? '...' : unresolvedCount }}
+        </span>
+      </div>
+      <div class="h-4 w-px bg-border" />
+      <div class="flex items-center gap-2">
+        <span class="text-muted-foreground">Gate aktif:</span>
+        <span class="font-semibold text-foreground">{{ websiteStore.activeGateOuts.length + websiteStore.activeGateIns.length }}</span>
+      </div>
+    </div>
+
     <!-- Hero tile: POS Kiosk -->
     <NuxtLink
       to="/pos"
@@ -65,7 +91,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, markRaw } from 'vue'
+import { ref, computed, onMounted, markRaw } from 'vue'
 import {
   LogIn,
   FileText,
@@ -83,21 +109,27 @@ definePageMeta({
 
 const authStore = useAuthStore()
 const posSession = usePosSessionStore()
+const websiteStore = useWebsiteStore()
+const { fetchApi } = useApi()
 
-// markRaw prevents Vue from making the components reactive (cheap optimisation
-// for icon refs that never change).
+const loadingStatus = ref(true)
+const activeCount = ref(0)
+const unresolvedCount = ref(0)
+
 const allModules = [
-  { to: '/gate-in', title: 'Gate In Monitor', description: 'Pantau kendaraan masuk secara real-time', icon: markRaw(LogIn), adminOnly: false },
-  { to: '/transaksi', title: 'Transaksi', description: 'Riwayat dan pencarian transaksi parkir', icon: markRaw(FileText), adminOnly: false },
-  { to: '/member', title: 'Member', description: 'Kelola kartu member dan langganan', icon: markRaw(Users), adminOnly: false },
-  { to: '/report', title: 'Laporan', description: 'Laporan pendapatan dan statistik parkir', icon: markRaw(BarChart3), adminOnly: false },
-  { to: '/notification', title: 'Notifikasi', description: 'Peringatan sistem dan notifikasi gate', icon: markRaw(Bell), adminOnly: false },
-  { to: '/device', title: 'Perangkat', description: 'Konfigurasi perangkat keras dan gate', icon: markRaw(Cpu), adminOnly: true },
-  { to: '/setting', title: 'Pengaturan', description: 'Pengaturan sistem, tarif, dan shift', icon: markRaw(Settings), adminOnly: true },
+  { to: '/gate-in', title: 'Gate In Monitor', description: 'Pantau kendaraan masuk secara real-time', icon: markRaw(LogIn), adminOnly: false, badge: null },
+  { to: '/transaksi', title: 'Transaksi', description: 'Riwayat dan pencarian transaksi parkir', icon: markRaw(FileText), adminOnly: false, badge: null },
+  { to: '/member', title: 'Member', description: 'Kelola kartu member dan langganan', icon: markRaw(Users), adminOnly: false, badge: null },
+  { to: '/report', title: 'Laporan', description: 'Laporan pendapatan dan statistik parkir', icon: markRaw(BarChart3), adminOnly: false, badge: null },
+  { to: '/notification', title: 'Notifikasi', description: 'Peringatan sistem dan notifikasi gate', icon: markRaw(Bell), adminOnly: false, badge: null },
+  { to: '/device', title: 'Perangkat', description: 'Konfigurasi perangkat keras dan gate', icon: markRaw(Cpu), adminOnly: true, badge: null },
+  { to: '/setting', title: 'Pengaturan', description: 'Pengaturan sistem, tarif, dan shift', icon: markRaw(Settings), adminOnly: true, badge: null },
 ]
 
+const modules = ref(allModules.map((m) => ({ ...m })))
+
 const visibleModules = computed(() =>
-  allModules.filter((m) => !m.adminOnly || authStore.isAdmin)
+  modules.value.filter((m) => !m.adminOnly || authStore.isAdmin)
 )
 
 const greeting = computed(() => {
@@ -125,7 +157,31 @@ function formatCurrency(value) {
   }).format(value || 0)
 }
 
+async function loadStatus() {
+  loadingStatus.value = true
+  try {
+    const [activeRes, unresolvedRes] = await Promise.all([
+      fetchApi('/api/transactions?status=ACTIVE&limit=1').catch(() => null),
+      fetchApi('/api/transactions?status=LOST_CONTACT&limit=1').catch(() => null),
+    ])
+    activeCount.value = activeRes?.total ?? 0
+    unresolvedCount.value = unresolvedRes?.total ?? 0
+
+    // Badge on notification tile when there are unresolved e-money transactions
+    if (unresolvedCount.value > 0) {
+      const notifModule = modules.value.find((m) => m.to === '/notification')
+      if (notifModule) notifModule.badge = unresolvedCount.value
+    }
+  } finally {
+    loadingStatus.value = false
+  }
+}
+
 onMounted(async () => {
-  await posSession.loadShiftSummary()
+  await Promise.all([
+    posSession.loadShiftSummary(),
+    websiteStore.loadAll(),
+    loadStatus(),
+  ])
 })
 </script>

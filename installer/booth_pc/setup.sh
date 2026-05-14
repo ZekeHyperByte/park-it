@@ -94,6 +94,24 @@ SCANNER_BAUD=${SCANNER_BAUD:-9600}
 read -rp "Enable auto-login for operator? [y/N]: " AUTO_LOGIN
 AUTO_LOGIN=${AUTO_LOGIN:-n}
 
+read -rp "Does this booth PC have a RS232/USB barrier gate (Interface Barrier Gate)? [y/N]: " HAS_SERIAL_GATE
+HAS_SERIAL_GATE=${HAS_SERIAL_GATE:-n}
+
+SERIAL_GATE_CODE=""
+GATE_DEV="/dev/ttyUSB3"
+GATE_BAUD=9600
+if [[ "$HAS_SERIAL_GATE" =~ ^[Yy]$ ]]; then
+    read -rp "Gate code in DB (e.g. GOUT02 — must match gate configured with protocol=serial): " SERIAL_GATE_CODE
+    if [[ -z "$SERIAL_GATE_CODE" ]]; then
+        error "Gate code is required for RS232/USB gate"
+        exit 1
+    fi
+    read -rp "Barrier gate serial device [/dev/ttyUSB3]: " GATE_DEV_INPUT
+    GATE_DEV=${GATE_DEV_INPUT:-/dev/ttyUSB3}
+    read -rp "Barrier gate baudrate [9600]: " GATE_BAUD_INPUT
+    GATE_BAUD=${GATE_BAUD_INPUT:-9600}
+fi
+
 read -rp "Git repository URL [${REPO_URL}]: " INPUT_REPO
 REPO_URL=${INPUT_REPO:-$REPO_URL}
 
@@ -147,10 +165,15 @@ if [[ ! -d ".venv" ]]; then
     sudo -u parking python3.12 -m venv .venv
 fi
 
-# Only install booth bridge dependencies
 sudo -u parking .venv/bin/pip install --quiet --upgrade pip
-sudo -u parking .venv/bin/pip install --quiet pyserial websockets
-ok "Booth bridge dependencies installed"
+if [[ "$HAS_SERIAL_GATE" =~ ^[Yy]$ ]]; then
+    # Full install (no dev extras) — gate daemon needs protocols, shared, etc.
+    sudo -u parking .venv/bin/pip install --quiet -e "$PROJECT_ROOT/"
+    ok "Application dependencies installed (gate daemon + booth bridge)"
+else
+    sudo -u parking .venv/bin/pip install --quiet pyserial websockets
+    ok "Booth bridge dependencies installed"
+fi
 
 # ── 6. Write booth configuration ────────────────────────────────────────────────
 step "6/9 — Writing Booth Configuration"
@@ -190,6 +213,53 @@ EOF
 chown parking:parking /etc/parking/booth.json
 ok "Booth config written to /etc/parking/booth.json"
 
+# Write install notes for technician reference
+NOTES_FILE="/etc/parking/install-notes.txt"
+cat > "$NOTES_FILE" <<EOF
+E-Parking v2 — Installation Notes
+Generated: $(date)
+════════════════════════════════════════
+
+BOOTH: ${BOOTH_NAME} (${BOOTH_CODE})
+  Default gate : ${GATE_CODE}
+  Server IP    : ${SERVER_IP}
+  Booth IP     : ${BOOTH_IP}
+
+PERIPHERALS:
+  E-Money reader : ${EMONEY_DEV}  (${EMONEY_BAUD} baud)
+  Receipt printer: ${PRINTER_DEV}  (${PRINTER_BAUD} baud)
+  Barcode scanner: ${SCANNER_DEV}  (${SCANNER_BAUD} baud)
+EOF
+
+if [[ "$HAS_SERIAL_GATE" =~ ^[Yy]$ && -n "$SERIAL_GATE_CODE" ]]; then
+    cat >> "$NOTES_FILE" <<EOF
+
+BARRIER GATE (${SERIAL_GATE_CODE}):
+  Connection type  : serial (RS232/USB)
+  Serial device    : ${GATE_DEV}  (${GATE_BAUD} baud)
+
+  ↳ In admin UI → Device → Gates → ${SERIAL_GATE_CODE}, set:
+      protocol           = serial
+      controller_device  = ${GATE_DEV}
+      controller_baudrate= ${GATE_BAUD}
+
+  ↳ RFID note: serial gate has no Wiegand port.
+      If RFID reader is connected, configure in gate hardware_config:
+      rfid.enabled    = true
+      rfid.connection = direct_serial
+      rfid.device     = /dev/parking-rfid
+EOF
+fi
+
+cat >> "$NOTES_FILE" <<EOF
+
+════════════════════════════════════════
+View anytime: cat ${NOTES_FILE}
+EOF
+
+chown parking:parking "$NOTES_FILE"
+ok "Install notes written to ${NOTES_FILE}"
+
 # ── 7. Install booth bridge service ─────────────────────────────────────────────
 step "7/9 — Installing Booth Bridge Service"
 
@@ -224,6 +294,43 @@ systemctl daemon-reload
 systemctl enable "$(basename "$SERVICE_FILE")"
 systemctl start "$(basename "$SERVICE_FILE")"
 ok "Booth bridge service installed and started"
+
+# ── 7b. Install RS232/USB gate daemon (if applicable) ──────────────────────────
+if [[ "$HAS_SERIAL_GATE" =~ ^[Yy]$ && -n "$SERIAL_GATE_CODE" ]]; then
+    info "Configuring RS232/USB gate daemon for gate: ${SERIAL_GATE_CODE}"
+
+    # Write minimal .env so gate daemon can reach server Redis
+    ENV_FILE="$PROJECT_ROOT/.env"
+    if [[ ! -f "$ENV_FILE" ]]; then
+        cat > "$ENV_FILE" <<EOF
+REDIS_HOST=${SERVER_IP}
+REDIS_PORT=6379
+APP_ENV=production
+EOF
+        chown parking:parking "$ENV_FILE"
+        ok ".env written (REDIS_HOST=${SERVER_IP})"
+    else
+        # Patch REDIS_HOST in existing .env
+        if grep -q "^REDIS_HOST=" "$ENV_FILE"; then
+            sed -i "s|^REDIS_HOST=.*|REDIS_HOST=${SERVER_IP}|" "$ENV_FILE"
+        else
+            echo "REDIS_HOST=${SERVER_IP}" >> "$ENV_FILE"
+        fi
+        ok "REDIS_HOST set to ${SERVER_IP} in existing .env"
+    fi
+
+    # Copy systemd template if not already present
+    GATE_TEMPLATE="/etc/systemd/system/parking-daemon-gate-out@.service"
+    if [[ ! -f "$GATE_TEMPLATE" ]]; then
+        cp "$PROJECT_ROOT/systemd/parking-daemon-gate-out@.service" "$GATE_TEMPLATE"
+    fi
+
+    GATE_UNIT="parking-daemon-gate-out@${SERIAL_GATE_CODE}"
+    systemctl daemon-reload
+    systemctl enable "$GATE_UNIT"
+    systemctl start "$GATE_UNIT"
+    ok "Gate daemon enabled: ${GATE_UNIT} (device: ${GATE_DEV})"
+fi
 
 # ── 8. Create Chrome desktop shortcut ───────────────────────────────────────────
 step "8/9 — Creating Desktop Shortcut"
@@ -294,16 +401,30 @@ info "Booth:      ${BOOTH_NAME} (${BOOTH_CODE})"
 info "Server:     http://${SERVER_IP}"
 info "Local WS:   ws://localhost:5678"
 info "Serial dev: ${EMONEY_DEV}, ${PRINTER_DEV}, ${SCANNER_DEV}"
+if [[ "$HAS_SERIAL_GATE" =~ ^[Yy]$ ]]; then
+    info "Gate dev:   ${GATE_DEV} (baudrate: ${GATE_BAUD}) → gate ${SERIAL_GATE_CODE}"
+fi
 echo ""
-info "Service:"
+info "Services:"
 info "  systemctl status $(basename "$SERVICE_FILE")"
+if [[ "$HAS_SERIAL_GATE" =~ ^[Yy]$ && -n "$SERIAL_GATE_CODE" ]]; then
+    info "  systemctl status parking-daemon-gate-out@${SERIAL_GATE_CODE}"
+fi
+echo ""
+info "Install notes: cat /etc/parking/install-notes.txt"
 echo ""
 warn "Next steps:"
 echo "  1. Verify booth bridge: sudo journalctl -u $(basename "$SERVICE_FILE") -f"
 echo "  2. Verify serial devices: ls -la /dev/ttyUSB*"
-echo "  3. On the SERVER, ensure gate daemons are running:"
-echo "       cd /opt/parking-system-v2 && ./scripts/enable-gate-daemons.sh --run"
-echo "  4. On the SERVER admin page, ensure POS record exists:"
+if [[ "$HAS_SERIAL_GATE" =~ ^[Yy]$ && -n "$SERIAL_GATE_CODE" ]]; then
+    echo "  3. Verify gate daemon: sudo journalctl -u parking-daemon-gate-out@${SERIAL_GATE_CODE} -f"
+    echo "     ↳ Gate must be configured in DB with protocol=serial, controller_device=${GATE_DEV}"
+    echo "  4. On the SERVER admin page, ensure POS record exists:"
+else
+    echo "  3. On the SERVER, ensure TCP gate daemons are running:"
+    echo "       cd /opt/parking-system-v2 && ./scripts/enable-gate-daemons.sh --run"
+    echo "  4. On the SERVER admin page, ensure POS record exists:"
+fi
 echo "       Name: ${BOOTH_NAME}"
 echo "       Code: ${BOOTH_CODE}"
 echo "       IP:   ${BOOTH_IP}"

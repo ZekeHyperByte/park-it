@@ -180,3 +180,41 @@ class RedisClient:
 
 # Global instance
 redis_client = RedisClient()
+
+
+# ---------------------------------------------------------------------------
+# ARQ pool — separate from raw Redis client because ARQ uses its own framing
+# ---------------------------------------------------------------------------
+
+_arq_pool: Any | None = None
+_arq_pool_lock: Any | None = None
+
+
+async def get_arq_redis(queue_name: str = "arq:queue:critical") -> Any:
+    """Return cached ARQ pool for enqueueing jobs.
+
+    Default queue is critical (print, snapshot). Pass queue_name='arq:queue:background'
+    for settlement/cleanup jobs.
+    """
+    global _arq_pool, _arq_pool_lock
+    import asyncio
+
+    from arq import create_pool
+    from arq.connections import RedisSettings
+
+    if _arq_pool_lock is None:
+        _arq_pool_lock = asyncio.Lock()
+
+    async with _arq_pool_lock:
+        if _arq_pool is None:
+            settings = get_settings()
+            _arq_pool = await create_pool(
+                RedisSettings(
+                    host=settings.redis_host,
+                    port=settings.redis_port,
+                    database=settings.redis_db,
+                    password=settings.redis_password or None,
+                ),
+                default_queue_name=queue_name,
+            )
+    return _arq_pool

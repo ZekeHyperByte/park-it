@@ -76,7 +76,7 @@ const indicators = computed(() => [
   {
     label: 'E-Money',
     ok: props.hardwareStatus?.emoney?.status === 'ready',
-    warn: false,
+    warn: props.hardwareStatus?.emoney?.status === 'stale',
     statusText: props.hardwareStatus?.emoney?.status || 'unknown',
   },
   {

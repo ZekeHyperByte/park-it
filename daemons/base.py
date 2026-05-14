@@ -305,6 +305,20 @@ class BaseDaemon(ABC):
                         "state_data": self.state_data,
                     })
                     await self._redis.publish(f"parking.events.{self.gate_id}", state_payload)
+                    # Liveness key — 60s TTL so a missed heartbeat (30s cadence)
+                    # tolerates one drop, two drops = STALE.
+                    from datetime import datetime, timezone
+                    status_payload = json.dumps({
+                        "gate_id": self.gate_id,
+                        "state": self.state,
+                        "controller_ok": True,
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                    })
+                    await self._redis.set(
+                        f"gate:heartbeat:{self.gate_id}",
+                        status_payload,
+                        ex=60,
+                    )
                 await asyncio.wait_for(
                     self._shutdown_event.wait(),
                     timeout=30.0,

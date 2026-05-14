@@ -445,6 +445,11 @@ class GateInDaemon(BaseDaemon):
                 )
             elif command_type == "reset_gate":
                 await self._cmd_reset_gate(command_data.get("reason", "operator"))
+            elif command_type == "inject_rss":
+                signal = command_data.get("signal", "")
+                logger.warning("mock_inject_rss", gate_id=self.gate_id, signal=signal)
+                frame = b"\xa6" + signal.encode("latin-1") + b"\xa9"
+                await self._dispatch_rss_message(frame)
             elif command_type == "deduct":
                 logger.warning("deduct_ignored_at_gate_in", gate_id=self.gate_id)
             else:

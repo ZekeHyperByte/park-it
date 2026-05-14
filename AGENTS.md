@@ -363,11 +363,18 @@ cd frontend && npm test
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
 
-Rules:
-- ALWAYS read graphify-out/GRAPH_REPORT.md before reading any source files, running grep/glob searches, or answering codebase questions. The graph is your primary map of the codebase.
-- IF graphify-out/wiki/index.md EXISTS, navigate it instead of reading raw files
-- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+Built from 413 v2 source files (3,512 nodes, 4,937 edges, 375 communities). Key god nodes: `GateOutDaemon` (68), `GateInDaemon` (62), `BaseDaemon` (28), `EventConsumer` (23), `CompassTransport` (18).
+
+**Maintenance:**
+- `.graphifyignore` mirrors `.gitignore` — add new large/noise dirs to both files
+- After code changes, run `graphify update .` (AST-only, no API cost)
+- After adding docs/plans, run full rebuild: `rm -rf graphify-out/` then invoke `/graphify .`
+- The graph is gitignored — each developer builds their own
+
+**Navigation:**
+- Read `graphify-out/GRAPH_REPORT.md` for god nodes, surprising connections, community map
+- Navigate `graphify-out/wiki/index.md` for structured community articles
+- Query: `graphify query "<question>"`, `graphify path "A" "B"`, `graphify explain "<concept>"`
 
 ## @RTK.md
 

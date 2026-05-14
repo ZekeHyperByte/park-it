@@ -18,6 +18,22 @@ from shared.logging import get_logger
 logger = get_logger("print_worker")
 
 
+def _mock_write(gate_id: str, kind: str, escpos_data: bytes) -> str:
+    """Write ESC/POS bytes + decoded text to MOCK_HARDWARE_DIR/print/. Returns path."""
+    from datetime import datetime
+    from pathlib import Path
+
+    settings = get_settings()
+    base = Path(settings.mock_hardware_dir) / "print"
+    base.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    stem = base / f"{gate_id}_{kind}_{ts}"
+    stem.with_suffix(".bin").write_bytes(escpos_data)
+    decoded = escpos_data.decode("latin-1", errors="replace")
+    stem.with_suffix(".txt").write_text(decoded)
+    return str(stem)
+
+
 # ---------------------------------------------------------------------------
 # Paper Counter Helpers
 # ---------------------------------------------------------------------------
@@ -35,7 +51,7 @@ async def _check_paper_available(gate_id: str) -> tuple[bool, int | None]:
 
     try:
         from sqlalchemy import select
-        from api.app.database import async_session_factory
+        from api.database import AsyncSessionLocal as async_session_factory
         from api.app.models.printer import Printer
 
         async with async_session_factory() as db:
@@ -71,7 +87,7 @@ async def _decrement_paper_counter(printer_id: int) -> None:
         return
 
     try:
-        from api.app.database import async_session_factory
+        from api.database import AsyncSessionLocal as async_session_factory
         from api.app.models.printer import Printer
 
         async with async_session_factory() as db:
@@ -168,7 +184,7 @@ async def _get_print_config(gate_id: str, gate_type: str = "OUT") -> dict[str, A
     """
     try:
         from sqlalchemy import select
-        from api.app.database import async_session_factory
+        from api.database import AsyncSessionLocal as async_session_factory
         from api.app.models.gate import Gate
         from api.app.models.printer import Printer
 
@@ -269,6 +285,12 @@ async def print_ticket(
         timestamp=timestamp,
     )
 
+    if get_settings().mock_hardware:
+        path = _mock_write(gate_id, "ticket", escpos_data)
+        logger.info("mock_ticket_written", gate_id=gate_id, path=path)
+        await _decrement_paper_counter(printer_id)
+        return {"status": "success", "message": "Ticket printed (MOCK)", "path": path}
+
     try:
         if mode == "CONTROLLER_PASSTHROUGH":
             _print_via_controller(escpos_data, print_config)
@@ -326,6 +348,12 @@ async def print_receipt(
         transaction_data=transaction_data,
         location_name=location_name,
     )
+
+    if get_settings().mock_hardware:
+        path = _mock_write(gate_id, "receipt", escpos_data)
+        logger.info("mock_receipt_written", gate_id=gate_id, path=path)
+        await _decrement_paper_counter(printer_id)
+        return {"status": "success", "message": "Receipt printed (MOCK)", "path": path}
 
     try:
         if mode == "CONTROLLER_PASSTHROUGH":

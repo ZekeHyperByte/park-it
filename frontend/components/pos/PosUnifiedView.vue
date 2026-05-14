@@ -1,14 +1,21 @@
 <template>
   <div class="flex h-full flex-col p-4 gap-4">
-    <!-- Photos: Empty state or actual -->
+    <!-- Photos: only when transaction active -->
     <div class="flex-shrink-0">
       <PhotoComparison
+        v-show="hasTransaction"
         :entry-photo-url="entryPhotoUrl"
         :exit-photo-url="exitPhotoUrl"
         :entry-time="transaction?.entry_time"
         :entry-gate-name="transaction?.entry_gate_name"
-        :show-empty-state="!hasTransaction"
       />
+      <div
+        v-show="!hasTransaction"
+        class="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground/30"
+      >
+        <ScanLine class="h-12 w-12" />
+        <span class="text-sm">Scan barcode atau nomor plat kendaraan</span>
+      </div>
     </div>
 
     <!-- Transaction Info Card: Always visible, scrollable if needed -->
@@ -121,6 +128,7 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ScanLine } from 'lucide-vue-next'
 import { useFormatters } from '~/composables/useFormatters'
 import { Input } from '~/components/ui/input'
 import PhotoComparison from './PhotoComparison.vue'

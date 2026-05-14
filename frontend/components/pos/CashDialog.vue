@@ -79,7 +79,7 @@ const { formatCurrency } = useFormatters()
 const amountInput = ref(null)
 const paidAmount = ref(0)
 
-const denominations = [10000, 15000, 20000, 50000, 100000, 200000]
+const denominations = [10000, 20000, 50000, 100000, 200000, 500000]
 
 const filteredDenominations = computed(() =>
   denominations.filter((d) => d >= props.tariff)

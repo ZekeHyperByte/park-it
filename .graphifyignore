@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Frontend (Node)
+node_modules/
+.nuxt/
+.output/
+
+# v1 legacy system
+parking-system/
+
+# Logs
+*.log
+logs/
+
+# Runtime
+*.pid
+pids/
+
+# Tool caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Temp
+*.tmp
+*.bak
+
+# Self
+graphify-out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+# Testing
+.coverage
+htmlcov/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment (keep .env.example)
+.env
+.env.local
+.env.*.local

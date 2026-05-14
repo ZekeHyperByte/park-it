@@ -139,3 +139,47 @@ async def close_gate(
     msg_id = await publish_command(cmd)
     logger.info("gate_close_commanded", gate_id=gate.code, reason=req.reason)
     return GateControlResponse(success=True, message="Gate close command sent", gate_id=gate.code, command_id=msg_id)
+
+
+@router.get("/status/heartbeat")
+async def gates_heartbeat_status(db: AsyncSession = Depends(get_db)) -> dict:
+    """Return liveness map for all active gates.
+
+    Reads short-TTL `gate:heartbeat:{code}` keys from Redis. A gate that has
+    not heartbeat'd within 60s is reported as `online: false`.
+    """
+    import json as _json
+
+    from sqlalchemy import select
+    from shared.redis import redis_client
+
+    await redis_client.connect()
+    result = await db.execute(select(Gate).where(Gate.is_active == True))  # noqa: E712
+    gates = list(result.scalars().all())
+
+    out: list[dict] = []
+    for g in gates:
+        raw = await redis_client.client.get(f"gate:heartbeat:{g.code}")
+        if raw:
+            try:
+                payload = _json.loads(raw)
+            except ValueError:
+                payload = {}
+            out.append({
+                "code": g.code,
+                "direction": g.direction,
+                "online": True,
+                "state": payload.get("state"),
+                "controller_ok": payload.get("controller_ok"),
+                "last_seen": payload.get("ts"),
+            })
+        else:
+            out.append({
+                "code": g.code,
+                "direction": g.direction,
+                "online": False,
+                "state": None,
+                "controller_ok": None,
+                "last_seen": None,
+            })
+    return {"gates": out}

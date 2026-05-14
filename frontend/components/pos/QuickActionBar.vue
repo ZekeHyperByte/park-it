@@ -29,8 +29,9 @@
           <span v-if="shiftName">{{ shiftName }}</span>
           <span class="mx-1.5 text-border">|</span>
         </span>
-        <span class="text-xs text-muted-foreground/50">
-          Scan barcode untuk memulai
+        <span class="flex items-center gap-1.5">
+          <span class="h-2 w-2 rounded-full bg-success animate-pulse" />
+          <span class="text-xs text-muted-foreground/50">Scan barcode untuk memulai</span>
         </span>
       </template>
     </div>

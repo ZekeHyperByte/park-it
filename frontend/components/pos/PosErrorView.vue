@@ -40,7 +40,7 @@
 
     <!-- Recovery buttons -->
     <div class="flex flex-wrap items-center justify-center gap-3 max-w-lg">
-      <!-- Timeout actions -->
+      <!-- Timeout actions: primary=cash, secondary=open gate, tertiary=vehicle left -->
       <template v-if="errorType === 'timeout'">
         <Button size="lg" variant="default" class="h-14 px-6 text-base" @click="$emit('pay-cash')">
           Bayar Cash
@@ -48,58 +48,62 @@
         <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('manual-open')">
           Buka Palang
         </Button>
-        <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('vehicle-left')">
+        <Button size="lg" variant="ghost" class="h-14 px-6 text-base text-muted-foreground" @click="$emit('vehicle-left')">
           Kendaraan Pergi
         </Button>
       </template>
 
-      <!-- E-money: insufficient balance -->
+      <!-- E-money: insufficient balance — primary=cash, secondary=rfid, tertiary=retry -->
       <template v-if="emoneyState === 'INSUFFICIENT'">
-        <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('retry-emoney')">
-          Coba Lagi
-        </Button>
         <Button size="lg" variant="default" class="h-14 px-6 text-base" @click="$emit('pay-cash')">
           Bayar Cash
         </Button>
         <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('pay-rfid')">
           Bayar RFID
         </Button>
+        <Button size="lg" variant="ghost" class="h-14 px-6 text-base text-muted-foreground" @click="$emit('retry-emoney')">
+          Coba Lagi
+        </Button>
       </template>
 
-      <!-- E-money: wrong card -->
+      <!-- E-money: wrong card — primary=cash, secondary=retry -->
       <template v-if="emoneyState === 'WRONG_CARD'">
-        <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('retry-emoney')">
-          Coba Lagi
-        </Button>
         <Button size="lg" variant="default" class="h-14 px-6 text-base" @click="$emit('pay-cash')">
           Bayar Cash
+        </Button>
+        <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('retry-emoney')">
+          Coba Lagi
         </Button>
         <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('pay-rfid')">
           Bayar RFID
         </Button>
       </template>
 
-      <!-- E-money: lost contact -->
+      <!-- E-money: lost contact — primary=tap again, secondary=cash/rfid, tertiary=cancel -->
       <template v-if="emoneyState === 'LOST_CONTACT'">
-        <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('retry-emoney')">
+        <Button size="lg" variant="default" class="h-14 px-6 text-base" @click="$emit('retry-emoney')">
           Tap Lagi
         </Button>
-        <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('cancel-correction')">
+        <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('pay-cash')">
+          Bayar Cash
+        </Button>
+        <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('pay-rfid')">
+          Bayar RFID
+        </Button>
+        <Button size="lg" variant="ghost" class="h-14 px-6 text-base text-muted-foreground" @click="$emit('cancel-correction')">
           Batalkan
         </Button>
       </template>
 
-      <!-- E-money: generic failure -->
+      <!-- E-money: generic failure — primary=cash, secondary=retry, no override -->
       <template v-if="emoneyState === 'FAILED'">
-        <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('retry-emoney')">
-          Coba Lagi
-        </Button>
         <Button size="lg" variant="default" class="h-14 px-6 text-base" @click="$emit('pay-cash')">
           Bayar Cash
         </Button>
-        <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('override')">
-          Override
+        <Button size="lg" variant="outline" class="h-14 px-6 text-base" @click="$emit('retry-emoney')">
+          Coba Lagi
         </Button>
+        <p class="w-full text-center text-xs text-muted-foreground">Hubungi admin jika masalah berlanjut.</p>
       </template>
     </div>
   </div>
@@ -119,13 +123,11 @@ const props = defineProps({
 
 defineEmits([
   'manual-open',
-  'reset-gate',
   'vehicle-left',
   'pay-cash',
   'pay-rfid',
   'retry-emoney',
   'cancel-correction',
-  'override',
 ])
 
 const errorType = computed(() => {
@@ -146,7 +148,7 @@ const description = computed(() => {
   if (props.paymentState === 'TIMEOUT_ALERT') return 'Kendaraan telah menunggu melebihi batas waktu. Pilih tindakan di bawah.'
   if (props.emoneyState === 'INSUFFICIENT') return 'Saldo e-money tidak mencukupi untuk tarif parkir. Gunakan metode pembayaran lain.'
   if (props.emoneyState === 'WRONG_CARD') return 'Kartu yang di-tap tidak sesuai dengan kartu masuk. Gunakan kartu yang benar.'
-  if (props.emoneyState === 'LOST_CONTACT') return 'Kartu terlepas saat proses debit. Tap kartu lagi untuk koreksi.'
+  if (props.emoneyState === 'LOST_CONTACT') return 'Kartu terlepas saat proses debit. Tap kartu lagi, atau gunakan metode lain.'
   if (props.emoneyState === 'FAILED') return 'Proses pembayaran e-money gagal. Coba lagi atau gunakan metode pembayaran lain.'
   return ''
 })

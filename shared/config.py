@@ -127,6 +127,12 @@ class Settings(BaseSettings):
         default=10, alias="PRINTER_PAPER_CRITICAL_THRESHOLD"
     )
 
+    # ── Mock hardware (local dev / hardware test) ─────────────────────
+    mock_hardware: bool = Field(default=False, alias="MOCK_HARDWARE")
+    mock_hardware_dir: str = Field(
+        default="/tmp/parking-mock", alias="MOCK_HARDWARE_DIR"
+    )
+
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_format: str = Field(default="json", alias="LOG_FORMAT")

@@ -560,6 +560,12 @@ class GateOutDaemon(BaseDaemon):
                 reason = command_data.get("reason", "operator")
                 await self._cmd_reset_gate(reason)
 
+            elif command_type == "inject_rss":
+                signal = command_data.get("signal", "")
+                logger.warning("mock_inject_rss", gate_id=self.gate_id, signal=signal)
+                frame = b"\xa6" + signal.encode("latin-1") + b"\xa9"
+                await self._dispatch_rss_message(frame)
+
             else:
                 logger.warning("unknown_command", gate_id=self.gate_id, command_type=command_type)
 
@@ -591,8 +597,9 @@ class GateOutDaemon(BaseDaemon):
             await self._send_controller_command(cmd_mt(f"{track:05d}"))
 
     async def _cmd_display_text(self, line1: str, line2: str) -> None:
-        """Display text on LED."""
-        await self._send_controller_command(cmd_ds(line1, line2))
+        """Display text on LED — no-op for serial/Interface Barrier Gate (no display port)."""
+        if self.config.get("protocol", "compass") != "serial":
+            await self._send_controller_command(cmd_ds(line1, line2))
 
     async def _cmd_buzzer(self, success: bool) -> None:
         """Trigger buzzer."""
@@ -715,7 +722,7 @@ class GateOutDaemon(BaseDaemon):
         )
 
     def _map_passti_status_to_deduct(self, status: tuple | None) -> DeductStatus:
-        """Map PASSTI status tuple to DeductStatus enum."""
+        """Map PASSTI status tuple to DeductStatus enum (V1.12 §V)."""
         if status == (0x00, 0x00, 0x00):
             return DeductStatus.SUCCESS
         if status == (0x01, 0x10, 0x02):
@@ -726,6 +733,10 @@ class GateOutDaemon(BaseDaemon):
             return DeductStatus.LOST_CONTACT
         if status == (0x01, 0x10, 0x06):
             return DeductStatus.WRONG_CARD
+        if status == (0x01, 0x10, 0x09):
+            return DeductStatus.FAILED  # BNI inactive card
+        if status == (0x01, 0x10, 0x10):
+            return DeductStatus.WRONG_CARD  # reader expects same deduct amount (lost-contact correction)
         return DeductStatus.FAILED
 
     # ------------------------------------------------------------------

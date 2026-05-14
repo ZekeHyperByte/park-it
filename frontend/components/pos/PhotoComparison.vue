@@ -3,7 +3,7 @@
     <!-- Entry photo -->
     <div
       class="relative aspect-video cursor-pointer overflow-hidden rounded-lg border border-border bg-surface"
-      @click="entryPhotoUrl && (showFullscreen = 'entry')"
+      @click="entryPhotoUrl && (fullscreenPhoto = 'entry')"
     >
       <img
         v-if="entryPhotoUrl"
@@ -25,7 +25,7 @@
     <!-- Exit photo -->
     <div
       class="relative aspect-video cursor-pointer overflow-hidden rounded-lg border border-border bg-surface"
-      @click="exitPhotoUrl && (showFullscreen = 'exit')"
+      @click="exitPhotoUrl && (fullscreenPhoto = 'exit')"
     >
       <img
         v-if="exitPhotoUrl"
@@ -41,13 +41,13 @@
     </div>
 
     <!-- Fullscreen dialog -->
-    <Dialog v-model:open="showFullscreen">
+    <Dialog :open="showFullscreen" @update:open="(v) => { if (!v) fullscreenPhoto = null }">
       <DialogContent class="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{{ showFullscreen === 'entry' ? 'Foto Masuk' : 'Foto Keluar' }}</DialogTitle>
+          <DialogTitle>{{ fullscreenPhoto === 'entry' ? 'Foto Masuk' : 'Foto Keluar' }}</DialogTitle>
         </DialogHeader>
         <img
-          :src="showFullscreen === 'entry' ? entryPhotoUrl : exitPhotoUrl"
+          :src="fullscreenPhoto === 'entry' ? entryPhotoUrl : exitPhotoUrl"
           class="w-full rounded-lg"
         />
       </DialogContent>
@@ -56,7 +56,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Camera } from 'lucide-vue-next'
 import { useFormatters } from '~/composables/useFormatters'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '~/components/ui/dialog'
@@ -70,5 +70,7 @@ defineProps({
 })
 
 const { formatTime } = useFormatters()
-const showFullscreen = ref(null)
+
+const fullscreenPhoto = ref(null) // null | 'entry' | 'exit'
+const showFullscreen = computed(() => fullscreenPhoto.value !== null)
 </script>

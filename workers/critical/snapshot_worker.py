@@ -1,6 +1,7 @@
 """Critical snapshot worker job."""
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -10,8 +11,12 @@ from shared.logging import get_logger
 
 logger = get_logger("snapshot_worker")
 
-SNAPSHOT_DIR = Path("/var/lib/parking/snapshots")
-SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+SNAPSHOT_DIR = Path(os.environ.get("SNAPSHOT_DIR", "/var/lib/parking/snapshots"))
+try:
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+except PermissionError:
+    SNAPSHOT_DIR = Path("/tmp/parking-mock/snapshots")
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 async def take_snapshot(
@@ -35,12 +40,27 @@ async def take_snapshot(
         snapshot_type=snapshot_type,
     )
 
-    is_rtsp = camera_url.lower().startswith("rtsp://")
+    from shared.config import get_settings
 
-    if is_rtsp:
-        image_data = await _capture_rtsp(camera_url)
+    if get_settings().mock_hardware:
+        # 1x1 white JPEG placeholder
+        image_data = bytes.fromhex(
+            "ffd8ffe000104a46494600010101006000600000ffdb004300080606070605080707"
+            "07090908"
+            "0a0c140d0c0b0b0c1912130f141d1a1f1e1d1a1c1c20242e2720222c231c1c283729"
+            "2c30313434"
+            "1f27393d38323c2e333432ffc0000b080001000101011100ffc4001f000001050101"
+            "01010101000000000000000001020304050607080900ffc400b510000201030302040"
+            "30502060101000000010002110321041231054113617122718132061491a1b14223"
+            "2415528191a2b1c109233352f0d124e1f06272ffda0008010100003f00fbd8000000ffd9"
+        )
+        logger.info("mock_snapshot_used", gate_id=gate_id, snapshot_type=snapshot_type)
     else:
-        image_data = await _download_http(camera_url)
+        is_rtsp = camera_url.lower().startswith("rtsp://")
+        if is_rtsp:
+            image_data = await _capture_rtsp(camera_url)
+        else:
+            image_data = await _download_http(camera_url)
 
     if image_data is None:
         return {"status": "error", "message": "Snapshot capture failed"}

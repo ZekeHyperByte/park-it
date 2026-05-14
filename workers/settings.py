@@ -1,6 +1,6 @@
 """ARQ worker settings."""
 
-from arq import cron
+from arq import cron, func
 from arq.connections import RedisSettings
 
 from shared.config import get_settings
@@ -24,9 +24,9 @@ class CriticalWorkerSettings:
     queue_name = "arq:queue:critical"
 
     functions = [
-        "workers.critical.print_worker.print_ticket",
-        "workers.critical.print_worker.print_receipt",
-        "workers.critical.snapshot_worker.take_snapshot",
+        func("workers.critical.print_worker.print_ticket", name="print_ticket"),
+        func("workers.critical.print_worker.print_receipt", name="print_receipt"),
+        func("workers.critical.snapshot_worker.take_snapshot", name="take_snapshot"),
     ]
 
     # Retry settings
@@ -44,13 +44,13 @@ class BackgroundWorkerSettings:
     queue_name = "arq:queue:background"
 
     functions = [
-        "workers.background.settlement_worker.generate_settlement_file",
-        "workers.background.settlement_uploader.upload_settlement_job",
-        "workers.background.settlement_uploader.poll_settlement_responses",
-        "workers.background.cleanup_worker.cleanup_old_sessions",
-        "workers.background.cleanup_worker.cleanup_old_snapshots",
-        "workers.background.cleanup_worker.timeout_pending_payments",
-        "workers.background.notification_worker.send_telegram_alert",
+        func("workers.background.settlement_worker.generate_settlement_file", name="generate_settlement_file"),
+        func("workers.background.settlement_uploader.upload_settlement_job", name="upload_settlement_job"),
+        func("workers.background.settlement_uploader.poll_settlement_responses", name="poll_settlement_responses"),
+        func("workers.background.cleanup_worker.cleanup_old_sessions", name="cleanup_old_sessions"),
+        func("workers.background.cleanup_worker.cleanup_old_snapshots", name="cleanup_old_snapshots"),
+        func("workers.background.cleanup_worker.timeout_pending_payments", name="timeout_pending_payments"),
+        func("workers.background.notification_worker.send_telegram_alert", name="send_telegram_alert"),
     ]
 
     # Cron jobs
@@ -58,6 +58,7 @@ class BackgroundWorkerSettings:
         # Daily settlement at 2 AM (operational timezone enforced inside the job)
         cron(
             "workers.background.settlement_worker.generate_settlement_file",
+            name="generate_settlement_file",
             hour=2,
             minute=0,
         ),
@@ -65,17 +66,20 @@ class BackgroundWorkerSettings:
         # reconciliation, sparse enough to not hammer the bank's SFTP.
         cron(
             "workers.background.settlement_uploader.poll_settlement_responses",
+            name="poll_settlement_responses",
             minute={0, 15, 30, 45},
         ),
         # Cleanup old data daily at 3 AM
         cron(
             "workers.background.cleanup_worker.cleanup_old_sessions",
+            name="cleanup_old_sessions",
             hour=3,
             minute=0,
         ),
         # Timeout stuck PENDING e-money payments every 2 minutes
         cron(
             "workers.background.cleanup_worker.timeout_pending_payments",
+            name="timeout_pending_payments",
             minute={0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,
                     32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58},
         ),
