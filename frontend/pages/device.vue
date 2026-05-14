@@ -1,7 +1,22 @@
 <template>
   <div>
-    <h1 class="text-xl font-semibold text-foreground">Perangkat</h1>
-    <p class="mb-4 text-sm text-muted-foreground">Manajemen gate, booth POS, kamera, printer, dan e-money reader.</p>
+    <div class="mb-4 flex items-start justify-between gap-3">
+      <div>
+        <h1 class="text-xl font-semibold text-foreground">Perangkat</h1>
+        <p class="text-sm text-muted-foreground">Manajemen gate, booth POS, kamera, printer, dan e-money reader.</p>
+      </div>
+      <NuxtLink
+        v-if="authStore.isAdmin"
+        to="/setup?force=1"
+        class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+        Jalankan Setup Wizard
+      </NuxtLink>
+    </div>
 
     <!-- Tabs -->
     <div class="mb-4 flex gap-1 border-b border-border">
@@ -18,6 +33,25 @@
       >
         {{ tab.label }}
       </button>
+    </div>
+
+    <!-- Overview (status cards) -->
+    <div v-if="activeTab === 'overview'">
+      <div v-if="loadingGates" class="text-sm text-muted-foreground">Memuat gate…</div>
+      <div v-else-if="!gates.length" class="rounded-lg border border-border bg-surface p-6 text-sm text-muted-foreground">
+        Belum ada gate. Tambah dari tab Gates atau jalankan Setup Wizard.
+      </div>
+      <div v-else class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <GateStatusCard
+          v-for="gate in gates"
+          :key="gate.id"
+          :gate="gate"
+          :testing="testingGateId === gate.id"
+          @edit="openGateModal(gate)"
+          @test="testGate(gate)"
+          @open="openGateRemotely(gate)"
+        />
+      </div>
     </div>
 
     <!-- Gates -->
@@ -56,6 +90,8 @@
 </template>
 
 <script setup>
+import GateStatusCard from '~/components/dashboard/GateStatusCard.vue'
+
 definePageMeta({ middleware: 'auth' })
 
 const { fetchApi } = useApi()
@@ -66,6 +102,7 @@ const printerCrud = useCrud('/api/printers')
 const readerCrud = useCrud('/api/emoney-readers')
 
 const tabs = [
+  { key: 'overview', label: 'Ringkasan' },
   { key: 'gates', label: 'Gates' },
   { key: 'pos', label: 'Booth POS' },
   { key: 'cameras', label: 'Kamera' },
@@ -73,8 +110,39 @@ const tabs = [
   { key: 'emoney-readers', label: 'E-Money Reader' },
 ]
 
-const activeTab = ref('gates')
+const activeTab = ref('overview')
 const submitting = ref(false)
+const testingGateId = ref(null)
+const authStore = useAuthStore()
+
+async function testGate(gate) {
+  testingGateId.value = gate.id
+  try {
+    const body = gate.protocol === 'serial'
+      ? { type: 'serial', device: gate.controller_device, baudrate: gate.controller_baudrate || 9600 }
+      : { type: 'tcp', host: gate.controller_host, port: gate.controller_port }
+    const res = await fetchApi('/api/setup/test-device', { method: 'POST', body: JSON.stringify(body) })
+    const { toast } = await import('vue-sonner')
+    if (res.ok) toast.success(`${gate.code}: ${Math.round(res.latency_ms || 0)}ms`)
+    else toast.error(`${gate.code}: ${res.error || 'gagal'}`)
+  } catch (err) {
+    const { toast } = await import('vue-sonner')
+    toast.error(`${gate.code}: ${err.message}`)
+  } finally {
+    testingGateId.value = null
+  }
+}
+
+async function openGateRemotely(gate) {
+  try {
+    await fetchApi(`/api/gates/${gate.id}/open`, { method: 'POST' })
+    const { toast } = await import('vue-sonner')
+    toast.success(`${gate.code} dibuka`)
+  } catch (err) {
+    const { toast } = await import('vue-sonner')
+    toast.error(err.message)
+  }
+}
 
 // Gates
 const gates = ref([])

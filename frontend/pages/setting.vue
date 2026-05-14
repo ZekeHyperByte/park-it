@@ -1,7 +1,18 @@
 <template>
   <div>
-    <h1 class="text-xl font-semibold text-foreground">Pengaturan</h1>
-    <p class="mb-4 text-sm text-muted-foreground">Kelola konfigurasi sistem parkir.</p>
+    <div class="mb-4 flex items-start justify-between gap-3">
+      <div>
+        <h1 class="text-xl font-semibold text-foreground">Pengaturan</h1>
+        <p class="text-sm text-muted-foreground">Kelola konfigurasi sistem parkir.</p>
+      </div>
+      <NuxtLink
+        v-if="authStore.isAdmin"
+        to="/setup?force=1"
+        class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
+      >
+        🔧 Jalankan Setup Wizard
+      </NuxtLink>
+    </div>
 
     <div class="mb-4 flex gap-1 border-b border-border">
       <button
@@ -104,6 +115,7 @@ import { Input } from '~/components/ui/input'
 definePageMeta({ middleware: 'auth' })
 
 const { fetchApi } = useApi()
+const authStore = useAuthStore()
 const vtCrud = useCrud('/api/vehicle-types')
 const shiftCrud = useCrud('/api/shifts')
 const areaCrud = useCrud('/api/areas')
