@@ -131,6 +131,17 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_format: str = Field(default="json", alias="LOG_FORMAT")
 
+    # Setup wizard
+    setup_token_path: str = Field(
+        default="/etc/parking/setup-token", alias="SETUP_TOKEN_PATH"
+    )
+    setup_session_ttl_seconds: int = Field(
+        default=3600, alias="SETUP_SESSION_TTL_SECONDS"
+    )
+    parking_install_root: str = Field(
+        default="/opt/parking-system-v2", alias="PARKING_INSTALL_ROOT"
+    )
+
     @model_validator(mode="after")
     def _validate_production_settings(self) -> "Settings":
         """Ensure critical settings are configured in production."""

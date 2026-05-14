@@ -21,6 +21,7 @@ from api.app.models.parking_transaction import ParkingTransaction
 from api.app.models.pos import Pos
 from api.app.models.printer import Printer
 from api.app.models.setting import Setting
+from api.app.models.setup_session import SetupSession
 from api.app.models.shift import Shift
 from api.app.models.site_config import SiteConfig
 from api.app.models.shift_emoney_snapshot import ShiftEmoneySnapshot
@@ -47,6 +48,7 @@ __all__ = [
     "Pos",
     "Printer",
     "Setting",
+    "SetupSession",
     "Shift",
     "SiteConfig",
     "ShiftEmoneySnapshot",

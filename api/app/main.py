@@ -102,6 +102,7 @@ def create_app() -> FastAPI:
         reports,
         settlements,
         settings as settings_routes,
+        setup,
         shifts,
         site_config,
         snapshots,
@@ -134,6 +135,7 @@ def create_app() -> FastAPI:
     app.include_router(audit_logs.router, prefix="/api")
     app.include_router(printers.router, prefix="/api")
     app.include_router(snapshots.router, prefix="/api")
+    app.include_router(setup.router, prefix="/api")
 
     # WebSocket
     app.include_router(ws_handlers.router)
