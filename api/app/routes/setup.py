@@ -57,6 +57,8 @@ from api.app.services.setup import (
     read_setup_token,
     run_script_json,
     save_session_step,
+)
+from api.app.services.setup import (
     setup_complete as setup_complete_q,
 )
 from api.app.utils.password import hash_password
