@@ -39,6 +39,9 @@ from api.app.schemas.setup import (
     SetupStateUpdate,
     TestDeviceRequest,
     TestDeviceResponse,
+    TestGateRequest,
+    TestGateResponse,
+    TestGateStep,
     TopologyApplyRequest,
     WriteUdevRequest,
     WriteUdevResponse,
@@ -62,9 +65,12 @@ from api.app.services.setup import (
     setup_complete as setup_complete_q,
 )
 from api.app.utils.password import hash_password
+from api.app.services.gate_command import publish_command
 from api.database import get_db
 from shared.config import get_settings
+from shared.events import CloseGateCommand, OpenGateCommand
 from shared.logging import get_logger
+from shared.redis import redis_client
 
 logger = get_logger("setup_routes")
 
@@ -396,6 +402,104 @@ async def test_device(
             error=stderr.decode("utf-8", errors="ignore").strip() or "probe returned non-JSON",
         )
     return TestDeviceResponse(**payload)
+
+
+async def _wait_event(channel: str, want_type: str, timeout: float) -> tuple[bool, float, str | None]:
+    """Subscribe to parking.events.<gate> and wait for an event of want_type.
+
+    Returns (acked, elapsed_ms, error). On timeout, acked=False.
+    """
+    import time as _time
+
+    await redis_client.connect()
+    pubsub = redis_client.client.pubsub()
+    try:
+        await pubsub.subscribe(channel)
+        t0 = _time.time()
+        deadline = t0 + timeout
+        while True:
+            remaining = deadline - _time.time()
+            if remaining <= 0:
+                return False, (deadline - t0) * 1000, "timeout — no event from daemon"
+            msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=remaining)
+            if msg is None:
+                continue
+            data = msg.get("data")
+            if isinstance(data, bytes):
+                data = data.decode("utf-8", errors="ignore")
+            try:
+                payload = json.loads(data)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if payload.get("event_type") == want_type:
+                return True, (_time.time() - t0) * 1000, None
+    finally:
+        try:
+            await pubsub.unsubscribe(channel)
+            await pubsub.close()
+        except Exception:
+            pass
+
+
+@router.post("/test-gate", response_model=TestGateResponse)
+async def test_gate(
+    body: TestGateRequest,
+    db: AsyncSession = Depends(get_db),
+    auth=Depends(require_setup_or_admin),
+) -> TestGateResponse:
+    """End-to-end gate test: publish open command, wait for gate_opened ACK.
+
+    For DUAL relay gates also publishes close + waits for gate_closed.
+    Confirms the full pipeline (DB row → Redis Stream → daemon → controller →
+    physical relay → daemon event publish) works as wired.
+    """
+    gate = await db.get(Gate, body.gate_id)
+    if gate is None:
+        raise HTTPException(status_code=404, detail="Gate not found")
+    if not gate.is_active:
+        raise HTTPException(status_code=400, detail="Gate is not active")
+
+    channel = f"parking.events.{gate.code}"
+    steps: list[TestGateStep] = []
+
+    # Open
+    try:
+        await publish_command(OpenGateCommand(gate_id=gate.code, reason="wizard_test"))
+        sent = True
+        err = None
+    except Exception as e:
+        sent, err = False, str(e)
+    if not sent:
+        steps.append(TestGateStep(action="open", sent=False, acked=False, error=err))
+        return TestGateResponse(ok=False, gate_code=gate.code, steps=steps, error=err)
+
+    acked, elapsed, err = await _wait_event(channel, "gate_opened", body.timeout_s)
+    steps.append(TestGateStep(action="open", sent=True, acked=acked, elapsed_ms=elapsed, error=err))
+    if not acked:
+        return TestGateResponse(
+            ok=False,
+            gate_code=gate.code,
+            steps=steps,
+            error="open command sent but no gate_opened event — daemon down? controller unreachable?",
+        )
+
+    # Close (DUAL only — SINGLE relay auto-closes via close-sensor or timer)
+    if gate.relay_mode == "DUAL":
+        try:
+            await publish_command(CloseGateCommand(gate_id=gate.code, reason="wizard_test"))
+            await asyncio.sleep(0.5)  # give controller time to relay
+            acked, elapsed, err = await _wait_event(channel, "gate_closed", body.timeout_s)
+            steps.append(TestGateStep(action="close", sent=True, acked=acked, elapsed_ms=elapsed, error=err))
+            if not acked:
+                return TestGateResponse(
+                    ok=False, gate_code=gate.code, steps=steps,
+                    error="close command sent but no gate_closed event",
+                )
+        except Exception as e:
+            steps.append(TestGateStep(action="close", sent=False, acked=False, error=str(e)))
+            return TestGateResponse(ok=False, gate_code=gate.code, steps=steps, error=str(e))
+
+    return TestGateResponse(ok=True, gate_code=gate.code, steps=steps)
 
 
 @router.post("/write-udev", response_model=WriteUdevResponse)

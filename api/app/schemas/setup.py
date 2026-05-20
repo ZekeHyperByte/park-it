@@ -123,6 +123,32 @@ class TopologyApplyRequest(BaseModel):
     include_local_serial: bool = False
 
 
+class TestGateRequest(BaseModel):
+    """Per-gate end-to-end open/close test."""
+
+    gate_id: int
+    timeout_s: float = Field(default=8.0, ge=1.0, le=30.0)
+
+
+class TestGateStep(BaseModel):
+    """One step (open or close) of the gate test."""
+
+    action: Literal["open", "close"]
+    sent: bool
+    acked: bool
+    elapsed_ms: float | None = None
+    error: str | None = None
+
+
+class TestGateResponse(BaseModel):
+    """Aggregated gate-test result."""
+
+    ok: bool
+    gate_code: str
+    steps: list[TestGateStep] = Field(default_factory=list)
+    error: str | None = None
+
+
 class FinalizeResponse(BaseModel):
     """Finalize response."""
 

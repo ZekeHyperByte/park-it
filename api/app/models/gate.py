@@ -33,11 +33,16 @@ class Gate(Base, IntPKMixin, TimestampMixin):
     has_close_sensor: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     gate_close_duration_ms: Mapped[int] = mapped_column(Integer, default=5000, nullable=False)
     relay_mode: Mapped[str] = mapped_column(String(20), default="SINGLE", nullable=False)
-    gate_open_timeout_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gate_open_timeout_s: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     sensor_stuck_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    # Peripherals configuration (JSONB)
-    hardware_config: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    # Peripherals configuration (JSONB). Default keeps display+audio off so a
+    # bare controller without a display module can't be sent cmd_ds and dropped.
+    hardware_config: Mapped[dict] = mapped_column(
+        JSONB,
+        default=lambda: {"display": {"enabled": False}, "audio": {"enabled": False}},
+        nullable=False,
+    )
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
