@@ -4,18 +4,17 @@ Daemon -> FastAPI: parking.events.{gate_id} (Pub/Sub)
 FastAPI -> Daemon: parking.commands.{gate_id} (Redis Streams)
 """
 
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
-
 
 # =============================================================================
 # Enums
 # =============================================================================
 
-class PaymentMethod(str, Enum):
+class PaymentMethod(StrEnum):
     """Payment method types."""
 
     CASH = "CASH"
@@ -24,7 +23,7 @@ class PaymentMethod(str, Enum):
     PENDING = "PENDING"
 
 
-class GateMode(str, Enum):
+class GateMode(StrEnum):
     """Gate-in operational mode."""
 
     CASH = "CASH"
@@ -32,7 +31,7 @@ class GateMode(str, Enum):
     EMONEY = "EMONEY"
 
 
-class DeductStatus(str, Enum):
+class DeductStatus(StrEnum):
     """E-money deduct result status."""
 
     SUCCESS = "SUCCESS"
@@ -45,7 +44,7 @@ class DeductStatus(str, Enum):
     FAILED = "FAILED"
 
 
-class TransactionStatus(str, Enum):
+class TransactionStatus(StrEnum):
     """Parking transaction status."""
 
     ACTIVE = "ACTIVE"
@@ -53,7 +52,7 @@ class TransactionStatus(str, Enum):
     LOST_CONTACT = "LOST_CONTACT"
 
 
-class AlertType(str, Enum):
+class AlertType(StrEnum):
     """Operator alert types."""
 
     TIMEOUT = "TIMEOUT"
@@ -72,7 +71,7 @@ class BaseEvent(BaseModel):
 
     event_type: str
     gate_id: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class VehicleDetectedEvent(BaseEvent):
@@ -230,7 +229,7 @@ class BaseCommand(BaseModel):
 
     command_type: str
     gate_id: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class OpenGateCommand(BaseCommand):
@@ -340,6 +339,16 @@ class ResetGateCommand(BaseCommand):
     reason: str
 
 
+class RejectCardCommand(BaseCommand):
+    """Reject RFID/card tap — show error then return to WAITING_INPUT for retry."""
+
+    command_type: Literal["reject_card"] = "reject_card"
+    line1: str
+    line2: str = ""
+    audio_track: int = 3
+    display_seconds: float = 3.0
+
+
 # Union type for all commands
 RedisCommand = (
     OpenGateCommand
@@ -356,4 +365,5 @@ RedisCommand = (
     | CashPaymentConfirmedCommand
     | EmoneyPaymentConfirmedCommand
     | ResetGateCommand
+    | RejectCardCommand
 )

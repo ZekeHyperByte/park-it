@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from daemons.base import BaseDaemon
 from protocols.compass.parser import parse_stat
 from protocols.compass.protocol import (
     CompassTransport,
@@ -29,7 +30,6 @@ from protocols.compass.protocol import (
     cmd_open1,
     cmd_pr3,
     cmd_rss,
-    cmd_stat,
     cmd_stop1,
     cmd_trig1,
 )
@@ -47,8 +47,6 @@ from shared.events import (
     VehiclePassedEvent,
 )
 from shared.logging import get_logger
-
-from daemons.base import BaseDaemon
 
 logger = get_logger(__name__)
 
@@ -78,6 +76,7 @@ class GateInDaemon(BaseDaemon):
         self._controller_lock = asyncio.Lock()
         self._poll_task: asyncio.Task | None = None
         self._print_decision_timer: asyncio.Task | None = None
+        self._validating_task: asyncio.Task | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -88,6 +87,9 @@ class GateInDaemon(BaseDaemon):
         await super().run()
 
     async def _on_started(self) -> None:
+        if self.state != STATE_IDLE:
+            logger.warning("startup_state_reset", gate_id=self.gate_id, old_state=self.state)
+            await self._transition(STATE_IDLE)
         await self._start_polling()
 
     async def stop(self) -> None:
@@ -156,6 +158,11 @@ class GateInDaemon(BaseDaemon):
     async def _relay_brake(self) -> None:
         if self.config.get("relay_mode") == "TRIPLE":
             await self._send_controller_command(cmd_stop1())
+
+    async def _display(self, line1: str = "", line2: str = "") -> None:
+        if self.hw.get("display", {}).get("enabled", True):
+            cmd = cmd_dsu() if not line1 else cmd_ds(line1, line2)
+            await self._send_controller_command(cmd)
 
     # ------------------------------------------------------------------
     # RSS listener
@@ -300,32 +307,32 @@ class GateInDaemon(BaseDaemon):
         if audio_cfg.get("enabled", True):
             track = audio_cfg.get("welcome_track", 1)
             await self._cmd_play_audio(track)
-        await self._send_controller_command(cmd_ds("Selamat Datang", "Tombol/Tempel Kartu"))
+        await self._display("Selamat Datang", "Tombol/Tempel Kartu")
         if self.has_emoney:
             asyncio.create_task(self._passti_poll_loop(), name="passti_poll")
 
     async def _on_vehicle_backed_up(self) -> None:
         """Vehicle reversed before completing entry."""
         await self._transition(STATE_IDLE)
-        await self._send_controller_command(cmd_dsu())
+        await self._display()
         logger.info("vehicle_backed_up", gate_id=self.gate_id)
 
     async def _on_reset(self) -> None:
         """IN3 triggered during input wait — reset to IDLE."""
         await self._transition(STATE_IDLE)
-        await self._send_controller_command(cmd_dsu())
+        await self._display()
         logger.info("gate_reset_by_sensor", gate_id=self.gate_id)
 
     async def _on_help_button(self) -> None:
         """IN4 help button — alert operator, hold 10s, reset."""
         await self._cmd_play_audio(5)
-        await self._send_controller_command(cmd_ds("Mohon Tunggu", "Petugas Membantu Anda"))
+        await self._display("Mohon Tunggu", "Petugas Membantu Anda")
         await self.publish_event(
             HelpButtonPressedEvent(event_type="help_button_pressed", gate_id=self.gate_id)
         )
         await asyncio.sleep(10)
         await self._transition(STATE_IDLE)
-        await self._send_controller_command(cmd_dsu())
+        await self._display()
 
     async def _on_ticket_button_pressed(self) -> None:
         """Cash button pressed — notify API to create transaction and print."""
@@ -345,6 +352,15 @@ class GateInDaemon(BaseDaemon):
                 channel=channel,
             )
         )
+        self._validating_task = asyncio.create_task(self._validating_timeout(), name="validating_timeout")
+
+    async def _validating_timeout(self) -> None:
+        timeout = self.config.get("gate_open_timeout_s") or 10
+        await asyncio.sleep(timeout)
+        if self.state == STATE_VALIDATING:
+            logger.warning("validating_timeout_reset", gate_id=self.gate_id)
+            await self._transition(STATE_IDLE)
+            await self._display()
 
     async def _on_passti_card_tap(self, card_number: str, card_type_code: int, balance: int) -> None:
         """E-money card tapped — notify API to check balance threshold."""
@@ -394,7 +410,7 @@ class GateInDaemon(BaseDaemon):
         asyncio.create_task(self._vehicle_pass_timer())
 
     async def _vehicle_pass_timer(self) -> None:
-        await asyncio.sleep(self.config.get("gate_open_timeout_s", 10))
+        await asyncio.sleep(self.config.get("gate_open_timeout_s") or 10)
         if self.state == STATE_OPENING:
             await self._on_vehicle_passed()
 
@@ -403,7 +419,7 @@ class GateInDaemon(BaseDaemon):
         await self.publish_event(
             VehiclePassedEvent(event_type="vehicle_passed", gate_id=self.gate_id)
         )
-        await self._send_controller_command(cmd_dsu())
+        await self._display()
         await self._relay_close()
 
     # ------------------------------------------------------------------
@@ -443,6 +459,13 @@ class GateInDaemon(BaseDaemon):
                 await self._cmd_check_balance(
                     int(command_data.get("minimum_threshold", 10000))
                 )
+            elif command_type == "reject_card":
+                await self._cmd_reject_card(
+                    command_data.get("line1", "Kartu Tidak Valid"),
+                    command_data.get("line2", ""),
+                    int(command_data.get("audio_track", 3)),
+                    float(command_data.get("display_seconds", 3.0)),
+                )
             elif command_type == "reset_gate":
                 await self._cmd_reset_gate(command_data.get("reason", "operator"))
             elif command_type == "inject_rss":
@@ -465,13 +488,15 @@ class GateInDaemon(BaseDaemon):
         await self._on_gate_opened()
 
     async def _cmd_play_audio(self, track: int) -> None:
+        track_map = self.hw.get("audio", {}).get("track_map", {})
+        actual = track_map.get(str(track), track)
         if self.config.get("protocol", "compass") == "serial":
-            await self.publish_event(PlayAudioEvent(gate_id=self.gate_id, track=track))
+            await self.publish_event(PlayAudioEvent(gate_id=self.gate_id, track=actual))
         else:
-            await self._send_controller_command(cmd_mt(f"{track:05d}"))
+            await self._send_controller_command(cmd_mt(f"{actual:05d}"))
 
     async def _cmd_display_text(self, line1: str, line2: str) -> None:
-        await self._send_controller_command(cmd_ds(line1, line2))
+        await self._display(line1, line2)
 
     async def _cmd_print_ticket(self, barcode: str, gate_name: str) -> None:
         logger.info("print_ticket_commanded", gate_id=self.gate_id, barcode=barcode)
@@ -535,28 +560,40 @@ class GateInDaemon(BaseDaemon):
                 if len(body) >= 13:
                     balance = int.from_bytes(body[9:13], "big")
                     if balance < minimum_threshold:
-                        await self._send_controller_command(cmd_ds("Saldo Tidak Cukup", f"Rp {balance:,}"))
+                        await self._display("Saldo Tidak Cukup", f"Rp {balance:,}")
                         await self._cmd_play_audio(6)
                         await self._transition(STATE_IDLE)
                     else:
                         await self._transition(STATE_WAITING_PRINT_DECISION)
-                        await self._send_controller_command(cmd_ds("Cetak Tiket?", "Tekan Tombol"))
+                        await self._display("Cetak Tiket?", "Tekan Tombol")
                         timeout = self.hw.get("emoney", {}).get("print_decision_timeout_seconds", 10)
                         await self._start_print_decision_timer(timeout)
                 else:
-                    await self._send_controller_command(cmd_ds("Kartu Error", "Coba Lagi"))
+                    await self._display("Kartu Error", "Coba Lagi")
                     await self._transition(STATE_IDLE)
             else:
-                await self._send_controller_command(cmd_ds("Error", result.get("status_msg", "")))
+                await self._display("Error", result.get("status_msg", ""))
                 await self._transition(STATE_IDLE)
         except Exception as e:
             logger.error("check_balance_error", gate_id=self.gate_id, error=str(e))
             await self._transition(STATE_IDLE)
 
+    async def _cmd_reject_card(self, line1: str, line2: str, audio_track: int, display_seconds: float) -> None:
+        """Show rejection message then return to WAITING_INPUT — driver can retry immediately."""
+        if self._validating_task and not self._validating_task.done():
+            self._validating_task.cancel()
+        await self._display(line1, line2)
+        await self._cmd_play_audio(audio_track)
+        await asyncio.sleep(display_seconds)
+        await self._transition(STATE_WAITING_INPUT)
+        await self._display("Selamat Datang", "Tombol/Tempel Kartu")
+        if self.has_emoney:
+            asyncio.create_task(self._passti_poll_loop(), name="passti_poll")
+
     async def _cmd_reset_gate(self, reason: str) -> None:
         logger.info("reset_gate", gate_id=self.gate_id, reason=reason)
         await self._transition(STATE_IDLE)
-        await self._send_controller_command(cmd_dsu())
+        await self._display()
 
     # ------------------------------------------------------------------
     # Helpers

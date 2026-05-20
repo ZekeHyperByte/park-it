@@ -6,6 +6,7 @@ Subscribes to parking.events.* and handles business logic for specific event typ
 """
 
 import asyncio
+import contextlib
 import json
 
 from shared.logging import get_logger
@@ -34,10 +35,8 @@ class EventConsumer:
         self._running = False
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         logger.info("event_consumer_stopped")
 
     async def _listen(self) -> None:
@@ -220,6 +219,7 @@ class EventConsumer:
     async def _handle_ticket_button_pressed(self, payload: dict) -> None:
         """Cash entry: create transaction, send print_ticket_then_open to daemon."""
         import uuid
+
         from sqlalchemy import select
 
         from api.app.models import Gate
@@ -261,14 +261,15 @@ class EventConsumer:
 
     async def _handle_rfid_card_read(self, payload: dict) -> None:
         """RFID/UHF card read — branches on gate direction: entry creates tx, exit closes tx."""
-        from datetime import date
+        from datetime import date, timedelta
+
         from sqlalchemy import select
 
         from api.app.models import Gate, Member, ParkingTransaction
         from api.app.services.gate_command import publish_command
         from api.app.services.transaction import create_entry_transaction
         from api.database import AsyncSessionLocal
-        from shared.events import DisplayTextCommand, OpenGateCommand, PlayAudioCommand
+        from shared.events import DisplayTextCommand, OpenGateCommand, PlayAudioCommand, RejectCardCommand
 
         gate_code = payload.get("gate_id", "")
         card_number = payload.get("card_number", "")
@@ -311,19 +312,16 @@ class EventConsumer:
                 member = member_result.scalar_one_or_none()
 
                 if member is None:
-                    await publish_command(DisplayTextCommand(gate_id=gate_code, line1="Kartu Tidak", line2="Terdaftar"))
-                    await publish_command(PlayAudioCommand(gate_id=gate_code, track=3))
+                    await publish_command(RejectCardCommand(gate_id=gate_code, line1="Kartu Tidak", line2="Terdaftar", audio_track=3))
                     logger.info("rfid_member_not_found", gate_id=gate_code, card=card_number)
                     return
 
                 if not member.is_active:
-                    await publish_command(DisplayTextCommand(gate_id=gate_code, line1="Kartu Tidak", line2="Aktif"))
-                    await publish_command(PlayAudioCommand(gate_id=gate_code, track=4))
+                    await publish_command(RejectCardCommand(gate_id=gate_code, line1="Kartu Tidak", line2="Aktif", audio_track=4))
                     return
 
                 if member.valid_until and member.valid_until < date.today():
-                    await publish_command(DisplayTextCommand(gate_id=gate_code, line1="Kartu Expired", line2=""))
-                    await publish_command(PlayAudioCommand(gate_id=gate_code, track=3))
+                    await publish_command(RejectCardCommand(gate_id=gate_code, line1="Kartu Expired", line2="", audio_track=3))
                     logger.info("rfid_member_expired", gate_id=gate_code, card=card_number)
                     return
 
@@ -335,10 +333,21 @@ class EventConsumer:
                     )
                 )
                 if unclosed.scalar_one_or_none():
-                    await publish_command(DisplayTextCommand(gate_id=gate_code, line1="Transaksi", line2="Belum Selesai"))
-                    await publish_command(PlayAudioCommand(gate_id=gate_code, track=11))
+                    await publish_command(RejectCardCommand(gate_id=gate_code, line1="Transaksi", line2="Belum Selesai", audio_track=11))
                     logger.info("rfid_unclosed_transaction", gate_id=gate_code, card=card_number)
                     return
+
+                # Expiry warning — warn but allow entry (matches legacy MT00011/MT00012 behavior)
+                if member.valid_until:
+                    days_left = (member.valid_until - date.today()).days
+                    if days_left == 1:
+                        await publish_command(DisplayTextCommand(gate_id=gate_code, line1="Kartu Habis", line2="Dalam 1 Hari"))
+                        await publish_command(PlayAudioCommand(gate_id=gate_code, track=12))
+                        await asyncio.sleep(6)
+                    elif days_left == 5:
+                        await publish_command(DisplayTextCommand(gate_id=gate_code, line1="Kartu Habis", line2="Dalam 5 Hari"))
+                        await publish_command(PlayAudioCommand(gate_id=gate_code, track=11))
+                        await asyncio.sleep(6)
 
                 await create_entry_transaction(
                     db,
