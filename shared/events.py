@@ -110,7 +110,7 @@ class TicketButtonPressedEvent(BaseEvent):
 
 
 class HelpButtonPressedEvent(BaseEvent):
-    """IN4 help button pressed — operator assistance requested."""
+    """IN3 help button pressed — operator assistance requested."""
 
     event_type: Literal["help_button_pressed"] = "help_button_pressed"
 

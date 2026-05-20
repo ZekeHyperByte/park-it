@@ -19,8 +19,8 @@ from protocols.compass.protocol import (
     cmd_ack_in1off,
     cmd_ack_in1on,
     cmd_ack_in2on,
-    cmd_ack_in3off,
     cmd_ack_in3on,
+    cmd_ack_in4off,
     cmd_ack_in4on,
     cmd_ack_wiegand,
     cmd_close1,
@@ -243,19 +243,19 @@ class GateInDaemon(BaseDaemon):
         elif "IN3ON" in text:
             await self._send_controller_command(cmd_ack_in3on())
             if self.state == STATE_WAITING_INPUT:
-                await self._on_reset()
-            elif self.state == STATE_OPENING:
-                await self._on_vehicle_passed()
-
-        elif "IN3OFF" in text:
-            await self._send_controller_command(cmd_ack_in3off())
-            if self.state == STATE_OPENING:
-                await self._on_vehicle_passed()
+                await self._on_help_button()
 
         elif "IN4ON" in text:
             await self._send_controller_command(cmd_ack_in4on())
             if self.state == STATE_WAITING_INPUT:
-                await self._on_help_button()
+                await self._on_reset()
+            elif self.state == STATE_OPENING:
+                await self._on_vehicle_passed()
+
+        elif "IN4OFF" in text:
+            await self._send_controller_command(cmd_ack_in4off())
+            if self.state == STATE_OPENING:
+                await self._on_vehicle_passed()
 
         else:
             parsed = parse_stat(msg)
@@ -318,13 +318,13 @@ class GateInDaemon(BaseDaemon):
         logger.info("vehicle_backed_up", gate_id=self.gate_id)
 
     async def _on_reset(self) -> None:
-        """IN3 triggered during input wait — reset to IDLE."""
+        """IN4 triggered during input wait — reset to IDLE."""
         await self._transition(STATE_IDLE)
         await self._display()
         logger.info("gate_reset_by_sensor", gate_id=self.gate_id)
 
     async def _on_help_button(self) -> None:
-        """IN4 help button — alert operator, hold 10s, reset."""
+        """IN3 help button — alert operator, hold 10s, reset."""
         await self._cmd_play_audio(5)
         await self._display("Mohon Tunggu", "Petugas Membantu Anda")
         await self.publish_event(
