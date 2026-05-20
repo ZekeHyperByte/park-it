@@ -44,6 +44,7 @@ dependencies = [
     "structlog>=24.0.0",
     # Hardware
     "pyserial>=3.5",
+    "evdev>=1.7.0",
     "python-escpos>=3.0",
     "cryptography>=43.0.0",
     # Utils
