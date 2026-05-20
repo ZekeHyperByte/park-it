@@ -190,7 +190,7 @@ class WebSocketServer:
             gate_out_id = cmd.get("gate_out_id", 0)
 
             from protocols.passti.commands import cmd_deduct, parse_deduct_response
-            from protocols.passti.frame import parse_response, STATUS_MESSAGES
+            from protocols.passti.frame import parse_response
 
             frame = cmd_deduct(amount, timeout_sec=30)
             raw_response = self.serial_manager.send("emoney_reader", frame)

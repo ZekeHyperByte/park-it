@@ -9,7 +9,6 @@ from typing import Any
 import pytest
 
 from daemons.gate_in import (
-    STATE_GATE_CLOSED,
     STATE_IDLE,
     STATE_OPENING,
     STATE_PROCESSING,

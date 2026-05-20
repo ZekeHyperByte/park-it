@@ -1,8 +1,6 @@
 """Tests for vehicle type routes."""
 
-from datetime import time
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -8,7 +8,6 @@ Usage:
 """
 
 import os
-import platform
 import shutil
 import socket
 import sys

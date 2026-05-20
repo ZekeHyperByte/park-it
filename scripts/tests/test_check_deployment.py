@@ -1,6 +1,5 @@
 """Tests for deployment readiness checker."""
 
-import pytest
 
 from scripts.check_deployment import (
     check_python_version,

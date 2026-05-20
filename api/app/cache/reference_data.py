@@ -1,6 +1,5 @@
 """Redis caching layer for reference data (gates, vehicle types, members, settings)."""
 
-from typing import Any
 
 from shared.redis import redis_client
 

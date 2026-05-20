@@ -1,7 +1,6 @@
 """Background cleanup worker jobs."""
 
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from shared.logging import get_logger
 
@@ -53,7 +52,7 @@ async def timeout_pending_payments(ctx) -> dict:
     If the PASSTI reader never responds, transactions stay in PENDING forever.
     This job resets them so the operator can retry with a different payment method.
     """
-    from sqlalchemy import select, update
+    from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
     from api.app.models import ParkingTransaction

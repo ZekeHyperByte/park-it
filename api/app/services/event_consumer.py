@@ -261,7 +261,7 @@ class EventConsumer:
 
     async def _handle_rfid_card_read(self, payload: dict) -> None:
         """RFID/UHF card read — branches on gate direction: entry creates tx, exit closes tx."""
-        from datetime import date, timedelta
+        from datetime import date
 
         from sqlalchemy import select
 

@@ -1,6 +1,5 @@
 """Tests for configuration validator."""
 
-import pytest
 
 from scripts.hardware.config_validator import validate_gate_config, validate_system_config
 

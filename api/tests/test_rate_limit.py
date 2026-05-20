@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from starlette.testclient import TestClient
 
 from api.app.middleware.rate_limit import RateLimitMiddleware

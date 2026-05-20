@@ -15,7 +15,6 @@ ENET-specific formats from v1:
 - RFID:    W1<hex>...;
 """
 
-import re
 
 
 def parse_info(response: bytes) -> dict:

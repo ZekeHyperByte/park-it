@@ -1,6 +1,6 @@
 """Snapshot model for camera captures."""
 
-from sqlalchemy import BigInteger, ForeignKey, String, Text
+from sqlalchemy import BigInteger, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.app.models.base import Base, IntPKMixin, TimestampMixin

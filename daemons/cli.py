@@ -163,7 +163,7 @@ def main() -> int:
     except RuntimeError as e:
         logger.error("daemon_fatal_error", error=str(e))
         return 1
-    except Exception as e:
+    except Exception:
         logger.exception("daemon_uncaught_exception")
         return 1
 

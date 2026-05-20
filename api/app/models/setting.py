@@ -1,6 +1,6 @@
 """System setting model."""
 
-from sqlalchemy import Boolean, Integer, String, Text
+from sqlalchemy import Boolean, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.app.models.base import Base, IntPKMixin, TimestampMixin

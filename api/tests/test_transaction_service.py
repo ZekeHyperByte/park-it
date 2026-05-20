@@ -2,12 +2,10 @@
 
 from datetime import datetime, time, timezone
 
-import pytest
 import pytest_asyncio
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.app.models import Member, ParkingTransaction, Shift, VehicleType
+from api.app.models import ParkingTransaction, Shift, VehicleType
 from api.app.services.tariff import DEFAULT_TARIFF_CONFIG
 from api.app.services.transaction import (
     calculate_transaction_fee,

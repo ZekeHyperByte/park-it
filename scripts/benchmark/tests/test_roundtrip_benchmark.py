@@ -1,8 +1,7 @@
 """Tests for roundtrip benchmark."""
 
-import pytest
 
-from scripts.benchmark.roundtrip_benchmark import aggregate_stats, BenchmarkResult
+from scripts.benchmark.roundtrip_benchmark import aggregate_stats
 
 
 class TestAggregateStats:

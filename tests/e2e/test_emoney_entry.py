@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from daemons.gate_in import GateInDaemon
-from shared.events import EmoneyPrintDecisionEvent, OpenGateCommand
+from shared.events import OpenGateCommand
 
 
 @pytest.mark.asyncio

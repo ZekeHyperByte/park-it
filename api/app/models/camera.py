@@ -1,6 +1,6 @@
 """Camera entity for RTSP surveillance."""
 
-from sqlalchemy import BigInteger, Boolean, String
+from sqlalchemy import Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.app.models.base import Base, IntPKMixin, TimestampMixin

@@ -7,11 +7,10 @@ Business logic for processing payments at gate-out. This service:
 4. Publishes the appropriate gate command to the daemon
 """
 
-from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.app.models import Member, ParkingTransaction
+from api.app.models import Member
 from api.app.services.gate_command import publish_command
 from api.app.services.transaction import (
     calculate_transaction_fee,

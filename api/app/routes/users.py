@@ -4,10 +4,9 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.middleware.auth import require_admin
-from api.app.schemas.common import ErrorResponse, SuccessResponse
+from api.app.schemas.common import SuccessResponse
 from api.app.schemas.user import UserCreate, UserResponse, UserUpdate
 from api.app.services.user import (
-    count_users,
     create_user,
     delete_user,
     get_user_by_id,

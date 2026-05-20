@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
 
 import pytest
 
 from daemons.tests.test_gate_out import TestableGateOutDaemon
-from daemons.tests.conftest import MockPasstiTransport
 
 
 @pytest.fixture

@@ -1,6 +1,5 @@
 """Tests for password hashing utilities."""
 
-import pytest
 
 from api.app.utils.password import hash_password, verify_password
 

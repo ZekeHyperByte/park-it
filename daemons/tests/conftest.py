@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
 from collections.abc import AsyncGenerator
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
 import redis.asyncio as aioredis
 
-from shared.events import BaseEvent
 
 
 class FakeRedis:

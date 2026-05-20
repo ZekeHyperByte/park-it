@@ -6,10 +6,8 @@ import gzip
 import tempfile
 from pathlib import Path
 
-import pytest
 
 from scripts.verify_backup import (
-    check_backup_age,
     check_backup_contents,
     check_backup_exists,
     check_backup_integrity,

@@ -1,6 +1,5 @@
 """Tests for hardware deployment script."""
 
-import pytest
 
 from scripts.deploy_hardware import generate_systemd_service, validate_before_deploy, write_service_file
 

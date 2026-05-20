@@ -1,6 +1,5 @@
 """Tests for JWT utilities."""
 
-import time
 
 import pytest
 

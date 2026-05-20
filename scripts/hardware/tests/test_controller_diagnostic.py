@@ -1,8 +1,7 @@
 """Tests for controller diagnostic."""
 
-import pytest
 
-from scripts.hardware.controller_diagnostic import check_tcp_connect, send_stat_command, run_full_diagnostic
+from scripts.hardware.controller_diagnostic import check_tcp_connect, run_full_diagnostic
 from protocols.compass.protocol import cmd_stat
 
 

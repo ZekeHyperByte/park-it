@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import asyncio
-from datetime import date, datetime, time, timedelta
+from datetime import date, time, timedelta
 
 from sqlalchemy import select
 

@@ -1,4 +1,3 @@
-import os
 import pytest
 import tempfile
 from unittest.mock import AsyncMock, patch

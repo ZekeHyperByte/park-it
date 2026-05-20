@@ -32,11 +32,8 @@ from protocols.compass.protocol import (
 )
 from protocols.compass.parser import parse_stat, parse_rfid_card
 from protocols.passti.commands import (
-    cmd_buzzer,
     cmd_check_balance,
-    cmd_display,
     cmd_init,
-    cmd_reset_display,
     parse_check_balance_response,
 )
 from protocols.passti.frame import parse_response

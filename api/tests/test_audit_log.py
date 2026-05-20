@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import pytest
-import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.app.models.audit_log import AuditLog
 from api.app.services.audit import (
     log_action,
     log_gate_operation,

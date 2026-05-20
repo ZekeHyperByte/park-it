@@ -1,6 +1,5 @@
 """Tests for ENET protocol parser and transport."""
 
-import pytest
 
 from protocols.enet.parser import parse_info, parse_rfid_card, _extract_wiegand_w1
 from protocols.enet.protocol import (

@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import json
 import signal
-import sys
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
@@ -18,7 +17,7 @@ from typing import Any
 import redis.asyncio as aioredis
 
 from shared.config import get_settings
-from shared.events import BaseEvent, HeartbeatEvent, RedisCommand
+from shared.events import BaseEvent, HeartbeatEvent
 from shared.logging import bind_trace_id, clear_context, get_logger
 
 logger = get_logger(__name__)

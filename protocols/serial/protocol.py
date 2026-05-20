@@ -10,7 +10,6 @@ Protocol details from v1:
 - No built-in LED display controller
 """
 
-from typing import Callable
 
 
 def build_command(cmd: bytes) -> bytes:

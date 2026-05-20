@@ -6,7 +6,6 @@ Commands are wrapped with \xa6 prefix and \xa9 suffix.
 
 import asyncio
 import socket
-from typing import Callable
 
 
 def build_command(cmd: bytes) -> bytes:

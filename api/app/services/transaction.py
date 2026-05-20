@@ -4,7 +4,7 @@ This module handles the core database operations for parking transactions,
 including entry creation, active transaction lookup, and exit completion.
 """
 
-from datetime import datetime, time, timezone
+from datetime import datetime, timezone
 from typing import Literal
 
 from sqlalchemy import select

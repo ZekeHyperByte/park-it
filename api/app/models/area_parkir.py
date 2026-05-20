@@ -1,6 +1,6 @@
 """Parking area model."""
 
-from sqlalchemy import BigInteger, Integer, String
+from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.app.models.base import Base, IntPKMixin, TimestampMixin

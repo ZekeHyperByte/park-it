@@ -7,7 +7,6 @@ Frame structure:
     0x02 | 0xHH  | 0xHH  |    |    |0x01-0x0C |    | XOR checksum
 """
 
-from typing import Callable
 
 STX = 0x02
 

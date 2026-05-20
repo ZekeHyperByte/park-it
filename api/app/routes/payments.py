@@ -2,12 +2,11 @@
 
 import json
 
-from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi import APIRouter, Depends, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.middleware.api_key import require_api_key
 from api.app.middleware.auth import require_operator
-from api.app.schemas.common import ErrorResponse, SuccessResponse
 from api.app.schemas.payment import (
     CashPaymentRequest,
     EmoneyBoothResultRequest,

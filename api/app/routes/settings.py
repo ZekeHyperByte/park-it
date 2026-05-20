@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.middleware.auth import require_admin
 from api.app.models.setting import Setting
-from api.app.schemas.common import SuccessResponse
 from api.app.schemas.setting import SettingResponse, SettingUpdate
 from api.database import get_db
 from shared.logging import get_logger

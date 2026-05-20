@@ -1,6 +1,5 @@
 """Tests for Compass controller parser."""
 
-import pytest
 
 from protocols.compass.parser import parse_rfid_card, parse_stat
 

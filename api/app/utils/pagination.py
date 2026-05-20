@@ -1,6 +1,6 @@
 """Pagination utilities for list endpoints."""
 
-from typing import Any, Sequence
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select

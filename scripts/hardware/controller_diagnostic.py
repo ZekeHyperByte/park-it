@@ -10,7 +10,7 @@ import sys
 import time
 
 from protocols.compass.parser import parse_stat
-from protocols.compass.protocol import cmd_stat, cmd_trig1, cmd_mt
+from protocols.compass.protocol import cmd_stat
 
 
 def check_tcp_connect(host: str, port: int, timeout: float = 5.0) -> dict:

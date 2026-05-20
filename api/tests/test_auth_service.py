@@ -3,11 +3,9 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.app.models.user import User
 from api.app.schemas.user import UserCreate
 from api.app.services.auth import authenticate_user, create_tokens
 from api.app.services.user import create_user
-from api.app.utils.password import verify_password
 
 
 class TestAuthenticateUser:

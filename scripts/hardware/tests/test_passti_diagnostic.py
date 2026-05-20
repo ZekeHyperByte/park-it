@@ -1,10 +1,8 @@
 """Tests for PASSTI diagnostic."""
 
-import pytest
 
 from scripts.hardware.passti_diagnostic import diagnose_passti
 from protocols.passti.commands import cmd_init, cmd_check_balance
-from protocols.passti.frame import parse_response
 
 
 class TestDiagnosePassti:

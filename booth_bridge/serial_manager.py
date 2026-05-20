@@ -1,6 +1,5 @@
 """Manages serial connections to booth peripherals."""
 
-import asyncio
 
 import serial
 

@@ -1,6 +1,6 @@
 """Tests for tariff calculation engine."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 

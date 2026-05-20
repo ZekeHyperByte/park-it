@@ -16,7 +16,6 @@ Serial-specific formats from v1:
 - UHF:     *X<hex>#
 """
 
-import re
 
 
 def parse_serial(response: bytes) -> dict:

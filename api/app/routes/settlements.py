@@ -1,6 +1,6 @@
 """Settlement routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 
 from api.app.middleware.auth import require_admin

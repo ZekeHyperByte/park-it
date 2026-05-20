@@ -3,7 +3,6 @@
 import asyncio
 from typing import Any
 
-import pytest
 import pytest_asyncio
 import redis.asyncio as aioredis
 

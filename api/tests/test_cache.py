@@ -1,6 +1,5 @@
 """Tests for Redis caching layer."""
 
-import pytest
 import pytest_asyncio
 
 from api.app.cache import reference_data as cache

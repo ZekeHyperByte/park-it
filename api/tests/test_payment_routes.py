@@ -1,14 +1,13 @@
 """Tests for payment routes."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.main import app
-from api.app.models import Member, ParkingTransaction
+from api.app.models import ParkingTransaction
 from api.app.services.transaction import create_entry_transaction
 from api.database import get_db
 

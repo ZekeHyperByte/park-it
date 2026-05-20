@@ -1,6 +1,5 @@
 """Tests for Serial protocol parser and transport."""
 
-import pytest
 
 from protocols.serial.parser import parse_rfid_card, parse_serial, _extract_wiegand
 from protocols.serial.protocol import (
