@@ -134,6 +134,8 @@ cat > /etc/parking/booth.json <<EOF
   "code": "${BOOTH_CODE}",
   "ip_address": "${SERVER_IP}",
   "default_gate_code": "${GATE_CODE}",
+  "api_base_url": "${API_BASE_URL:-http://localhost:8000}",
+  "api_key": "${INTERNAL_API_KEY}",
   "peripherals": {
     "emoney_reader": {
       "enabled": true,

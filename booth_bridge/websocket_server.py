@@ -27,12 +27,33 @@ except ImportError:
 class WebSocketServer:
     """WebSocket server exposing serial peripherals to POS frontend."""
 
-    def __init__(self, serial_manager, port: int = 5678, api_config: dict | None = None) -> None:
+    def __init__(
+        self,
+        serial_manager,
+        port: int = 5678,
+        api_config: dict | None = None,
+        gate_opener=None,
+    ) -> None:
         self.serial_manager = serial_manager
         self.port = port
         self._api_config = api_config
+        self.gate_opener = gate_opener
         self._server = None
         self._clients: set = set()
+
+    async def broadcast(self, payload: dict) -> None:
+        """Send JSON payload to every connected client."""
+        if not self._clients:
+            return
+        data = json.dumps(payload)
+        stale = []
+        for ws in self._clients:
+            try:
+                await ws.send(data)
+            except Exception:
+                stale.append(ws)
+        for ws in stale:
+            self._clients.discard(ws)
 
     async def start(self) -> None:
         """Start WebSocket server."""
@@ -221,6 +242,23 @@ class WebSocketServer:
 
             if self._api_config:
                 asyncio.create_task(self._call_api_booth_result(result_payload))
+
+            # Auto-open relay on SUCCESS; broadcast result to all POS clients
+            if deduct_status == "SUCCESS" and self.gate_opener is not None:
+                asyncio.create_task(self.gate_opener.open())
+
+            asyncio.create_task(
+                self.broadcast(
+                    {
+                        "event": "emoney_payment_completed",
+                        "status": deduct_status,
+                        "card_number": result_payload.get("card_number"),
+                        "deduct_amount": result_payload.get("deduct_amount"),
+                        "balance_after": result_payload.get("balance_after"),
+                        "gate_id": gate_id,
+                    }
+                )
+            )
 
             return result_payload
 

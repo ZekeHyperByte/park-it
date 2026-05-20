@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.app.middleware.api_key import require_api_key
 from api.app.middleware.auth import require_admin, require_operator
 from api.app.models.gate import Gate
 from api.app.schemas.common import SuccessResponse
@@ -45,6 +46,20 @@ async def create_gate(
     await db.commit()
     await db.refresh(gate)
     logger.info("gate_created", gate_id=gate.id, code=gate.code, direction=gate.direction)
+    return GateResponse.model_validate(gate)
+
+
+@router.get("/by-code/{code}", response_model=GateResponse)
+async def get_gate_by_code(
+    code: str,
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(require_api_key),
+) -> GateResponse:
+    """Booth-authenticated gate lookup by code (machine-to-machine)."""
+    result = await db.execute(select(Gate).where(Gate.code == code))
+    gate = result.scalar_one_or_none()
+    if gate is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gate not found")
     return GateResponse.model_validate(gate)
 
 

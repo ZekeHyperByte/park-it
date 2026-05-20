@@ -240,6 +240,37 @@ async def emoney_result(
         )
 
 
+@router.post("/rfid/booth", response_model=PaymentResponse)
+async def rfid_booth(
+    request: Request,
+    payment: RfidPaymentRequest,
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(require_api_key),
+) -> PaymentResponse:
+    """Process RFID member exit triggered by booth_bridge UHF reader (machine-to-machine)."""
+    payment_attempts_total.labels(method="rfid").inc()
+    try:
+        result = await process_rfid_payment(
+            db,
+            gate_id=payment.gate_id,
+            gate_out_id=payment.gate_out_id,
+            card_number=payment.card_number,
+            operator_id=None,
+        )
+        payment_success_total.labels(method="rfid").inc()
+        return PaymentResponse(
+            success=True,
+            message="RFID payment successful",
+            transaction_id=result["transaction"].id,
+            fee=0,
+            change_amount=0,
+            payment_method="RFID_MEMBER",
+        )
+    except ValueError as e:
+        logger.warning("rfid_booth_failed", error=str(e), gate_id=payment.gate_id)
+        return PaymentResponse(success=False, message=str(e))
+
+
 @router.post("/emoney/booth-result", response_model=PaymentResponse)
 async def emoney_booth_result(
     request: Request,
