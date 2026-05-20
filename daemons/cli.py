@@ -1,14 +1,10 @@
 """Unified daemon CLI entry point.
 
-Queries the `gates` table by code, builds the config dict, and starts
-the appropriate daemon (GateInDaemon or GateOutDaemon).
+Launches GateInDaemon for IN gates. OUT gates are operator-attended:
+booth_bridge owns serial relay + readers, no autonomous daemon runs.
 
 Usage:
     python -m daemons.cli --gate-id GIN01
-    python -m daemons.cli --gate-id GOUT01
-
-Systemd template:
-    ExecStart=/opt/parking-system-v2/.venv/bin/python -m daemons.cli --gate-id %i
 """
 
 from __future__ import annotations
@@ -119,9 +115,10 @@ async def _run_daemon(gate_code: str) -> None:
 
         daemon = GateInDaemon(gate_id=gate_code, config=config)
     elif direction == "OUT":
-        from daemons.gate_out import GateOutDaemon
-
-        daemon = GateOutDaemon(gate_id=gate_code, config=config)
+        # OUT gates are operator-attended: booth_bridge owns serial relay + readers,
+        # POS drives open/close directly. No autonomous daemon needed.
+        logger.info("gate_out_daemon_skipped_attended_mode", gate_id=gate_code)
+        return
     else:
         raise RuntimeError(f"Unknown gate direction: {direction}")
 

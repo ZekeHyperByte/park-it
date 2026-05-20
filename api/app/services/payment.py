@@ -22,13 +22,27 @@ from api.app.services.transaction import (
 from shared.events import (
     DeductStatus,
     DisplayTextCommand,
-    OpenGateCommand,
     PlayAudioCommand,
-    PrintReceiptCommand,
 )
 from shared.logging import get_logger
 
 logger = get_logger("payment_service")
+
+
+async def _enqueue_print_receipt(gate_id: str, transaction_data: dict) -> None:
+    """Direct ARQ enqueue of exit receipt — bypasses gate_out daemon (attended exit)."""
+    try:
+        from shared.redis import get_arq_redis
+
+        arq_redis = await get_arq_redis()
+        await arq_redis.enqueue_job(
+            "print_receipt",
+            gate_id=gate_id,
+            transaction_data=transaction_data,
+        )
+        logger.info("receipt_job_enqueued", gate_id=gate_id)
+    except Exception as e:
+        logger.error("receipt_enqueue_failed", gate_id=gate_id, error=str(e))
 
 
 async def _enqueue_exit_snapshot(db: AsyncSession, gate_id: str, transaction_id: int) -> None:
@@ -117,25 +131,20 @@ async def process_cash_payment(
         shift_id=shift.id if shift else None,
     )
 
-    # Publish print_receipt command (DO NOT open gate — operator controls this)
-    await publish_command(
-        PrintReceiptCommand(
-            gate_id=gate_id,
-            transaction_data={
-                "transaction_id": tx.id,
-                "barcode": tx.barcode,
-                "plate_number": tx.plate_number,
-                "entry_time": tx.entry_time.isoformat() if tx.entry_time else None,
-                "exit_time": tx.exit_time.isoformat() if tx.exit_time else None,
-                "fee": fee,
-                "paid_amount": paid_amount,
-                "payment_method": "CASH",
-            },
-        )
+    # Print receipt — direct ARQ (attended exit, no gate_out daemon)
+    await _enqueue_print_receipt(
+        gate_id,
+        {
+            "transaction_id": tx.id,
+            "barcode": tx.barcode,
+            "plate_number": tx.plate_number,
+            "entry_time": tx.entry_time.isoformat() if tx.entry_time else None,
+            "exit_time": tx.exit_time.isoformat() if tx.exit_time else None,
+            "fee": fee,
+            "paid_amount": paid_amount,
+            "payment_method": "CASH",
+        },
     )
-
-    # Play checkout audio
-    await publish_command(PlayAudioCommand(gate_id=gate_id, track=3))
 
     logger.info(
         "cash_payment_processed",
@@ -214,9 +223,7 @@ async def process_rfid_payment(
         shift_id=shift.id if shift else None,
     )
 
-    # Publish open_gate + audio
-    await publish_command(OpenGateCommand(gate_id=gate_id))
-    await publish_command(PlayAudioCommand(gate_id=gate_id, track=9))
+    # Attended exit: POS shows member info, operator opens gate via booth_bridge.
 
     logger.info(
         "rfid_payment_processed",
@@ -394,25 +401,21 @@ async def process_emoney_result(
 
         await _enqueue_exit_snapshot(db, gate_id, tx.id)
 
-        # Open gate + print receipt
-        await publish_command(OpenGateCommand(gate_id=gate_id))
-        await publish_command(
-            PrintReceiptCommand(
-                gate_id=gate_id,
-                transaction_data={
-                    "transaction_id": tx.id,
-                    "barcode": tx.barcode,
-                    "plate_number": tx.plate_number,
-                    "entry_time": tx.entry_time.isoformat() if tx.entry_time else None,
-                    "exit_time": tx.exit_time.isoformat() if tx.exit_time else None,
-                    "fee": deduct_amount,
-                    "paid_amount": deduct_amount,
-                    "payment_method": "EMONEY",
-                    "balance_after": balance_after,
-                },
-            )
+        # Attended exit: POS shows payment result, operator opens gate via booth_bridge.
+        await _enqueue_print_receipt(
+            gate_id,
+            {
+                "transaction_id": tx.id,
+                "barcode": tx.barcode,
+                "plate_number": tx.plate_number,
+                "entry_time": tx.entry_time.isoformat() if tx.entry_time else None,
+                "exit_time": tx.exit_time.isoformat() if tx.exit_time else None,
+                "fee": deduct_amount,
+                "paid_amount": deduct_amount,
+                "payment_method": "EMONEY",
+                "balance_after": balance_after,
+            },
         )
-        await publish_command(PlayAudioCommand(gate_id=gate_id, track=10))
 
         logger.info(
             "emoney_payment_success",
