@@ -2,8 +2,8 @@
 
 Connects to serial devices (e-money reader, receipt printer, running text),
 exposes them via WebSocket for the POS frontend, drives the local serial
-relay for boom barrier opens, and runs an autonomous UHF reader poll for
-member RFID exits.
+relay for boom barrier opens, and runs an autonomous PC/SC reader poll
+(Omnikey 5427 CK) for member RFID exits.
 
 Usage:
     python -m booth_bridge.main --config /etc/parking/booth.json
@@ -17,7 +17,7 @@ import logging
 from booth_bridge.api_client import ApiClient
 from booth_bridge.gate_opener import GateOpener
 from booth_bridge.serial_manager import SerialManager
-from booth_bridge.uhf_poller import UhfPoller
+from booth_bridge.omnikey_poller import OmnikeyPoller
 from booth_bridge.websocket_server import WebSocketServer
 
 logger = logging.getLogger("booth_bridge")
@@ -51,7 +51,7 @@ async def main():
         api_client = ApiClient(api_config["base_url"], api_config["api_key"])
 
     gate_opener = None
-    uhf_poller = None
+    rfid_poller = None
     gate_code = config.get("default_gate_code")
     ws_server_ref: list = [None]
 
@@ -62,20 +62,20 @@ async def main():
             logger.info("gate_opener_ready", extra={"gate": gate_code})
 
             hw = gate_data.get("hardware_config") or {}
-            uhf_cfg = hw.get("uhf_reader") or {}
-            if uhf_cfg.get("enabled") and uhf_cfg.get("host") and uhf_cfg.get("port"):
+            omnikey_cfg = hw.get("omnikey_reader") or {}
+            if omnikey_cfg.get("enabled"):
                 async def _broadcast(payload):
                     if ws_server_ref[0] is not None:
                         await ws_server_ref[0].broadcast(payload)
 
-                uhf_poller = UhfPoller(
-                    host=uhf_cfg["host"],
-                    port=int(uhf_cfg["port"]),
+                rfid_poller = OmnikeyPoller(
                     gate_id=gate_data.get("code", ""),
                     gate_db_id=gate_data.get("id", 0),
                     api_client=api_client,
                     gate_opener=gate_opener,
                     broadcast=_broadcast,
+                    device_path=omnikey_cfg.get("device_path"),
+                    device_name_match=omnikey_cfg.get("device_name_match", "omnikey"),
                 )
 
     ws_server = WebSocketServer(
@@ -84,15 +84,15 @@ async def main():
     ws_server_ref[0] = ws_server
     await ws_server.start()
 
-    if uhf_poller is not None:
-        uhf_poller.start()
-        logger.info("uhf_poller_started")
+    if rfid_poller is not None:
+        rfid_poller.start()
+        logger.info("rfid_poller_started")
 
     try:
         await asyncio.Event().wait()
     finally:
-        if uhf_poller is not None:
-            await uhf_poller.stop()
+        if rfid_poller is not None:
+            await rfid_poller.stop()
         await ws_server.stop()
         await serial_manager.stop()
 

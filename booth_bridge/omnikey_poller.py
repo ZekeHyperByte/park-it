@@ -1,0 +1,191 @@
+"""Evdev keyboard-wedge poller for booth exit RFID.
+
+Omnikey 5427 CK in default HID keyboard mode types the card number plus
+Enter into the focused window. To avoid focus dependency, we grab the
+reader's evdev keyboard device exclusively, parse scancodes, buffer
+digits until Enter, then call /api/payments/rfid/booth and open the
+local relay on success.
+
+Requires python-evdev. Process must have read access on /dev/input/event*
+(run as root, add user to `input` group, or install a udev rule).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import glob
+from typing import Any, Awaitable, Callable
+
+from shared.logging import get_logger
+
+logger = get_logger("booth_omnikey")
+
+_DIGIT_KEYS = {
+    "KEY_0": "0", "KEY_1": "1", "KEY_2": "2", "KEY_3": "3", "KEY_4": "4",
+    "KEY_5": "5", "KEY_6": "6", "KEY_7": "7", "KEY_8": "8", "KEY_9": "9",
+    "KEY_KP0": "0", "KEY_KP1": "1", "KEY_KP2": "2", "KEY_KP3": "3", "KEY_KP4": "4",
+    "KEY_KP5": "5", "KEY_KP6": "6", "KEY_KP7": "7", "KEY_KP8": "8", "KEY_KP9": "9",
+}
+_ENTER_KEYS = {"KEY_ENTER", "KEY_KPENTER"}
+
+
+class OmnikeyPoller:
+    def __init__(
+        self,
+        gate_id: str,
+        gate_db_id: int,
+        api_client,
+        gate_opener,
+        broadcast: Callable[[dict[str, Any]], Awaitable[None]],
+        device_path: str | None = None,
+        device_name_match: str = "omnikey",
+        dedupe_cooldown_s: float = 3.0,
+    ) -> None:
+        self.gate_id = gate_id
+        self.gate_db_id = gate_db_id
+        self.api = api_client
+        self.opener = gate_opener
+        self.broadcast = broadcast
+        self.device_path = device_path
+        self.device_name_match = device_name_match.lower()
+        self.dedupe_cooldown_s = dedupe_cooldown_s
+        self._task: asyncio.Task | None = None
+        self._running = False
+        self._last_card: str | None = None
+        self._last_card_at: float = 0.0
+
+    def start(self) -> None:
+        if self._task is not None and not self._task.done():
+            return
+        self._running = True
+        self._task = asyncio.create_task(self._run(), name=f"omnikey_poll_{self.gate_id}")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+    def _find_device(self):
+        from evdev import InputDevice, list_devices
+
+        if self.device_path:
+            try:
+                return InputDevice(self.device_path)
+            except Exception as e:
+                logger.warning("omnikey_open_path_failed", path=self.device_path, error=str(e))
+                return None
+
+        for path in list_devices():
+            try:
+                dev = InputDevice(path)
+                if self.device_name_match in dev.name.lower():
+                    return dev
+            except Exception:
+                continue
+
+        for path in glob.glob("/dev/input/by-id/*omnikey*event-kbd") + \
+                    glob.glob("/dev/input/by-id/*OMNIKEY*event-kbd"):
+            try:
+                return InputDevice(path)
+            except Exception:
+                continue
+        return None
+
+    async def _run(self) -> None:
+        from evdev import KeyEvent, categorize, ecodes
+
+        while self._running:
+            dev = await asyncio.get_event_loop().run_in_executor(None, self._find_device)
+            if dev is None:
+                logger.warning("omnikey_device_not_found", match=self.device_name_match)
+                await asyncio.sleep(3)
+                continue
+
+            try:
+                dev.grab()
+            except Exception as e:
+                logger.error("omnikey_grab_failed", device=dev.path, error=str(e))
+                await asyncio.sleep(3)
+                continue
+
+            logger.info("omnikey_device_opened", device=dev.path, name=dev.name, gate_id=self.gate_id)
+            buffer: list[str] = []
+
+            try:
+                async for event in dev.async_read_loop():
+                    if not self._running:
+                        break
+                    if event.type != ecodes.EV_KEY:
+                        continue
+                    key_event = categorize(event)
+                    if key_event.keystate != KeyEvent.key_down:
+                        continue
+                    keycode = key_event.keycode
+                    if isinstance(keycode, list):
+                        keycode = keycode[0]
+                    if keycode in _DIGIT_KEYS:
+                        buffer.append(_DIGIT_KEYS[keycode])
+                    elif keycode in _ENTER_KEYS:
+                        if buffer:
+                            card_number = "".join(buffer)
+                            buffer = []
+                            await self._handle_card(card_number)
+                    else:
+                        continue
+            except OSError as e:
+                logger.warning("omnikey_device_disconnected", error=str(e))
+            except Exception as e:
+                logger.error("omnikey_loop_error", error=str(e))
+            finally:
+                try:
+                    dev.ungrab()
+                except Exception:
+                    pass
+                try:
+                    dev.close()
+                except Exception:
+                    pass
+
+            await asyncio.sleep(2)
+
+    async def _handle_card(self, card_number: str) -> None:
+        now = asyncio.get_event_loop().time()
+        if (
+            card_number == self._last_card
+            and (now - self._last_card_at) < self.dedupe_cooldown_s
+        ):
+            return
+        self._last_card = card_number
+        self._last_card_at = now
+
+        logger.info("omnikey_card_read", card=card_number, gate_id=self.gate_id)
+
+        result = await self.api.rfid_exit(self.gate_id, self.gate_db_id, card_number)
+        success = bool(result.get("success"))
+
+        await self.broadcast(
+            {
+                "event": "member_card_scanned",
+                "gate_id": self.gate_id,
+                "card_number": card_number,
+                "success": success,
+                "message": result.get("message", ""),
+                "transaction_id": result.get("transaction_id"),
+            }
+        )
+
+        if success:
+            opened = await self.opener.open()
+            if not opened:
+                logger.error("omnikey_open_relay_failed", card=card_number, gate_id=self.gate_id)
+        else:
+            logger.warning(
+                "omnikey_member_rejected",
+                card=card_number,
+                gate_id=self.gate_id,
+                reason=result.get("message"),
+            )
