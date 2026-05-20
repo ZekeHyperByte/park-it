@@ -77,6 +77,7 @@ class GateInDaemon(BaseDaemon):
         self._poll_task: asyncio.Task | None = None
         self._print_decision_timer: asyncio.Task | None = None
         self._validating_task: asyncio.Task | None = None
+        self._in1_on = False
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -222,11 +223,13 @@ class GateInDaemon(BaseDaemon):
             return
 
         if "IN1ON" in text:
+            self._in1_on = True
             await self._send_controller_command(cmd_ack_in1on())
             if self.state == STATE_IDLE:
                 await self._on_vehicle_detected()
 
         elif "IN1OFF" in text:
+            self._in1_on = False
             await self._send_controller_command(cmd_ack_in1off())
             if self.state == STATE_WAITING_INPUT:
                 await self._on_vehicle_backed_up()
@@ -235,6 +238,9 @@ class GateInDaemon(BaseDaemon):
 
         elif "IN2ON" in text:
             await self._send_controller_command(cmd_ack_in2on())
+            if not self._in1_on:
+                logger.info("in2_ignored_no_vehicle", gate_id=self.gate_id, state=self.state)
+                return
             if self.state == STATE_WAITING_INPUT:
                 await self._on_ticket_button_pressed()
             elif self.state == STATE_WAITING_PRINT_DECISION:
