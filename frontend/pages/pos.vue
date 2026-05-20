@@ -300,6 +300,22 @@ function cancelCorrection() {
 
 async function openGateAction() {
   if (!selectedGate.value) return
+
+  // Attended OUT gates: drive booth_bridge directly (no daemon at exit)
+  if (gateStore.boothConnected && boothWs) {
+    const hw = selectedGate.value.hardware_config || {}
+    boothWs.send(JSON.stringify({
+      action: 'open_gate',
+      device: selectedGate.value.controller_device || hw.device || '/dev/ttyUSB0',
+      baudrate: selectedGate.value.controller_baudrate || hw.baudrate || 9600,
+      open_command: hw.open_command || '',
+      close_command: hw.close_command || '',
+    }))
+    sound.gateOpen()
+    toast.success('Palang pintu dibuka')
+    return
+  }
+
   const result = await gateStore.openGate({ gateId: selectedGate.value.id })
   if (result?.success) {
     sound.gateOpen()
@@ -370,6 +386,22 @@ function disconnectBooth() {
 }
 
 function handleBoothMessage(data) {
+  // Server-pushed events from booth_bridge (UHF auto-flow, eMoney broadcast)
+  if (data.event === 'member_card_scanned') {
+    if (data.success) {
+      sound.gateOpen()
+      toast.success(`Member ${data.card_number} keluar`)
+    } else {
+      sound.paymentFailed()
+      toast.error(data.message || `Kartu ${data.card_number} ditolak`)
+    }
+    return
+  }
+  if (data.event === 'emoney_payment_completed') {
+    // Mirror of emoney_deduct_result; primary handling already done via action response.
+    return
+  }
+
   if (data.action === 'emoney_deduct_result') {
     if (data.status === 'SUCCESS') {
       gateStore.setEmoneyState('SUCCESS')

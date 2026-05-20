@@ -341,6 +341,18 @@
           />
         </section>
 
+        <section v-if="activeGate.id" class="rounded-md border border-border bg-muted/30 p-3">
+          <h3 class="mb-2 text-sm font-semibold text-foreground">
+            Uji buka/tutup gate (end-to-end)
+          </h3>
+          <p class="mb-2 text-xs text-muted-foreground">
+            Perintah buka dikirim ke daemon via Redis, lalu menunggu ACK dari
+            controller. Konfirmasi seluruh jalur software→hardware bekerja
+            sebelum lanjut.
+          </p>
+          <GateTestButton :gate-id="activeGate.id" :gate-code="activeGate.code" />
+        </section>
+
         <section class="space-y-2">
           <h3 class="text-sm font-semibold text-foreground">Perangkat tambahan</h3>
           <PeripheralAccordion
@@ -385,6 +397,19 @@
           >
             <WizardField label="RTSP URL">
               <Input v-model="activeGate.peripherals.camera.url" placeholder="rtsp://user:pass@host/stream1" />
+            </WizardField>
+          </PeripheralAccordion>
+
+          <PeripheralAccordion
+            title="UHF reader (member auto-exit)"
+            :enabled="!!activeGate.peripherals.uhf_reader.enabled"
+            @update:enabled="(v) => togglePeripheral('uhf_reader', v)"
+          >
+            <WizardField label="Host">
+              <Input v-model="activeGate.peripherals.uhf_reader.host" placeholder="192.168.1.50" />
+            </WizardField>
+            <WizardField label="Port">
+              <Input v-model.number="activeGate.peripherals.uhf_reader.port" type="number" placeholder="6000" />
             </WizardField>
           </PeripheralAccordion>
         </section>
@@ -466,6 +491,7 @@ import PreflightList from '~/components/setup/PreflightList.vue'
 import TariffPresetCard from '~/components/setup/TariffPresetCard.vue'
 import TopologyCard from '~/components/setup/TopologyCard.vue'
 import DeviceProbeRow from '~/components/setup/DeviceProbeRow.vue'
+import GateTestButton from '~/components/setup/GateTestButton.vue'
 import PeripheralAccordion from '~/components/setup/PeripheralAccordion.vue'
 import StatusPill from '~/components/setup/StatusPill.vue'
 import WizardField from '~/components/setup/WizardField.vue'
@@ -572,6 +598,7 @@ function blankPeripherals() {
     emoney: { enabled: false, device: '', baudrate: 9600 },
     rfid: { enabled: false },
     camera: { enabled: false, url: '' },
+    uhf_reader: { enabled: false, host: '', port: 6000 },
   }
 }
 
@@ -605,7 +632,7 @@ async function loadGatesFromBackend() {
 function hydratePeripherals(hardware_config) {
   const out = blankPeripherals()
   const hc = hardware_config || {}
-  for (const k of ['printer', 'emoney', 'rfid', 'camera']) {
+  for (const k of ['printer', 'emoney', 'rfid', 'camera', 'uhf_reader']) {
     if (hc[k]) Object.assign(out[k], hc[k])
   }
   return out

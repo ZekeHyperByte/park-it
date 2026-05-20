@@ -168,6 +168,7 @@ const gateFields = computed(() => {
   const rfidDirect = gateForm.value._rfid_connection === 'direct_serial'
   const emoneyEnabled = gateForm.value._emoney_enabled
   const emoneyDirect = gateForm.value._emoney_connection === 'direct_serial'
+  const uhfReaderEnabled = gateForm.value._uhf_reader_enabled
 
   const base = [
     { prop: 'name', label: 'Nama', type: 'text', required: true },
@@ -201,6 +202,8 @@ const gateFields = computed(() => {
       { prop: '_ticket_printer_enabled', label: 'Printer Tiket', type: 'boolean' },
       { prop: '_emoney_enabled', label: 'E-Money', type: 'boolean' },
       { prop: '_camera_enabled', label: 'Kamera', type: 'boolean' },
+      { prop: '_display_enabled', label: 'Modul Display (LED)', type: 'boolean', helper: 'Centang HANYA jika controller punya modul display. cmd_ds ke controller tanpa display akan disconnect.' },
+      { prop: '_audio_enabled', label: 'Modul Audio (MP3)', type: 'boolean' },
     )
   } else if (dir === 'OUT') {
     base.push(
@@ -221,8 +224,14 @@ const gateFields = computed(() => {
           { prop: '_emoney_baudrate', label: 'Baudrate E-Money', type: 'number', placeholder: '38400' },
         ] : []),
       ] : []),
-      { prop: '_uhf_reader_enabled', label: 'UHF Reader', type: 'boolean' },
+      { prop: '_uhf_reader_enabled', label: 'UHF Reader (auto-exit)', type: 'boolean' },
+      ...(uhfReaderEnabled ? [
+        { prop: '_uhf_reader_host', label: 'Host UHF', type: 'text', placeholder: '192.168.1.50', required: true },
+        { prop: '_uhf_reader_port', label: 'Port UHF', type: 'number', placeholder: '6000', required: true },
+      ] : []),
       { prop: '_camera_enabled', label: 'Kamera', type: 'boolean' },
+      { prop: '_display_enabled', label: 'Modul Display (LED)', type: 'boolean', helper: 'Centang HANYA jika controller punya modul display.' },
+      { prop: '_audio_enabled', label: 'Modul Audio (MP3)', type: 'boolean' },
     )
   }
 
@@ -243,6 +252,10 @@ function flattenHardwareConfig(hw = {}) {
     _emoney_baudrate: hw.emoney?.baudrate ?? 38400,
     _camera_enabled: hw.camera?.enabled ?? false,
     _uhf_reader_enabled: hw.uhf_reader?.enabled ?? false,
+    _uhf_reader_host: hw.uhf_reader?.host ?? '',
+    _uhf_reader_port: hw.uhf_reader?.port ?? 6000,
+    _display_enabled: hw.display?.enabled ?? false,
+    _audio_enabled: hw.audio?.enabled ?? false,
   }
 }
 function buildHardwareConfig(form) {
@@ -265,7 +278,14 @@ function buildHardwareConfig(form) {
     }
   }
   if (form._camera_enabled !== undefined) hw.camera = { enabled: form._camera_enabled }
-  if (form._uhf_reader_enabled !== undefined) hw.uhf_reader = { enabled: form._uhf_reader_enabled }
+  if (form._uhf_reader_enabled !== undefined) {
+    hw.uhf_reader = {
+      enabled: form._uhf_reader_enabled,
+      ...(form._uhf_reader_enabled ? { host: form._uhf_reader_host || '', port: Number(form._uhf_reader_port) || 6000 } : {}),
+    }
+  }
+  if (form._display_enabled !== undefined) hw.display = { enabled: form._display_enabled }
+  if (form._audio_enabled !== undefined) hw.audio = { enabled: form._audio_enabled }
   return hw
 }
 function openGateModal(row = null) {
@@ -279,7 +299,7 @@ async function saveGate(data) {
   submitting.value = true
   try {
     const payload = { ...data, hardware_config: buildHardwareConfig(data) }
-    for (const k of ['_rfid_enabled', '_rfid_connection', '_rfid_device', '_rfid_baudrate', '_ticket_printer_enabled', '_emoney_enabled', '_emoney_connection', '_emoney_device', '_emoney_baudrate', '_camera_enabled', '_uhf_reader_enabled']) delete payload[k]
+    for (const k of ['_rfid_enabled', '_rfid_connection', '_rfid_device', '_rfid_baudrate', '_ticket_printer_enabled', '_emoney_enabled', '_emoney_connection', '_emoney_device', '_emoney_baudrate', '_camera_enabled', '_uhf_reader_enabled', '_display_enabled', '_audio_enabled']) delete payload[k]
     if (gateEditing.value) await gateCrud.update(data.id, payload); else await gateCrud.create(payload)
     gateModalVisible.value = false
     await loadGates()
