@@ -26,11 +26,9 @@
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.4",
     "vue": "^3.5.0",
-    "vue-router": "^4.5.0",
     "vue-sonner": "^2.0.9"
   },
   "devDependencies": {
-    "@nuxt/test-utils": "^3.15.0",
     "@vitejs/plugin-vue": "^5.2.0",
     "jsdom": "^29.0.2",
     "patch-package": "^8.0.1",
