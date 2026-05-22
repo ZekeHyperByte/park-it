@@ -12,13 +12,22 @@ from shared.config import get_settings
 
 settings = get_settings()
 
-# Async engine
+# Async engine.
+# `statement_cache_size=0` + `prepared_statement_cache_size=0` keep the engine
+# safe behind pgbouncer in transaction pooling mode (asyncpg requirement).
+# `pool_recycle=1800` drops connections older than 30 min to avoid stale
+# sockets after long idle (e.g. firewall NAT drop, postgres restart).
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
     pool_size=settings.db_pool_size,
     max_overflow=settings.db_max_overflow,
     pool_pre_ping=True,
+    pool_recycle=1800,
+    connect_args={
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    },
 )
 
 # Session factory
