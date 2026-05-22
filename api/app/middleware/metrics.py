@@ -3,7 +3,7 @@
 import time
 
 from fastapi import Request, Response
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 
 # Request metrics
 http_requests_total = Counter(
@@ -36,6 +36,81 @@ settlement_files_generated_total = Counter(
     "settlement_files_generated_total",
     "Total settlement files generated",
 )
+
+# Worker metrics
+print_jobs_total = Counter(
+    "print_jobs_total",
+    "Total print jobs",
+    ["kind", "result"],  # kind=ticket|receipt, result=success|failure
+)
+
+snapshot_jobs_total = Counter(
+    "snapshot_jobs_total",
+    "Total snapshot jobs",
+    ["snapshot_type", "result"],  # snapshot_type=entry|exit, result=success|failure
+)
+
+# Queue metrics (scraped on demand)
+arq_queue_depth = Gauge(
+    "arq_queue_depth",
+    "Current depth of ARQ queue",
+    ["queue"],
+)
+
+# Gate health
+gate_online = Gauge(
+    "gate_online",
+    "1 if gate daemon heartbeat key is fresh in Redis, 0 if missing or unparseable",
+    ["gate_id"],
+)
+
+
+async def refresh_queue_depths() -> None:
+    """Sample ARQ queue depths into the gauge. Cheap zcard on the sorted-set."""
+    try:
+        from shared.redis import redis_client
+
+        await redis_client.connect()
+        redis = redis_client.client
+        for queue in ("arq:queue:critical", "arq:queue:snapshot", "arq:queue:background"):
+            try:
+                depth = await redis.zcard(queue)
+                arq_queue_depth.labels(queue=queue).set(depth)
+            except Exception:
+                continue
+    except Exception:
+        # Metrics scrape must never crash the endpoint.
+        return
+
+
+async def refresh_gate_online() -> None:
+    """Sample gate liveness keys (`gate:heartbeat:{gate_id}`) into the gauge.
+
+    Daemon writes a 60s-TTL key on every heartbeat. Key present = online.
+    """
+    try:
+        from shared.redis import redis_client
+
+        await redis_client.connect()
+        redis = redis_client.client
+        seen: set[str] = set()
+        async for key in redis.scan_iter(match="gate:heartbeat:*"):
+            gate_id = key.split(":", 2)[-1]
+            seen.add(gate_id)
+            try:
+                # Key exists with TTL? mark online.
+                ttl = await redis.ttl(key)
+                gate_online.labels(gate_id=gate_id).set(1 if ttl > 0 else 0)
+            except Exception:
+                gate_online.labels(gate_id=gate_id).set(0)
+        # Existing labels whose keys disappeared = offline. Prometheus client
+        # keeps the label until we explicitly clear, so set them to 0.
+        for label_tuple in list(gate_online._metrics.keys()):  # type: ignore[attr-defined]
+            gid = label_tuple[0]
+            if gid not in seen:
+                gate_online.labels(gate_id=gid).set(0)
+    except Exception:
+        return
 
 
 def get_metrics_response() -> Response:

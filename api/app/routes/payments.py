@@ -23,6 +23,7 @@ from api.app.services.payment import (
     process_emoney_result,
     process_rfid_payment,
 )
+from api.app.services.rate_limit_booth import enforce_booth_rate_limit
 from api.app.services.transaction import calculate_transaction_fee, find_active_transaction
 from api.database import get_db
 from shared.events import DeductStatus
@@ -247,6 +248,7 @@ async def rfid_booth(
     api_key: str = Depends(require_api_key),
 ) -> PaymentResponse:
     """Process RFID member exit triggered by booth_bridge UHF reader (machine-to-machine)."""
+    await enforce_booth_rate_limit(payment.gate_id)
     payment_attempts_total.labels(method="rfid").inc()
     try:
         result = await process_rfid_payment(
@@ -278,6 +280,7 @@ async def emoney_booth_result(
     api_key: str = Depends(require_api_key),
 ) -> PaymentResponse:
     """Process e-money deduct result from booth bridge (machine-to-machine)."""
+    await enforce_booth_rate_limit(result.gate_id)
     try:
         status_enum = DeductStatus(result.status)
     except ValueError:
