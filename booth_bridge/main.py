@@ -13,6 +13,7 @@ import argparse
 import asyncio
 import json
 import logging
+from typing import Awaitable, Callable
 
 from booth_bridge.api_client import ApiClient
 from booth_bridge.gate_opener import GateOpener
@@ -21,6 +22,40 @@ from booth_bridge.omnikey_poller import OmnikeyPoller
 from booth_bridge.websocket_server import WebSocketServer
 
 logger = logging.getLogger("booth_bridge")
+
+
+async def _supervise(
+    name: str,
+    coro_factory: Callable[[], Awaitable[None]],
+    *,
+    initial_backoff_s: float = 1.0,
+    max_backoff_s: float = 30.0,
+) -> None:
+    """Restart `coro_factory()` whenever it raises. Honors cancellation.
+
+    Each subtask (Omnikey poller loop, WS server lifetime, etc.) lives inside
+    its own supervisor so one component's crash never kills the whole booth
+    bridge process. Backoff caps at `max_backoff_s` and resets after a clean
+    run >= 60s (subtask was healthy long enough to count as recovered).
+    """
+    backoff = initial_backoff_s
+    while True:
+        started = asyncio.get_event_loop().time()
+        try:
+            await coro_factory()
+            logger.warning("supervised_task_returned", extra={"task": name})
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            ran_for = asyncio.get_event_loop().time() - started
+            logger.exception(
+                "supervised_task_crashed",
+                extra={"task": name, "ran_for_s": round(ran_for, 2), "error": str(e)},
+            )
+            if ran_for >= 60.0:
+                backoff = initial_backoff_s
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, max_backoff_s)
 
 
 async def main():
@@ -88,9 +123,32 @@ async def main():
         rfid_poller.start()
         logger.info("rfid_poller_started")
 
+    # Supervisor loops: if the Omnikey poller's underlying task dies (USB
+    # replug, driver error, partial frame parse blow-up), restart it without
+    # taking down the booth process. WS server already manages clients with
+    # try/except inside its handler; we still watch its serving task to be
+    # safe.
+    supervisors: list[asyncio.Task] = []
+
+    if rfid_poller is not None:
+        async def _omnikey_factory():
+            # If poller task is dead, start fresh; else wait on existing.
+            if rfid_poller._task is None or rfid_poller._task.done():
+                rfid_poller.start()
+            assert rfid_poller._task is not None
+            await rfid_poller._task
+
+        supervisors.append(
+            asyncio.create_task(_supervise("omnikey_poller", _omnikey_factory))
+        )
+
     try:
         await asyncio.Event().wait()
     finally:
+        for sup in supervisors:
+            sup.cancel()
+        if supervisors:
+            await asyncio.gather(*supervisors, return_exceptions=True)
         if rfid_poller is not None:
             await rfid_poller.stop()
         await ws_server.stop()
