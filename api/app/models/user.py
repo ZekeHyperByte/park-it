@@ -22,6 +22,7 @@ class User(Base, IntPKMixin, TimestampMixin):
     )  # admin, operator, supervisor
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    worker_pin: Mapped[str | None] = mapped_column(String(255), nullable=True)  # bcrypt-hashed 4-digit PIN
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, username={self.username}, role={self.role})>"

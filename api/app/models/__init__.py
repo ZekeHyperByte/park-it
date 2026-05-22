@@ -23,10 +23,12 @@ from api.app.models.printer import Printer
 from api.app.models.setting import Setting
 from api.app.models.setup_session import SetupSession
 from api.app.models.shift import Shift
+from api.app.models.shift_assignment import ShiftAssignment
 from api.app.models.site_config import SiteConfig
 from api.app.models.shift_emoney_snapshot import ShiftEmoneySnapshot
 from api.app.models.snapshot import Snapshot
 from api.app.models.user import User
+from api.app.models.worker_session import WorkerSession
 from api.app.models.vehicle_type import VehicleType
 
 __all__ = [
@@ -50,9 +52,11 @@ __all__ = [
     "Setting",
     "SetupSession",
     "Shift",
+    "ShiftAssignment",
     "SiteConfig",
     "ShiftEmoneySnapshot",
     "Snapshot",
     "User",
     "VehicleType",
+    "WorkerSession",
 ]

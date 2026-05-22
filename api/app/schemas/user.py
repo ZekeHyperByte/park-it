@@ -1,6 +1,6 @@
 """User Pydantic schemas."""
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class UserBase(BaseModel):
@@ -38,6 +38,12 @@ class UserResponse(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    worker_pin: bool = False  # True if PIN is set (hash is never exposed)
+
+    @field_validator("worker_pin", mode="before")
+    @classmethod
+    def coerce_pin_to_bool(cls, v: object) -> bool:
+        return bool(v)
 
 
 class UserListResponse(BaseModel):
