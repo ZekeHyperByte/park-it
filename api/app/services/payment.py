@@ -28,18 +28,32 @@ from shared.logging import get_logger
 logger = get_logger("payment_service")
 
 
-async def _enqueue_print_receipt(gate_id: str, transaction_data: dict) -> None:
-    """Direct ARQ enqueue of exit receipt — bypasses gate_out daemon (attended exit)."""
+async def _enqueue_print_receipt(db: AsyncSession, gate_id: str, transaction_data: dict) -> None:
+    """Direct ARQ enqueue of exit receipt — bypasses gate_out daemon (attended exit).
+
+    Skips enqueue if the gate's receipt_printer peripheral is disabled.
+    """
     try:
+        from sqlalchemy import select
+
+        from api.app.models import Gate
         from shared.redis import get_arq_redis
 
+        gate_result = await db.execute(select(Gate).where(Gate.code == gate_id))
+        gate = gate_result.scalar_one_or_none()
+        if gate is None or not gate.is_peripheral_enabled("receipt_printer"):
+            logger.info("receipt_print_skipped_disabled", gate_id=gate_id)
+            return
+
         arq_redis = await get_arq_redis()
+        tx_id = transaction_data.get("transaction_id")
         await arq_redis.enqueue_job(
             "print_receipt",
             gate_id=gate_id,
             transaction_data=transaction_data,
+            _job_id=f"receipt:{tx_id}" if tx_id else None,
         )
-        logger.info("receipt_job_enqueued", gate_id=gate_id)
+        logger.info("receipt_job_enqueued", gate_id=gate_id, transaction_id=tx_id)
     except Exception as e:
         logger.error("receipt_enqueue_failed", gate_id=gate_id, error=str(e))
 
@@ -60,7 +74,8 @@ async def _enqueue_exit_snapshot(db: AsyncSession, gate_id: str, transaction_id:
         if not cameras:
             return
         arq_redis = await get_arq_redis()
-        for cam in cameras:
+        for idx, cam in enumerate(cameras):
+            cam_key = cam.get("label") or str(idx)
             await arq_redis.enqueue_job(
                 "take_snapshot",
                 gate_id=gate_id,
@@ -68,6 +83,8 @@ async def _enqueue_exit_snapshot(db: AsyncSession, gate_id: str, transaction_id:
                 transaction_id=transaction_id,
                 snapshot_type="exit",
                 camera_label=cam.get("label"),
+                _job_id=f"snapshot:exit:{transaction_id}:{cam_key}",
+                _queue_name="arq:queue:snapshot",
             )
         logger.info("exit_snapshot_enqueued", gate_id=gate_id, transaction_id=transaction_id, count=len(cameras))
     except Exception as e:
@@ -132,6 +149,7 @@ async def process_cash_payment(
 
     # Print receipt — direct ARQ (attended exit, no gate_out daemon)
     await _enqueue_print_receipt(
+        db,
         gate_id,
         {
             "transaction_id": tx.id,
@@ -402,6 +420,7 @@ async def process_emoney_result(
 
         # Attended exit: POS shows payment result, operator opens gate via booth_bridge.
         await _enqueue_print_receipt(
+            db,
             gate_id,
             {
                 "transaction_id": tx.id,

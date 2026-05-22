@@ -69,7 +69,8 @@ async def create_entry_transaction(
                 cameras = gate.get_cameras()
                 if cameras:
                     arq_redis = await get_arq_redis()
-                    for cam in cameras:
+                    for idx, cam in enumerate(cameras):
+                        cam_key = cam.get("label") or str(idx)
                         await arq_redis.enqueue_job(
                             "take_snapshot",
                             gate_id=gate.code,
@@ -77,6 +78,8 @@ async def create_entry_transaction(
                             transaction_id=tx.id,
                             snapshot_type="entry",
                             camera_label=cam.get("label"),
+                            _job_id=f"snapshot:entry:{tx.id}:{cam_key}",
+                            _queue_name="arq:queue:snapshot",
                         )
                     logger.info(
                         "entry_snapshot_enqueued",
