@@ -62,10 +62,21 @@ class EnetTransport:
         self._sock: socket.socket | None = None
 
     def connect(self, timeout: float = 5.0) -> None:
-        """Establish TCP connection to controller."""
+        """Establish TCP connection to controller with keepalive."""
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.settimeout(timeout)
         self._sock.connect((self.host, self.port))
+        self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        for opt, val in (
+            (getattr(socket, "TCP_KEEPIDLE", None), 10),
+            (getattr(socket, "TCP_KEEPINTVL", None), 5),
+            (getattr(socket, "TCP_KEEPCNT", None), 3),
+        ):
+            if opt is not None:
+                try:
+                    self._sock.setsockopt(socket.IPPROTO_TCP, opt, val)
+                except OSError:
+                    pass
 
     def close(self) -> None:
         """Close TCP connection."""
