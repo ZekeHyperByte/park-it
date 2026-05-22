@@ -511,7 +511,7 @@ const protocolLabels = {
 }
 function protocolLabel(p) { return protocolLabels[p] || p }
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, middleware: 'auth' })
 
 const route = useRoute()
 const router = useRouter()

@@ -100,7 +100,7 @@ async function handleLogin() {
 
   try {
     await authStore.login(form.username, form.password)
-    router.push('/')
+    router.push(authStore.isAdmin ? '/' : '/pos')
   } catch (err) {
     // Error is stored in authStore.error
   }

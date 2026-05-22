@@ -27,7 +27,7 @@
       <!-- Navigation -->
       <nav class="flex-1 overflow-y-auto p-2 space-y-0.5">
         <NuxtLink
-          v-for="item in menuItems"
+          v-for="item in visibleItems"
           :key="item.path"
           :to="item.path"
           :class="[
@@ -43,31 +43,6 @@
             <span v-show="!collapsed">{{ item.label }}</span>
           </Transition>
         </NuxtLink>
-
-        <!-- Admin section -->
-        <template v-if="authStore.isAdmin">
-          <div v-show="!collapsed" class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Admin
-          </div>
-          <div v-show="collapsed" class="mx-auto my-2 h-1 w-1 rounded-full bg-muted-foreground" />
-          <NuxtLink
-            v-for="item in adminItems"
-            :key="item.path"
-            :to="item.path"
-            :class="[
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-              isActive(item.path)
-                ? 'bg-primary/10 text-primary font-medium'
-                : 'text-muted-foreground hover:bg-surface hover:text-foreground',
-            ]"
-            :title="item.label"
-          >
-            <component :is="item.icon" class="h-5 w-5 shrink-0" :stroke-width="2" />
-            <Transition name="fade-text">
-              <span v-show="!collapsed">{{ item.label }}</span>
-            </Transition>
-          </NuxtLink>
-        </template>
       </nav>
 
       <!-- Footer -->
@@ -128,6 +103,8 @@ import {
   Bell,
   Settings,
   Cpu,
+  Activity,
+  Wrench,
 } from 'lucide-vue-next'
 
 const authStore = useAuthStore()
@@ -139,29 +116,40 @@ const clock = ref('')
 let clockTimer = null
 
 // markRaw on icon components — they never need reactivity tracking.
-const menuItems = [
-  { path: '/', label: 'Dashboard', icon: markRaw(LayoutGrid) },
+const operatorItems = [
   { path: '/pos', label: 'POS Kiosk', icon: markRaw(Monitor) },
   { path: '/gate-in', label: 'Gate In', icon: markRaw(LogIn) },
+  { path: '/gates-status', label: 'Gate Status', icon: markRaw(Activity) },
   { path: '/transaksi', label: 'Transaksi', icon: markRaw(FileText) },
-  { path: '/member', label: 'Member', icon: markRaw(Users) },
-  { path: '/report', label: 'Laporan', icon: markRaw(BarChart3) },
   { path: '/notification', label: 'Notifikasi', icon: markRaw(Bell) },
 ]
 
 const adminItems = [
+  { path: '/', label: 'Dashboard', icon: markRaw(LayoutGrid) },
+  { path: '/gates-status', label: 'Gate Status', icon: markRaw(Activity) },
+  { path: '/transaksi', label: 'Transaksi', icon: markRaw(FileText) },
+  { path: '/member', label: 'Member', icon: markRaw(Users) },
+  { path: '/report', label: 'Laporan', icon: markRaw(BarChart3) },
+  { path: '/notification', label: 'Notifikasi', icon: markRaw(Bell) },
   { path: '/setting', label: 'Pengaturan', icon: markRaw(Settings) },
   { path: '/device', label: 'Perangkat', icon: markRaw(Cpu) },
+  { path: '/setup', label: 'Setup', icon: markRaw(Wrench) },
 ]
+
+const visibleItems = computed(() =>
+  authStore.isAdmin ? adminItems : operatorItems,
+)
 
 const pageTitle = computed(() => {
   const titles = {
     '/': 'Dashboard',
     '/pos': 'POS — Gate Out',
     '/gate-in': 'Gate In Monitor',
+    '/gates-status': 'Gate Status',
     '/transaksi': 'Transaksi',
     '/setting': 'Pengaturan',
     '/device': 'Perangkat',
+    '/setup': 'Setup',
     '/member': 'Member',
     '/report': 'Laporan',
     '/notification': 'Notifikasi',

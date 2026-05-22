@@ -1,16 +1,36 @@
 /**
- * Auth Middleware
+ * Auth + Role Middleware
  *
- * Protects routes that require authentication.
- * Redirects unauthenticated users to /login.
- * Redirects authenticated users away from /login.
+ * - Redirects unauthenticated users to /login.
+ * - Routes logged-in users away from /login based on role.
+ * - Blocks operators from admin-only pages (URL-hack defense).
  */
+
+const ADMIN_ONLY_PREFIXES = [
+  '/',          // admin dashboard (exact match handled below)
+  '/setting',
+  '/device',
+  '/setup',
+  '/member',
+  '/report',
+]
+
+const OPERATOR_HOME = '/pos'
+const ADMIN_HOME = '/'
+
+function isAdminOnly(path) {
+  if (path === '/') return true
+  return ADMIN_ONLY_PREFIXES
+    .filter((p) => p !== '/')
+    .some((p) => path === p || path.startsWith(p + '/'))
+}
 
 export default defineNuxtRouteMiddleware(async (to, from) => {
   const authStore = useAuthStore()
 
-  // Initialize auth if not yet loaded
-  if (!authStore.user && !authStore.isLoading) {
+  const publicRoutes = ['/login']
+
+  if (!authStore.user && !authStore.isLoading && !publicRoutes.includes(to.path)) {
     try {
       await authStore.fetchUser()
     } catch {
@@ -18,15 +38,15 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     }
   }
 
-  const publicRoutes = ['/login']
-
-  // If not logged in and trying to access a protected route
   if (!authStore.isLoggedIn && !publicRoutes.includes(to.path)) {
     return navigateTo('/login')
   }
 
-  // If logged in and trying to access login page
   if (authStore.isLoggedIn && to.path === '/login') {
-    return navigateTo('/')
+    return navigateTo(authStore.isAdmin ? ADMIN_HOME : OPERATOR_HOME)
+  }
+
+  if (authStore.isLoggedIn && !authStore.isAdmin && isAdminOnly(to.path)) {
+    return navigateTo(OPERATOR_HOME)
   }
 })
