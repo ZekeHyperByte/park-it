@@ -106,12 +106,14 @@ def create_app() -> FastAPI:
         settlements,
         settings as settings_routes,
         setup,
+        shift_assignments,
         shifts,
         site_config,
         snapshots,
         transactions,
         users,
         vehicle_types,
+        worker_sessions,
     )
     from api.app.websocket import handlers as ws_handlers
 
@@ -125,6 +127,8 @@ def create_app() -> FastAPI:
     app.include_router(payments.router, prefix="/api")
     app.include_router(vehicle_types.router, prefix="/api")
     app.include_router(shifts.router, prefix="/api")
+    app.include_router(shift_assignments.router, prefix="/api")
+    app.include_router(worker_sessions.router, prefix="/api")
     app.include_router(areas.router, prefix="/api")
     app.include_router(emoney_readers.router, prefix="/api")
     app.include_router(members.router, prefix="/api")

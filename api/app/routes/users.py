@@ -3,9 +3,10 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.app.middleware.auth import require_admin
+from api.app.middleware.auth import require_admin, require_operator
 from api.app.schemas.common import SuccessResponse
 from api.app.schemas.user import UserCreate, UserResponse, UserUpdate
+from api.app.schemas.worker_session import SetWorkerPinRequest
 from api.app.services.user import (
     create_user,
     delete_user,
@@ -19,6 +20,26 @@ from shared.logging import get_logger
 logger = get_logger("user_routes")
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+
+@router.get("/workers", response_model=list[UserResponse])
+async def list_workers(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_operator),
+) -> list[UserResponse]:
+    """List active workers (operator/supervisor/admin) for shift handover picker."""
+    from sqlalchemy import select
+
+    from api.app.models.user import User
+
+    result = await db.execute(
+        select(User)
+        .where(User.is_active == True)
+        .where(User.worker_pin.isnot(None))
+        .order_by(User.full_name)
+    )
+    users = result.scalars().all()
+    return [UserResponse.model_validate(u) for u in users]
 
 
 @router.get("", response_model=list[UserResponse])
@@ -90,3 +111,42 @@ async def delete_existing_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     await delete_user(db, user)
     return SuccessResponse(message="User deleted")
+
+
+@router.post("/{user_id}/set-pin", response_model=SuccessResponse)
+async def set_worker_pin(
+    user_id: int,
+    data: SetWorkerPinRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_admin),
+) -> SuccessResponse:
+    """Set or update a worker's 4-digit PIN (admin only)."""
+    from fastapi import HTTPException
+
+    from api.app.utils.password import hash_password
+
+    user = await get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user.worker_pin = hash_password(data.pin)
+    await db.commit()
+    logger.info("worker_pin_set", user_id=user_id)
+    return SuccessResponse(message="PIN updated")
+
+
+@router.delete("/{user_id}/pin", response_model=SuccessResponse)
+async def remove_worker_pin(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_admin),
+) -> SuccessResponse:
+    """Remove a worker's PIN (admin only)."""
+    from fastapi import HTTPException
+
+    user = await get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user.worker_pin = None
+    await db.commit()
+    logger.info("worker_pin_removed", user_id=user_id)
+    return SuccessResponse(message="PIN removed")
