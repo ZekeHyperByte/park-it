@@ -18,7 +18,7 @@ arq_redis_settings = RedisSettings(
 
 
 class CriticalWorkerSettings:
-    """Critical worker: handles print jobs, snapshots, and other time-sensitive tasks."""
+    """Critical worker: handles print jobs (time-sensitive, blocks gate UX)."""
 
     redis_settings = arq_redis_settings
     queue_name = "arq:queue:critical"
@@ -26,7 +26,6 @@ class CriticalWorkerSettings:
     functions = [
         func("workers.critical.print_worker.print_ticket", name="print_ticket"),
         func("workers.critical.print_worker.print_receipt", name="print_receipt"),
-        func("workers.critical.snapshot_worker.take_snapshot", name="take_snapshot"),
     ]
 
     # Retry settings
@@ -34,6 +33,24 @@ class CriticalWorkerSettings:
     job_timeout = 30  # seconds
 
     # Worker settings
+    handle_signals = True
+
+
+class SnapshotWorkerSettings:
+    """Snapshot worker: separate queue so slow RTSP grabs never block prints."""
+
+    redis_settings = arq_redis_settings
+    queue_name = "arq:queue:snapshot"
+
+    functions = [
+        func("workers.critical.snapshot_worker.take_snapshot", name="take_snapshot"),
+    ]
+
+    # Snapshot retries less aggressive — disk full / camera offline shouldn't spin.
+    max_tries = 2
+    job_timeout = 30
+    max_jobs = 5  # cap parallel RTSP opens
+
     handle_signals = True
 
 

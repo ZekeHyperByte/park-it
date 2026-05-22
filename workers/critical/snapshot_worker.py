@@ -63,6 +63,8 @@ async def take_snapshot(
             image_data = await _download_http(camera_url)
 
     if image_data is None:
+        from api.app.middleware.metrics import snapshot_jobs_total
+        snapshot_jobs_total.labels(snapshot_type=snapshot_type, result="failure").inc()
         return {"status": "error", "message": "Snapshot capture failed"}
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -74,6 +76,8 @@ async def take_snapshot(
         filepath.write_bytes(image_data)
     except Exception as e:
         logger.error("snapshot_save_failed", error=str(e), filepath=str(filepath))
+        from api.app.middleware.metrics import snapshot_jobs_total
+        snapshot_jobs_total.labels(snapshot_type=snapshot_type, result="failure").inc()
         return {"status": "error", "message": f"Save failed: {e}"}
 
     logger.info("snapshot_saved", filepath=str(filepath), size=len(image_data))
@@ -91,6 +95,8 @@ async def take_snapshot(
     if snapshot_id and snapshot_type == "exit":
         await _broadcast_exit_snapshot(gate_id, snapshot_id)
 
+    from api.app.middleware.metrics import snapshot_jobs_total
+    snapshot_jobs_total.labels(snapshot_type=snapshot_type, result="success").inc()
     return {
         "status": "success",
         "filepath": str(filepath),

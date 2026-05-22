@@ -46,6 +46,22 @@ async def generate_settlement_file(ctx, db=None) -> dict:
     from api.app.models.emoney_reader import EmoneyReader
     from api.app.models.emoney_settlement import EmoneySettlement
 
+    # Lease lock: prevent duplicate settlement runs (e.g. two workers, manual + cron).
+    # Lock keyed by operational day in Jakarta TZ. 1h TTL safely outlives the job.
+    redis_client = ctx.get("redis") if ctx else None
+    lock_acquired = False
+    lock_key = None
+    if redis_client is not None:
+        day_key = datetime.now(JAKARTA_TZ).strftime("%Y%m%d")
+        lock_key = f"lock:settlement:{day_key}"
+        try:
+            lock_acquired = await redis_client.set(lock_key, "1", nx=True, ex=3600)
+        except Exception as e:
+            logger.warning("settlement_lock_error", error=str(e))
+        if not lock_acquired:
+            logger.warning("settlement_lock_held", lock_key=lock_key)
+            return {"files_generated": 0, "total_transactions": 0, "skipped_locked": True}
+
     os.makedirs(SETTLEMENT_DIR, exist_ok=True)
 
     files_generated = 0

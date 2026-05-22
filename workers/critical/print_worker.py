@@ -304,9 +304,13 @@ async def print_ticket(
         # Decrement paper counter on success
         await _decrement_paper_counter(printer_id)
 
+        from api.app.middleware.metrics import print_jobs_total
+        print_jobs_total.labels(kind="ticket", result="success").inc()
         return {"status": "success", "message": "Ticket printed"}
     except Exception as e:
         logger.error("print_ticket_failed", gate_id=gate_id, error=str(e))
+        from api.app.middleware.metrics import print_jobs_total
+        print_jobs_total.labels(kind="ticket", result="failure").inc()
         raise Retry(defer=ctx.get("job_try", 1) * 5)
 
 
@@ -368,9 +372,13 @@ async def print_receipt(
         # Decrement paper counter on success
         await _decrement_paper_counter(printer_id)
 
+        from api.app.middleware.metrics import print_jobs_total
+        print_jobs_total.labels(kind="receipt", result="success").inc()
         return {"status": "success", "message": "Receipt printed"}
     except Exception as e:
         logger.error("print_receipt_failed", gate_id=gate_id, error=str(e))
+        from api.app.middleware.metrics import print_jobs_total
+        print_jobs_total.labels(kind="receipt", result="failure").inc()
         raise Retry(defer=ctx.get("job_try", 1) * 5)
 
 
