@@ -105,6 +105,8 @@ import {
   Cpu,
   Activity,
   Wrench,
+  CalendarDays,
+  UserCog,
 } from 'lucide-vue-next'
 
 const authStore = useAuthStore()
@@ -129,6 +131,8 @@ const adminItems = [
   { path: '/gates-status', label: 'Gate Status', icon: markRaw(Activity) },
   { path: '/transaksi', label: 'Transaksi', icon: markRaw(FileText) },
   { path: '/member', label: 'Member', icon: markRaw(Users) },
+  { path: '/shifts-schedule', label: 'Jadwal Shift', icon: markRaw(CalendarDays) },
+  { path: '/personnel', label: 'Personil', icon: markRaw(UserCog) },
   { path: '/report', label: 'Laporan', icon: markRaw(BarChart3) },
   { path: '/notification', label: 'Notifikasi', icon: markRaw(Bell) },
   { path: '/setting', label: 'Pengaturan', icon: markRaw(Settings) },
@@ -147,6 +151,8 @@ const pageTitle = computed(() => {
     '/gate-in': 'Gate In Monitor',
     '/gates-status': 'Gate Status',
     '/transaksi': 'Transaksi',
+    '/shifts-schedule': 'Jadwal Shift',
+    '/personnel': 'Personil',
     '/setting': 'Pengaturan',
     '/device': 'Perangkat',
     '/setup': 'Setup',

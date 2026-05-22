@@ -95,5 +95,3 @@ pids/
 *.bak
 *.orig
 
-# Graphify output
-graphify-out/

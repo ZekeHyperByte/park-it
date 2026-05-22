@@ -73,21 +73,25 @@ Single `Gate` table with `direction='IN'|'OUT'` — replaces old `GateIn`/`GateO
 - **WebSocket:** API -> Frontend POS (real-time vehicle/payment notifications)
 - Event schemas: `shared/events.py` (Pydantic models)
 
-### Daemon State Machines
+### Gate Daemons / Exit Lane
 
-- `daemons/gate_in.py` — Entry gate (IDLE -> VEHICLE_DETECTED -> WAITING_PRINT -> OPEN -> ...)
-- `daemons/gate_out.py` — Exit gate (IDLE -> VEHICLE_PRESENT -> WAITING_PAYMENT -> OPENING -> CLOSED)
+- `daemons/gate_in.py` — Entry gate state machine (IDLE -> VEHICLE_DETECTED -> WAITING_PRINT -> OPEN -> ...). Includes IN2 trigger on IN1 presence.
 - Entry point: `daemons/cli.py` (reads gate config from DB)
 - Heartbeat every 30s, never import `api.database` (independent engine)
+- **Exit lane has no autonomous daemon.** `daemons/gate_out.py` was removed (commit `f4a3eb0`). Exit lane is driven directly by `booth_bridge/`:
+  - `booth_bridge/omnikey_poller.py` — Omnikey 5427 evdev RFID poll loop, calls `/api/payments/rfid/booth`, fires local relay (replaced legacy `uhf_poller.py`)
+  - `booth_bridge/gate_opener.py` — writes serial open hex to local relay, sleeps `close_delay_seconds` (default 3s), writes close hex
+  - `booth_bridge/api_client.py` — async HTTP client (X-API-Key auth) for gate config + booth RFID exit endpoint
+  - `booth_bridge/websocket_server.py` — emoney_deduct SUCCESS fires local relay open + broadcasts `emoney_payment_completed`
+  - `booth_bridge/main.py` — per-task supervisor with backoff (commit `9d2b13a`)
 
 ### Two-Step Exit Flow (Cash)
 
-Cash payment does NOT auto-open gate. Flow: operator pays -> receipt prints (ARQ) -> operator presses Space/button -> gate opens. RFID and e-money auto-open (pre-verified).
+Cash payment does NOT auto-open gate. Flow: operator pays -> receipt prints (ARQ) -> operator presses Space/button -> booth_bridge fires local relay open. RFID and e-money auto-open (pre-verified via booth bridge).
 
-### E-Money Payment Paths
+### E-Money Payment Path (single path; no more manless variant)
 
-1. **Booth Bridge** (attended gates): Card tap -> Booth Bridge serial -> API `/emoney/booth-result` (API key auth) -> gate opens
-2. **Manless** (unmanned gates): Card tap -> GateOutDaemon -> PASSTI reader -> Redis event -> API -> gate opens
+- Card tap -> Booth Bridge PASSTI serial -> API `/emoney/booth-result` (API key auth) -> on SUCCESS booth_bridge fires `gate_opener` local relay + broadcasts `emoney_payment_completed` WS event.
 
 ## Key Files
 
@@ -101,7 +105,10 @@ Cash payment does NOT auto-open gate. Flow: operator pays -> receipt prints (ARQ
 | `api/app/routes/gates_unified.py` | Gate CRUD + open/close commands |
 | `daemons/base.py` | Abstract daemon (Redis Streams, heartbeat) |
 | `daemons/gate_in.py` | Entry gate state machine |
-| `daemons/gate_out.py` | Exit gate state machine |
+| `booth_bridge/main.py` | Booth Bridge supervisor (drives exit lane) |
+| `booth_bridge/gate_opener.py` | Exit lane local relay open/close |
+| `booth_bridge/omnikey_poller.py` | Booth RFID poller (Omnikey 5427 evdev) |
+| `booth_bridge/websocket_server.py` | Booth POS WS server (PASSTI e-money + relay) |
 | `shared/config.py` | Pydantic Settings (reads .env) |
 | `shared/events.py` | Redis IPC event schemas |
 | `workers/settings.py` | ARQ worker configuration |
@@ -131,13 +138,17 @@ Key variables in `.env` (see `.env.example` for full list):
 
 ## graphify
 
-Project has knowledge graph at graphify-out/ with god nodes, community structure, cross-file relationships.
+Knowledge graph at graphify-out/ — god nodes, communities, cross-file relationships. 3530 nodes, 4945 edges (80% EXTRACTED, 20% INFERRED), 9 hyperedges.
 
-Rules:
-- ALWAYS read graphify-out/GRAPH_REPORT.md before reading source files, running grep/glob, or answering codebase questions. Graph = primary map.
-- IF graphify-out/wiki/index.md EXISTS, navigate it instead of reading raw files
-- Cross-module "how does X relate to Y" questions: prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — traverses EXTRACTED + INFERRED edges instead of scanning files
-- After modifying code, run `graphify update .` to keep graph current (AST-only, no API cost).
+**Navigation strategy (hyperedge-first):**
+
+1. Read GRAPH_REPORT.md for god nodes + surprising connections + hyperedges
+2. Cross-module questions: start at hyperedges — they model Redis Pub/Sub + Streams flows AST can't see (daemon↔API IPC, e-money dual path, settlement pipeline). Then navigate member nodes.
+3. Single-node context: `graphify explain "<concept>"`
+4. A→B traversal: `graphify path "<A>" "<B>"`
+5. Broad exploration: `graphify query "<question>"`
+6. Prefer graph over grep for cross-module questions (traverses EXTRACTED + INFERRED edges)
+7. After code changes: `graphify update .` (AST-only, no API cost)
 
 ## @RTK.md
 

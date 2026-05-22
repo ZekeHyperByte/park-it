@@ -45,6 +45,9 @@ pids/
 # Self
 graphify-out/
 
+# Archived docs (historical changelogs + executed plans)
+docs/archive/
+
 # OS
 .DS_Store
 Thumbs.db

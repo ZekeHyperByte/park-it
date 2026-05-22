@@ -1,0 +1,16 @@
+# Auto-generated noise — exclude from repo
+cache/
+wiki/Community_*.md
+transcripts/
+memory/
+.graphify_chunk_*.json
+.graphify_detect.json
+.graphify_extract.json
+.graphify_ast.json
+.graphify_semantic*.json
+.graphify_analysis.json
+.graphify_incremental.json
+.graphify_cached.json
+.graphify_uncached*.txt
+.graphify_old.json
+.needs_update
