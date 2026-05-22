@@ -59,8 +59,9 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (err) {
       if (err.status === 401) {
         user.value = null
+      } else {
+        error.value = err.message || 'Failed to fetch user'
       }
-      error.value = err.message || 'Failed to fetch user'
       throw err
     } finally {
       isLoading.value = false
