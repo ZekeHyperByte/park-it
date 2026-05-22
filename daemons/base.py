@@ -66,13 +66,13 @@ class BaseDaemon(ABC):
         self._redis = aioredis.from_url(
             settings.redis_url,
             decode_responses=True,
+            health_check_interval=30,
         )
 
-        # Recover state from Redis
-        await self._recover_state()
-
-        # Ensure consumer group exists
-        await self._ensure_consumer_group()
+        # Redis may not be reachable at boot (broker still starting). Retry
+        # state recovery + consumer-group creation with backoff so the daemon
+        # comes up cleanly without a systemd restart loop.
+        await self._wait_for_redis_then_init()
 
         self._running = True
         logger.info(
@@ -116,7 +116,7 @@ class BaseDaemon(ABC):
                 )
 
         if self._redis:
-            await self._redis.close()
+            await self._redis.aclose()
             self._redis = None
 
         logger.info("daemon_stopped", gate_id=self.gate_id)
@@ -130,6 +130,30 @@ class BaseDaemon(ABC):
         """Programmatic stop (for testing)."""
         self._running = False
         self._shutdown_event.set()
+
+    async def _wait_for_redis_then_init(self) -> None:
+        """Block until Redis answers PING, then recover state + ensure group.
+
+        Caps backoff at 30s so we don't sit silent forever.
+        """
+        if self._redis is None:
+            raise RuntimeError("Redis not initialized")
+        delay = 1.0
+        while True:
+            try:
+                await self._redis.ping()
+                await self._recover_state()
+                await self._ensure_consumer_group()
+                return
+            except Exception as e:
+                logger.warning(
+                    "redis_init_retry",
+                    gate_id=self.gate_id,
+                    error=str(e),
+                    next_retry_s=delay,
+                )
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 30.0)
 
     async def _on_started(self) -> None:
         """Hook called after _running is set to True but before main tasks start.
@@ -263,14 +287,49 @@ class BaseDaemon(ABC):
     # ------------------------------------------------------------------
 
     async def publish_event(self, event: BaseEvent) -> int:
-        """Publish an event to the Redis Pub/Sub channel.
+        """Publish an event to Pub/Sub (fanout) AND append to a bounded Stream.
+
+        The Stream gives POS clients a replay buffer to fill in events that
+        arrived during a Redis blip or WS reconnect. MAXLEN ~1000 keeps the
+        log cheap; older entries are trimmed automatically.
 
         Returns:
-            Number of subscribers that received the message.
+            Number of subscribers that received the Pub/Sub message.
         """
         if self._redis is None:
             raise RuntimeError("Redis not connected")
-        payload = event.model_dump_json()
+        base_payload = event.model_dump_json()
+
+        # Best-effort Stream tee. Pub/Sub remains the primary delivery path;
+        # if XADD fails we still want fanout to succeed. When XADD succeeds
+        # we inject its returned stream id into the published payload so live
+        # WS clients can track a high-water mark for replay on reconnect.
+        stream_id: str | None = None
+        try:
+            stream_id = await self._redis.xadd(
+                f"parking.eventlog.{self.gate_id}",
+                {"event": base_payload},
+                maxlen=1000,
+                approximate=True,
+            )
+        except Exception as e:
+            logger.warning(
+                "event_stream_xadd_failed",
+                gate_id=self.gate_id,
+                event_type=event.event_type,
+                error=str(e),
+            )
+
+        if stream_id:
+            try:
+                obj = json.loads(base_payload)
+                obj["_event_id"] = stream_id
+                payload = json.dumps(obj)
+            except json.JSONDecodeError:
+                payload = base_payload
+        else:
+            payload = base_payload
+
         result = await self._redis.publish(self._event_channel, payload)
         logger.debug(
             "event_published",

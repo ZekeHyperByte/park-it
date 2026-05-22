@@ -30,6 +30,7 @@ from protocols.compass.protocol import (
     cmd_open1,
     cmd_pr3,
     cmd_rss,
+    cmd_stat,
     cmd_stop1,
     cmd_trig1,
 )
@@ -78,6 +79,15 @@ class GateInDaemon(BaseDaemon):
         self._print_decision_timer: asyncio.Task | None = None
         self._validating_task: asyncio.Task | None = None
         self._in1_on = False
+
+        # Circuit breaker for controller send: if N consecutive send errors,
+        # fast-fail subsequent sends for `cooldown_s` instead of waiting for
+        # each socket-write timeout. The STAT heartbeat will re-probe the
+        # controller; a successful send (heartbeat or otherwise) resets state.
+        self._cb_fail_count = 0
+        self._cb_threshold = 3
+        self._cb_cooldown_s = 15.0
+        self._cb_open_until = 0.0
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -172,9 +182,26 @@ class GateInDaemon(BaseDaemon):
     async def _start_polling(self) -> None:
         self._poll_task = asyncio.create_task(self._rss_listener(), name="poll")
         self._tasks.append(self._poll_task)
+        self._tasks.append(asyncio.create_task(self._controller_heartbeat(), name="ctrl_hb"))
         if self.has_rfid and self.hw.get("rfid", {}).get("connection") == "direct_serial":
             task = asyncio.create_task(self._rfid_serial_reader_task(), name="rfid_serial")
             self._tasks.append(task)
+
+    async def _controller_heartbeat(self) -> None:
+        """Send periodic STAT to keep controller's connected-client state alive.
+
+        Compass controller LED flashes rapidly if it doesn't see PC-side
+        traffic, even with TCP socket open. STAT every 5s is enough.
+        """
+        while self._running:
+            try:
+                await asyncio.sleep(5)
+                if self.controller and self.controller.is_connected():
+                    await self._send_controller_command(cmd_stat())
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug("controller_heartbeat_error", gate_id=self.gate_id, error=str(e))
 
     async def _setup_rss(self) -> None:
         if self.controller and self.controller.is_connected():
@@ -266,6 +293,13 @@ class GateInDaemon(BaseDaemon):
         else:
             parsed = parse_stat(msg)
             if parsed["wiegand_w"] or parsed["wiegand_x"]:
+                logger.info(
+                    "wiegand_diag",
+                    gate_id=self.gate_id,
+                    raw_hex=msg.hex(),
+                    w=parsed["wiegand_w"],
+                    x=parsed["wiegand_x"],
+                )
                 await self._send_controller_command(cmd_ack_wiegand())
                 if self.state == STATE_WAITING_INPUT and self.has_rfid:
                     if parsed["wiegand_w"]:
@@ -505,17 +539,35 @@ class GateInDaemon(BaseDaemon):
         await self._display(line1, line2)
 
     async def _cmd_print_ticket(self, barcode: str, gate_name: str) -> None:
+        if not self.has_ticket_printer:
+            logger.info("print_ticket_skipped_disabled", gate_id=self.gate_id, barcode=barcode)
+            return
         logger.info("print_ticket_commanded", gate_id=self.gate_id, barcode=barcode)
         try:
             from shared.redis import get_arq_redis
             arq_redis = await get_arq_redis()
-            await arq_redis.enqueue_job("print_ticket", gate_id=self.gate_id, barcode=barcode, gate_name=gate_name)
+            await arq_redis.enqueue_job(
+                "print_ticket",
+                gate_id=self.gate_id,
+                barcode=barcode,
+                gate_name=gate_name,
+                _job_id=f"print_ticket:{barcode}",
+            )
         except Exception as e:
             logger.error("print_ticket_enqueue_failed", gate_id=self.gate_id, error=str(e))
 
     async def _cmd_print_ticket_then_open(self, barcode: str, gate_name: str) -> None:
         """Print-first cash entry flow. Gate ALWAYS opens — never trap a vehicle."""
         logger.info("print_ticket_then_open", gate_id=self.gate_id, barcode=barcode)
+        audio_cfg = self.hw.get("audio", {})
+
+        if not self.has_ticket_printer:
+            logger.info("cash_ticket_print_skipped_disabled", gate_id=self.gate_id, barcode=barcode)
+            if audio_cfg.get("enabled", True):
+                await self._cmd_play_audio(audio_cfg.get("ticket_track", 2))
+            await self._cmd_open_gate()
+            return
+
         print_success = False
         try:
             from datetime import datetime
@@ -540,7 +592,6 @@ class GateInDaemon(BaseDaemon):
         except Exception as e:
             logger.error("cash_ticket_print_failed", gate_id=self.gate_id, barcode=barcode, error=str(e))
 
-        audio_cfg = self.hw.get("audio", {})
         if not print_success:
             await self._send_controller_command(cmd_ds("CATAT NOMOR:", barcode))
             await self.publish_event(BaseEvent(event_type="print_failed_alert", gate_id=self.gate_id))
@@ -639,13 +690,42 @@ class GateInDaemon(BaseDaemon):
             ser.close()
 
     async def _send_controller_command(self, command: bytes) -> None:
-        if self.controller and self.controller.is_connected():
-            try:
-                async with self._controller_lock:
-                    self.controller.send(command)
-                logger.debug("controller_cmd_sent", gate_id=self.gate_id, cmd=command.hex())
-            except Exception as e:
-                logger.error("controller_cmd_error", gate_id=self.gate_id, error=str(e))
+        if not (self.controller and self.controller.is_connected()):
+            return
+
+        # Circuit breaker open? Fast-fail without grabbing the lock.
+        loop = asyncio.get_event_loop()
+        now = loop.time()
+        if now < self._cb_open_until:
+            logger.warning(
+                "controller_cb_open_skip",
+                gate_id=self.gate_id,
+                reopen_in_s=round(self._cb_open_until - now, 2),
+            )
+            return
+
+        try:
+            async with self._controller_lock:
+                self.controller.send(command)
+            logger.debug("controller_cmd_sent", gate_id=self.gate_id, cmd=command.hex())
+            if self._cb_fail_count:
+                logger.info("controller_cb_reset", gate_id=self.gate_id)
+            self._cb_fail_count = 0
+        except Exception as e:
+            self._cb_fail_count += 1
+            logger.error(
+                "controller_cmd_error",
+                gate_id=self.gate_id,
+                error=str(e),
+                fail_count=self._cb_fail_count,
+            )
+            if self._cb_fail_count >= self._cb_threshold:
+                self._cb_open_until = now + self._cb_cooldown_s
+                logger.warning(
+                    "controller_cb_open",
+                    gate_id=self.gate_id,
+                    cooldown_s=self._cb_cooldown_s,
+                )
 
     @staticmethod
     def _card_type_name(code: int) -> str:
