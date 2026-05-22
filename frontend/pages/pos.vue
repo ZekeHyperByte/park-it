@@ -1,14 +1,23 @@
 <template>
   <NuxtLayout name="kiosk">
     <template #status-bar>
-      <PosStatusBar
-        :gate-name="selectedGate?.name || '--'"
-        :ws-connected="gateStore.wsConnected"
-        :booth-connected="gateStore.boothConnected"
-        :hardware-status="hardwareStatus"
-        :transaction-count="posSession.transactionCount"
-        :cash-collected="posSession.cashCollected"
-      />
+      <div class="flex items-center gap-2 w-full min-w-0">
+        <PosStatusBar
+          class="flex-1 min-w-0"
+          :gate-name="selectedGate?.name || '--'"
+          :ws-connected="gateStore.wsConnected"
+          :booth-connected="gateStore.boothConnected"
+          :hardware-status="hardwareStatus"
+          :transaction-count="posSession.transactionCount"
+          :cash-collected="posSession.cashCollected"
+        />
+        <div class="h-5 w-px bg-border shrink-0" />
+        <PosWorkerBadge
+          :worker="workerSessionStore.currentWorker"
+          :session-status="workerSessionStore.sessionStatus"
+          @click="onWorkerBadgeClick"
+        />
+      </div>
     </template>
 
     <!-- Main: State-driven single-column layout -->
@@ -78,6 +87,30 @@
       />
     </template>
 
+    <!-- Worker Check-In (blocking — no session active) -->
+    <PosWorkerCheckInDialog
+      v-if="showCheckInDialog"
+      :gate-id="selectedGate?.id"
+      :workers="workerSessionStore.workers"
+      :is-loading="workerSessionStore.isLoading"
+      @check-in="onCheckIn"
+    />
+
+    <!-- Worker Handover -->
+    <PosWorkerHandoverDialog
+      v-if="showHandoverDialog"
+      :session-id="workerSessionStore.activeSession?.id"
+      :current-worker="workerSessionStore.currentWorker"
+      :workers="workerSessionStore.workers"
+      :is-loading="workerSessionStore.isLoading"
+      :initial-step="handoverInitialStep"
+      :early-leave="isEarlyLeave"
+      @confirm-outgoing="onConfirmOutgoing"
+      @confirm-incoming="onConfirmIncoming"
+      @force-leave="onForceLeave"
+      @cancel="showHandoverDialog = false"
+    />
+
     <!-- Cash Dialog -->
     <PosCashDialog
       v-model:open="showCashDialog"
@@ -107,12 +140,33 @@ const authStore = useAuthStore()
 const websiteStore = useWebsiteStore()
 const gateStore = useGateStore()
 const posSession = usePosSessionStore()
+const workerSessionStore = useWorkerSessionStore()
 const { $ws } = useNuxtApp()
 const config = useRuntimeConfig()
 const { fetchApi } = useApi()
 const sound = useSound()
 const { hardwareStatus, updateFromGate, updateWebSocketStatus, startPolling, stopPolling } = useHardwareStatus()
 const { detectCardType, maskCardNumber } = useFormatters()
+
+// Worker session state
+const showHandoverDialog = ref(false)
+let shiftEndTimer = null
+
+const showCheckInDialog = computed(() =>
+  !!selectedGate.value &&
+  !workerSessionStore.activeSession &&
+  !workerSessionStore.isLoading
+)
+
+const handoverInitialStep = computed(() =>
+  workerSessionStore.isPendingHandover ? 'pending' : 'outgoing'
+)
+
+const isEarlyLeave = computed(() => {
+  const endTime = workerSessionStore.shiftEndTime
+  if (!endTime) return false
+  return new Date() < endTime
+})
 
 // Refs
 let unsubscribeWs = null
@@ -480,6 +534,56 @@ function onGateChange(gateId) {
   updateFromGate(gate)
 }
 
+// Worker session handlers
+function onWorkerBadgeClick() {
+  if (!workerSessionStore.activeSession) return  // check-in dialog handles it
+  showHandoverDialog.value = true
+}
+
+async function onCheckIn(payload) {
+  await workerSessionStore.checkIn(payload)
+  toast.success(`Selamat bertugas, ${workerSessionStore.currentWorker?.full_name || ''}!`)
+}
+
+async function onConfirmOutgoing(payload) {
+  await workerSessionStore.confirmOutgoing(payload)
+  // dialog stays open in pending step
+}
+
+async function onConfirmIncoming(payload) {
+  await workerSessionStore.confirmIncoming(payload)
+  showHandoverDialog.value = false
+  scheduleShiftEndTimer()
+  toast.success(`Serah terima berhasil. Selamat bertugas!`)
+}
+
+async function onForceLeave(payload) {
+  await workerSessionStore.forceLeave(payload)
+  showHandoverDialog.value = false
+  toast.warning('Anda meninggalkan pos. Admin telah diberitahu.')
+}
+
+function scheduleShiftEndTimer() {
+  if (shiftEndTimer) {
+    clearTimeout(shiftEndTimer)
+    shiftEndTimer = null
+  }
+  const endTime = workerSessionStore.shiftEndTime
+  if (!endTime) return
+  const msUntilEnd = endTime.getTime() - Date.now()
+  if (msUntilEnd <= 0) return
+  shiftEndTimer = setTimeout(() => {
+    if (workerSessionStore.sessionStatus === 'ACTIVE') {
+      showHandoverDialog.value = true
+    }
+  }, msUntilEnd)
+}
+
+// Watch for pending handover state (e.g. page reload mid-handover)
+watch(() => workerSessionStore.isPendingHandover, (val) => {
+  if (val) showHandoverDialog.value = true
+})
+
 // Toast helper (using vue-sonner)
 const toast = {
   success: (msg) => useNuxtApp().$toast?.success?.(msg) || console.log('[success]', msg),
@@ -520,6 +624,13 @@ onMounted(async () => {
 
   connectBooth()
   startPolling(60000)
+
+  // Worker session init (after gate detection so gateId is available)
+  await workerSessionStore.fetchWorkers()
+  if (selectedGate.value?.id) {
+    await workerSessionStore.fetchActiveSession(selectedGate.value.id)
+    scheduleShiftEndTimer()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -530,5 +641,6 @@ onBeforeUnmount(() => {
   disconnectBooth()
   stopPolling()
   gateStore.stopDurationTimer()
+  if (shiftEndTimer) clearTimeout(shiftEndTimer)
 })
 </script>

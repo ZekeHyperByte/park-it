@@ -1,0 +1,48 @@
+<template>
+  <button
+    :class="[
+      'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+      uncovered
+        ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+        : pendingHandover
+          ? 'bg-warning/10 text-warning hover:bg-warning/20'
+          : 'bg-surface text-muted-foreground hover:bg-surface/80 hover:text-foreground',
+    ]"
+    :title="tooltipText"
+    @click="$emit('click')"
+  >
+    <svg class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+    <span class="font-medium truncate max-w-[120px]">{{ displayName }}</span>
+    <span v-if="pendingHandover" class="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
+    <span v-else-if="uncovered" class="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
+  </button>
+</template>
+
+<script setup>
+import { computed } from 'vue'
+
+const props = defineProps({
+  worker: { type: Object, default: null },
+  sessionStatus: { type: String, default: null },
+})
+
+defineEmits(['click'])
+
+const uncovered = computed(() => !props.worker && !props.sessionStatus)
+const pendingHandover = computed(() => props.sessionStatus === 'PENDING_HANDOVER')
+
+const displayName = computed(() => {
+  if (uncovered.value) return 'Tidak ada petugas'
+  if (pendingHandover.value) return 'Menunggu pengganti...'
+  return props.worker?.full_name || props.worker?.username || '—'
+})
+
+const tooltipText = computed(() => {
+  if (uncovered.value) return 'Pos tidak terjaga — klik untuk check-in'
+  if (pendingHandover.value) return 'Menunggu petugas pengganti'
+  return `Petugas: ${displayName.value} — klik untuk ganti shift`
+})
+</script>
