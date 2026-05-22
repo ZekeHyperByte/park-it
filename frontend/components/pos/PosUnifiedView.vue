@@ -1,31 +1,30 @@
 <template>
-  <div class="flex h-full flex-col p-4 gap-4">
-    <!-- Photos: only when transaction active -->
-    <div class="flex-shrink-0">
+  <div class="flex h-full min-h-0 flex-col p-3 gap-2">
+    <!-- Photos: fixed compact height, only when transaction active -->
+    <div v-if="hasTransaction" class="flex-shrink-0 h-28">
       <PhotoComparison
-        v-show="hasTransaction"
         :entry-photo-url="entryPhotoUrl"
         :exit-photo-url="exitPhotoUrl"
         :entry-time="transaction?.entry_time"
         :entry-gate-name="transaction?.entry_gate_name"
       />
-      <div
-        v-show="!hasTransaction"
-        class="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground/30"
-      >
-        <ScanLine class="h-12 w-12" />
-        <span class="text-sm">Scan barcode atau nomor plat kendaraan</span>
-      </div>
+    </div>
+    <div
+      v-else
+      class="flex-shrink-0 flex flex-col items-center justify-center py-4 gap-1 text-muted-foreground/30"
+    >
+      <ScanLine class="h-10 w-10" />
+      <span class="text-sm">Scan barcode atau nomor plat kendaraan</span>
     </div>
 
-    <!-- Transaction Info Card: Always visible, scrollable if needed -->
-    <div class="flex-1 overflow-y-auto space-y-3">
+    <!-- Transaction Info: flex-1 with overflow guard -->
+    <div class="flex-1 min-h-0 overflow-y-auto space-y-2">
       <!-- Plate Number -->
       <div class="text-center">
         <div class="text-[10px] uppercase text-muted-foreground">Nomor Plat</div>
         <div
           :class="[
-            'font-mono text-5xl font-black tracking-widest',
+            'font-mono text-4xl font-black tracking-widest leading-tight',
             hasTransaction ? 'text-foreground' : 'text-muted-foreground/30'
           ]"
         >
@@ -42,12 +41,12 @@
         <InfoItem label="Jenis" :value="vehicleTypeName" />
       </div>
 
-      <!-- Price: Always large, shows placeholder when empty -->
-      <div class="text-center py-4">
+      <!-- Price -->
+      <div class="text-center py-1">
         <div class="text-xs uppercase text-muted-foreground">Total Parkir</div>
         <div
           :class="[
-            'text-7xl font-black tabular-nums',
+            'text-5xl font-black tabular-nums leading-tight',
             hasTransaction ? 'text-success' : 'text-muted-foreground/30'
           ]"
         >
@@ -97,7 +96,7 @@
     </div>
 
     <!-- Payment Buttons: Always visible, disabled when no transaction -->
-    <div class="flex-shrink-0 space-y-3">
+    <div class="flex-shrink-0 space-y-2">
       <PaymentButton
         icon="cash"
         label="TUNAI"
@@ -228,8 +227,10 @@ function onBarcodeSubmit() {
 
 function focusBarcode() {
   nextTick(() => {
-    const input = barcodeInput.value?.$el?.querySelector('input') || barcodeInput.value
-    input?.focus()
+    const ref = barcodeInput.value
+    const el = ref?.$el ?? ref
+    const input = el?.querySelector?.('input') ?? (el?.tagName === 'INPUT' ? el : null)
+    input?.focus?.()
   })
 }
 

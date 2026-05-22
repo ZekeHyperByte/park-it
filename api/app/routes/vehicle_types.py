@@ -8,7 +8,7 @@ from api.app.cache.reference_data import (
     get_cached_vehicle_types,
     invalidate_vehicle_types,
 )
-from api.app.middleware.auth import require_admin
+from api.app.middleware.auth import require_admin, require_auth
 from api.app.models.vehicle_type import VehicleType
 from api.app.schemas.common import SuccessResponse
 from api.app.schemas.vehicle_type import (
@@ -29,7 +29,7 @@ router = APIRouter(prefix="/vehicle-types", tags=["Vehicle Types"])
 async def list_vehicle_types(
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_auth),
 ) -> list[VehicleTypeResponse]:
     """List all vehicle types (cached)."""
     # Only cache unfiltered, unpaginated lists

@@ -54,6 +54,7 @@ import { useFormatters } from '~/composables/useFormatters'
 const props = defineProps({
   gateName: { type: String, default: '--' },
   wsConnected: { type: Boolean, default: false },
+  boothConnected: { type: Boolean, default: false },
   hardwareStatus: { type: Object, default: () => ({}) },
   transactionCount: { type: Number, default: 0 },
   cashCollected: { type: Number, default: 0 },
@@ -68,10 +69,10 @@ const formattedCash = computed(() => formatCurrency(props.cashCollected))
 
 const indicators = computed(() => [
   {
-    label: 'Controller',
-    ok: props.hardwareStatus?.controller?.status === 'online',
-    warn: props.hardwareStatus?.controller?.status === 'stale',
-    statusText: props.hardwareStatus?.controller?.status || 'unknown',
+    label: 'Booth',
+    ok: props.boothConnected,
+    warn: false,
+    statusText: props.boothConnected ? 'connected' : 'disconnected',
   },
   {
     label: 'E-Money',

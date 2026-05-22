@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.middleware.api_key import require_api_key
-from api.app.middleware.auth import require_admin, require_operator
+from api.app.middleware.auth import require_admin, require_auth, require_operator
 from api.app.models.gate import Gate
 from api.app.schemas.common import SuccessResponse
 from api.app.schemas.gate import GateCreate, GateResponse, GateUpdate
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/gates", tags=["Gates"])
 async def list_gates(
     direction: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_auth),
 ) -> list[GateResponse]:
     """List all gates, optionally filtered by direction."""
     query = select(Gate)

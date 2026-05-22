@@ -4,6 +4,7 @@
       <PosStatusBar
         :gate-name="selectedGate?.name || '--'"
         :ws-connected="gateStore.wsConnected"
+        :booth-connected="gateStore.boothConnected"
         :hardware-status="hardwareStatus"
         :transaction-count="posSession.transactionCount"
         :cash-collected="posSession.cashCollected"
@@ -65,7 +66,7 @@
     </div>
 
     <template #action-bar>
-      <QuickActionBar
+      <PosQuickActionBar
         :payment-state="gateStore.paymentState"
         :emoney-state="gateStore.emoneyPaymentState"
         :awaiting-gate-open="gateStore.awaitingGateOpen"
@@ -78,14 +79,14 @@
     </template>
 
     <!-- Cash Dialog -->
-    <CashDialog
+    <PosCashDialog
       v-model:open="showCashDialog"
       :tariff="currentTariff"
       @confirm="confirmCashPayment"
     />
 
     <!-- RFID Dialog -->
-    <RfidDialog
+    <PosRfidDialog
       v-model:open="showRfidDialog"
       @confirm="confirmRfidPayment"
     />
@@ -313,6 +314,7 @@ async function openGateAction() {
     }))
     sound.gateOpen()
     toast.success('Palang pintu dibuka')
+    gateStore.clearTransaction()
     return
   }
 
@@ -459,15 +461,22 @@ function onGateChange(gateId) {
   unsubscribeWs = $ws.on(gateCode, (event) => {
     gateStore.handleWsEvent(event)
 
-    if (event.type === 'vehicle_detected') {
+    if (event.type === 'ws_open') {
+      gateStore.setWsConnected(true)
+      updateWebSocketStatus(true)
+    } else if (event.type === 'ws_close' || event.type === 'ws_error') {
+      gateStore.setWsConnected(false)
+      updateWebSocketStatus(false)
+    } else if (event.type === 'vehicle_detected') {
       sound.vehicleDetected()
     } else if (event.type === 'timeout_alert') {
       sound.timeoutAlert()
     }
   })
 
-  gateStore.setWsConnected($ws.isConnected(gateCode))
-  updateWebSocketStatus($ws.isConnected(gateCode))
+  const connected = $ws.isConnected(gateCode)
+  gateStore.setWsConnected(connected)
+  updateWebSocketStatus(connected)
   updateFromGate(gate)
 }
 

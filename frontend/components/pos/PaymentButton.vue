@@ -1,7 +1,7 @@
 <template>
   <button
     :class="[
-      'w-full h-20 flex items-center justify-between px-6 rounded-xl font-bold text-white text-xl transition-all',
+      'w-full h-14 flex items-center justify-between px-5 rounded-xl font-bold text-white text-lg transition-all',
       'hover:enabled:scale-[1.02] active:enabled:scale-[0.98]',
       'disabled:opacity-30 disabled:cursor-not-allowed',
       buttonColorClass,

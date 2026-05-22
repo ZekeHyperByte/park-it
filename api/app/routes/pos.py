@@ -1,11 +1,15 @@
 """POS (booth) management routes."""
 
+from datetime import datetime, time
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.middleware.auth import require_admin, require_auth
+from api.app.models.parking_transaction import ParkingTransaction
 from api.app.models.pos import Pos
+from api.app.models.shift import Shift
 from api.app.schemas.common import SuccessResponse
 from api.app.schemas.pos import PosCreate, PosResponse, PosUpdate
 from api.database import get_db
@@ -54,6 +58,67 @@ async def get_pos_by_ip(
 
     logger.info("pos_detected_by_ip", pos_id=pos.id, code=pos.code, ip=client_ip)
     return PosResponse.model_validate(pos)
+
+
+@router.get("/shift-summary")
+async def get_shift_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    """Return current shift name, time range, and aggregated POS totals for today.
+
+    Used by POS frontend status bar. Falls back to empty payload if no active shift.
+    """
+    now = datetime.now()
+    today_start = datetime.combine(now.date(), time.min)
+
+    # Resolve current shift by wall-clock time (handles overnight wrap)
+    shift_result = await db.execute(select(Shift).where(Shift.is_active == True))  # noqa: E712
+    shifts = list(shift_result.scalars().all())
+    current = now.time()
+    active_shift = None
+    for s in shifts:
+        if s.start_time <= s.end_time:
+            if s.start_time <= current < s.end_time:
+                active_shift = s
+                break
+        else:  # overnight
+            if current >= s.start_time or current < s.end_time:
+                active_shift = s
+                break
+
+    # Aggregate today's completed cash transactions for current operator
+    operator_id = current_user.get("sub")
+    try:
+        operator_id_int = int(operator_id) if operator_id is not None else None
+    except (TypeError, ValueError):
+        operator_id_int = None
+
+    cash_q = select(
+        func.coalesce(func.sum(ParkingTransaction.paid_amount), 0),
+        func.count(ParkingTransaction.id),
+    ).where(
+        ParkingTransaction.exit_time >= today_start,
+        ParkingTransaction.payment_method == "CASH",
+    )
+    if operator_id_int is not None:
+        cash_q = cash_q.where(ParkingTransaction.operator_id == operator_id_int)
+
+    cash_collected, transaction_count = (await db.execute(cash_q)).one()
+
+    if active_shift:
+        time_range = f"{active_shift.start_time.strftime('%H:%M')} - {active_shift.end_time.strftime('%H:%M')}"
+        shift_name = active_shift.name
+    else:
+        shift_name = ""
+        time_range = ""
+
+    return {
+        "shift_name": shift_name,
+        "shift_time_range": time_range,
+        "cash_collected": int(cash_collected or 0),
+        "transaction_count": int(transaction_count or 0),
+    }
 
 
 @router.get("", response_model=list[PosResponse])

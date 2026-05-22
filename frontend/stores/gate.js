@@ -131,6 +131,7 @@ export const useGateStore = defineStore('gate', () => {
         if (res.transaction.entry_time) {
           startDurationTimer(res.transaction.entry_time)
         }
+        paymentState.value = 'WAITING_PAYMENT'
         return true
       }
       return false

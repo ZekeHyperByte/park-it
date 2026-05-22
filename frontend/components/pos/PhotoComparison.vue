@@ -1,8 +1,8 @@
 <template>
-  <div class="grid grid-cols-2 gap-3">
+  <div class="grid grid-cols-2 gap-3 h-full">
     <!-- Entry photo -->
     <div
-      class="relative aspect-video cursor-pointer overflow-hidden rounded-lg border border-border bg-surface"
+      class="relative cursor-pointer overflow-hidden rounded-lg border border-border bg-surface"
       @click="entryPhotoUrl && (fullscreenPhoto = 'entry')"
     >
       <img
@@ -24,7 +24,7 @@
 
     <!-- Exit photo -->
     <div
-      class="relative aspect-video cursor-pointer overflow-hidden rounded-lg border border-border bg-surface"
+      class="relative cursor-pointer overflow-hidden rounded-lg border border-border bg-surface"
       @click="exitPhotoUrl && (fullscreenPhoto = 'exit')"
     >
       <img

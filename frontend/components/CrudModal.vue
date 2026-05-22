@@ -165,6 +165,11 @@ watch(
         formData[field.prop] =
           props.initialData[field.prop] ?? (field.type === 'boolean' ? false : '')
       }
+      if (props.initialData.id != null) {
+        formData.id = props.initialData.id
+      } else {
+        delete formData.id
+      }
     }
   },
   { immediate: true },

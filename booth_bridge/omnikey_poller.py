@@ -1,19 +1,24 @@
-"""Evdev keyboard-wedge poller for booth exit RFID.
+"""Evdev keyboard-wedge poller for booth exit RFID (Omnikey 5427 CK).
 
-Omnikey 5427 CK in default HID keyboard mode types the card number plus
-Enter into the focused window. To avoid focus dependency, we grab the
-reader's evdev keyboard device exclusively, parse scancodes, buffer
-digits until Enter, then call /api/payments/rfid/booth and open the
-local relay on success.
+Omnikey 5427 CK in HID keyboard mode types the card UID as ASCII digits
+into the focused window. Some firmware configurations omit the trailing
+Enter, so we flush the digit buffer when either Enter is seen OR no
+digit arrives within `flush_idle_ms` after the last digit.
 
-Requires python-evdev. Process must have read access on /dev/input/event*
-(run as root, add user to `input` group, or install a udev rule).
+We grab the keyboard event device exclusively to avoid the digits
+leaking into the desktop's focused window.
+
+Requirements:
+    - python-evdev installed in the venv
+    - process can read /dev/input/eventX (input group OR udev rule OR
+      `setfacl -m u:<user>:rw /dev/input/eventXX`)
 """
 
 from __future__ import annotations
 
 import asyncio
 import glob
+import time
 from typing import Any, Awaitable, Callable
 
 from shared.logging import get_logger
@@ -40,6 +45,8 @@ class OmnikeyPoller:
         device_path: str | None = None,
         device_name_match: str = "omnikey",
         dedupe_cooldown_s: float = 3.0,
+        flush_idle_ms: int = 200,
+        min_card_len: int = 6,
     ) -> None:
         self.gate_id = gate_id
         self.gate_db_id = gate_db_id
@@ -49,10 +56,13 @@ class OmnikeyPoller:
         self.device_path = device_path
         self.device_name_match = device_name_match.lower()
         self.dedupe_cooldown_s = dedupe_cooldown_s
+        self.flush_idle_s = flush_idle_ms / 1000.0
+        self.min_card_len = min_card_len
         self._task: asyncio.Task | None = None
         self._running = False
         self._last_card: str | None = None
         self._last_card_at: float = 0.0
+        self._event_queue: asyncio.Queue | None = None
 
     def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -98,8 +108,10 @@ class OmnikeyPoller:
     async def _run(self) -> None:
         from evdev import KeyEvent, categorize, ecodes
 
+        loop = asyncio.get_event_loop()
+
         while self._running:
-            dev = await asyncio.get_event_loop().run_in_executor(None, self._find_device)
+            dev = await loop.run_in_executor(None, self._find_device)
             if dev is None:
                 logger.warning("omnikey_device_not_found", match=self.device_name_match)
                 await asyncio.sleep(3)
@@ -113,12 +125,41 @@ class OmnikeyPoller:
                 continue
 
             logger.info("omnikey_device_opened", device=dev.path, name=dev.name, gate_id=self.gate_id)
+
+            queue: asyncio.Queue = asyncio.Queue()
+
+            def _on_readable():
+                try:
+                    for ev in dev.read():
+                        queue.put_nowait(ev)
+                except BlockingIOError:
+                    pass
+                except OSError as e:
+                    queue.put_nowait(e)
+
+            loop.add_reader(dev.fd, _on_readable)
+
             buffer: list[str] = []
+            last_digit_at: float | None = None
 
             try:
-                async for event in dev.async_read_loop():
-                    if not self._running:
-                        break
+                while self._running:
+                    timeout = None
+                    if buffer and last_digit_at is not None:
+                        elapsed = time.monotonic() - last_digit_at
+                        timeout = max(0.0, self.flush_idle_s - elapsed)
+
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=timeout)
+                    except asyncio.TimeoutError:
+                        if buffer:
+                            await self._flush_buffer(buffer)
+                            buffer = []
+                            last_digit_at = None
+                        continue
+
+                    if isinstance(event, OSError):
+                        raise event
                     if event.type != ecodes.EV_KEY:
                         continue
                     key_event = categorize(event)
@@ -129,18 +170,21 @@ class OmnikeyPoller:
                         keycode = keycode[0]
                     if keycode in _DIGIT_KEYS:
                         buffer.append(_DIGIT_KEYS[keycode])
+                        last_digit_at = time.monotonic()
                     elif keycode in _ENTER_KEYS:
                         if buffer:
-                            card_number = "".join(buffer)
+                            await self._flush_buffer(buffer)
                             buffer = []
-                            await self._handle_card(card_number)
-                    else:
-                        continue
+                            last_digit_at = None
             except OSError as e:
                 logger.warning("omnikey_device_disconnected", error=str(e))
             except Exception as e:
                 logger.error("omnikey_loop_error", error=str(e))
             finally:
+                try:
+                    loop.remove_reader(dev.fd)
+                except Exception:
+                    pass
                 try:
                     dev.ungrab()
                 except Exception:
@@ -151,6 +195,12 @@ class OmnikeyPoller:
                     pass
 
             await asyncio.sleep(2)
+
+    async def _flush_buffer(self, buffer: list[str]) -> None:
+        if len(buffer) < self.min_card_len:
+            return
+        card_number = "".join(buffer)
+        await self._handle_card(card_number)
 
     async def _handle_card(self, card_number: str) -> None:
         now = asyncio.get_event_loop().time()

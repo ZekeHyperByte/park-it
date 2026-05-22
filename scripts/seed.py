@@ -47,7 +47,7 @@ async def seed() -> None:
         # Users
         admin = User(
             username="admin",
-            email="admin@eparking.local",
+            email="admin@eparking.com",
             password_hash=hash_password("admin123"),
             full_name="Administrator",
             role="admin",
@@ -55,7 +55,7 @@ async def seed() -> None:
         )
         operator = User(
             username="operator",
-            email="operator@eparking.local",
+            email="operator@eparking.com",
             password_hash=hash_password("operator123"),
             full_name="Operator Satu",
             role="operator",

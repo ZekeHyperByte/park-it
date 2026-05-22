@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.app.middleware.auth import require_admin
+from api.app.middleware.auth import require_admin, require_auth
 from api.app.models.setting import Setting
 from api.app.schemas.setting import SettingResponse, SettingUpdate
 from api.database import get_db
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/settings", tags=["Settings"])
 async def list_settings(
     group: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_auth),
 ) -> list[SettingResponse]:
     """List all settings."""
     query = select(Setting)
@@ -34,7 +34,7 @@ async def list_settings(
 async def get_setting(
     key: str,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_auth),
 ) -> SettingResponse:
     """Get setting by key."""
     from fastapi import HTTPException

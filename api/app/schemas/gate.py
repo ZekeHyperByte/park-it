@@ -212,6 +212,13 @@ class UhfReaderConfig(PeripheralConfig):
     port: int | None = None
 
 
+class OmnikeyReaderConfig(PeripheralConfig):
+    """Omnikey 5427 CK HID keyboard reader at booth."""
+
+    device_path: str | None = None
+    device_name_match: str = "omnikey"
+
+
 class HardwareConfig(BaseModel):
     """Complete hardware configuration for a gate."""
 
@@ -221,6 +228,11 @@ class HardwareConfig(BaseModel):
     gate_open_timeout_s: int | None = 10
     sensor_stuck_s: int | None = 30
 
+    # Serial relay barrier commands (ASCII or hex string)
+    open_command: str = ""
+    close_command: str = ""
+    close_delay_seconds: float = 3.0
+
     # Peripherals (all optional, enabled=false by default)
     rfid: RfidConfig = Field(default_factory=RfidConfig)
     ticket_printer: PrinterConfig = Field(default_factory=PrinterConfig)
@@ -229,6 +241,7 @@ class HardwareConfig(BaseModel):
     audio: AudioConfig = Field(default_factory=AudioConfig)
     led: PeripheralConfig = Field(default_factory=PeripheralConfig)
     uhf_reader: UhfReaderConfig = Field(default_factory=UhfReaderConfig)
+    omnikey_reader: OmnikeyReaderConfig = Field(default_factory=OmnikeyReaderConfig)
     receipt_printer: PrinterConfig = Field(default_factory=PrinterConfig)
 
 
