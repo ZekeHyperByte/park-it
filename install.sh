@@ -19,6 +19,7 @@ set -euo pipefail
 INSTALL_DIR="${INSTALL_DIR:-/opt/eparking}"
 APP_USER="${APP_USER:-eparking}"
 PG_PASSWORD="${PG_PASSWORD:-parking}"
+APP_TIMEZONE="${APP_TIMEZONE:-Asia/Jakarta}"
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 GATE_IDS=()
@@ -77,6 +78,19 @@ case "$DISTRO" in
   arch)   install_packages_arch ;;
   debian) install_packages_debian ;;
 esac
+
+# ---------------------------------------------------------------------------
+# 1b. System timezone
+# ---------------------------------------------------------------------------
+# Settlement files + transaction timestamps are operational-local time (WIB).
+# A mismatched system clock corrupts the daily Multibank cut, so pin the zone.
+current_tz="$(timedatectl show -p Timezone --value 2>/dev/null || echo "")"
+if [ "$current_tz" != "$APP_TIMEZONE" ]; then
+  log "Setting system timezone to $APP_TIMEZONE (was: ${current_tz:-unknown})..."
+  timedatectl set-timezone "$APP_TIMEZONE" || warn "Failed to set timezone — set $APP_TIMEZONE manually before go-live."
+else
+  log "Timezone already $APP_TIMEZONE."
+fi
 
 # ---------------------------------------------------------------------------
 # 2. App user
