@@ -415,31 +415,42 @@ async function confirmRfidPayment(cardNumber) {
   }
 }
 
-function startEmoneyPayment() {
+async function startEmoneyPayment() {
   const tx = gateStore.currentTransaction
-  if (!tx?.card_number) {
-    toast.warning('Transaksi tidak memiliki nomor kartu e-money')
+  if (!tx?.barcode) {
+    toast.warning('Pindai tiket terlebih dulu sebelum tap kartu')
     return
   }
   if (!selectedGate.value) return
 
-  if (gateStore.boothConnected && boothWs) {
-    boothWs.send(JSON.stringify({
-      action: 'emoney_deduct',
-      peripheral: 'emoney_reader',
-      amount: tx.tariff,
-      expected_card_number: tx.card_number,
-    }))
-    gateStore.setEmoneyState('PROCESSING')
+  if (!gateStore.boothConnected || !boothWs) {
+    toast.error('Booth bridge offline — tidak dapat memproses e-money')
     return
   }
 
   const gateCode = selectedGate.value.code || `gate-out-${selectedGate.value.id}`
-  gateStore.startEmoneyDeduct({
+  // 1. Arm the deduct server-side (stores pending state, returns recomputed fee).
+  const armed = await gateStore.startEmoneyDeduct({
     gateId: gateCode,
     gateOutId: selectedGate.value.id,
-    cardNumber: tx.card_number,
+    barcode: tx.barcode,
+    vehicleTypeId: tx.vehicle_type_id ?? null,
   })
+  if (!armed?.success) {
+    toast.error(armed?.message || 'Gagal menyiapkan pembayaran e-money')
+    return
+  }
+
+  // 2. Ask booth bridge to deduct the armed amount when the driver taps.
+  boothWs.send(JSON.stringify({
+    action: 'emoney_deduct',
+    peripheral: 'emoney_reader',
+    amount: armed.fee,
+    gate_id: gateCode,
+    gate_out_id: selectedGate.value.id,
+  }))
+  gateStore.setEmoneyState('PROCESSING')
+  toast.info('Silakan tap kartu e-money')
 }
 
 function cancelEmoney() {

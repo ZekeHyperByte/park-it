@@ -228,10 +228,11 @@ export const useGateStore = defineStore('gate', () => {
   }
 
   /**
-   * Initiate e-money deduct.
-   * Returns { success, message } — caller handles notifications.
+   * Arm an e-money deduct for a scanned ticket. API stores the pending
+   * (gate_id → transaction_id) state in Redis; booth_bridge fires the
+   * actual deduct when the driver taps. Returns { success, fee, transaction_id }.
    */
-  async function startEmoneyDeduct({ gateId, gateOutId, cardNumber }) {
+  async function startEmoneyDeduct({ gateId, gateOutId, barcode, vehicleTypeId = null }) {
     isLoading.value = true
     try {
       const { fetchApi } = useApi()
@@ -240,7 +241,8 @@ export const useGateStore = defineStore('gate', () => {
         body: JSON.stringify({
           gate_id: gateId,
           gate_out_id: gateOutId,
-          card_number: cardNumber,
+          barcode,
+          vehicle_type_id: vehicleTypeId,
         }),
       })
       if (res.success) {

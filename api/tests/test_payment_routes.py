@@ -131,7 +131,7 @@ class TestEmoneyDeduct:
         response = await client.post("/api/payments/emoney/deduct", json={
             "gate_id": "gate-out-1",
             "gate_out_id": 1,
-            "card_number": "EMONEY01",
+            "barcode": "RT100",
         })
 
         assert response.status_code == 200
