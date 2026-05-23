@@ -1,0 +1,94 @@
+# Alert rules for E-Parking v2.
+#
+# Metric names match api/app/middleware/metrics.py exactly. Wire these into
+# Prometheus via rule_files in prometheus.yml. Tune thresholds to site volume
+# before go-live — defaults assume a small-to-mid facility.
+
+groups:
+  - name: eparking-availability
+    rules:
+      - alert: ParkingAPIDown
+        expr: up{job="parking-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Parking API is down"
+          description: "Prometheus cannot scrape {{ $labels.instance }} for >1m. POS, gates, and payments are likely offline."
+
+      - alert: GateDaemonDown
+        # gate_online is 1 when the daemon's gate:heartbeat:<id> key is fresh
+        # (60s TTL). 0 for 2m means the daemon stopped heart-beating.
+        expr: gate_online == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Gate {{ $labels.gate_id }} daemon offline"
+          description: "No fresh heartbeat from gate {{ $labels.gate_id }} for >2m. Entry/exit on that lane is down — check the daemon and controller link."
+
+  - name: eparking-payments
+    rules:
+      - alert: HighPaymentFailureRate
+        # Failure ratio over 10m, only fires once there's meaningful volume
+        # (>0.1 attempts/s ~= 60/10m) so a single failure at 03:00 stays quiet.
+        expr: |
+          (
+            sum(rate(payment_attempts_total[10m]))
+            - sum(rate(payment_success_total[10m]))
+          )
+          / clamp_min(sum(rate(payment_attempts_total[10m])), 0.0001) > 0.2
+          and sum(rate(payment_attempts_total[10m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Payment failure rate >20%"
+          description: "More than 20% of payments failed over the last 10m. Check readers, printers, and the booth bridge."
+
+      - alert: PrintFailureSpike
+        expr: sum(rate(print_jobs_total{result="failure"}[10m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Printer failures elevated"
+          description: "Print jobs are failing repeatedly (tickets/receipts). Check paper, printer power, and controller passthrough."
+
+  - name: eparking-throughput
+    rules:
+      - alert: CriticalQueueBacklog
+        # The critical queue drives print/snapshot UX — backlog = gate stalls.
+        expr: arq_queue_depth{queue="arq:queue:critical"} > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Critical ARQ queue backlog"
+          description: "Critical queue depth {{ $value }} for >5m. The critical worker may be stuck or under-provisioned."
+
+      - alert: HighRequestLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 latency >1s"
+          description: "95th-percentile request latency exceeded 1s for >10m. Check DB load, pool exhaustion, and Redis."
+
+  - name: eparking-settlement
+    rules:
+      - alert: NoSettlementGenerated
+        # Settlement cron runs daily at 02:00 WIB. If no file was produced in
+        # the last 26h, the daily bank cut was missed.
+        expr: increase(settlement_files_generated_total[26h]) == 0
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Daily settlement file not generated"
+          description: "No settlement file generated in the last 26h. The daily Multibank cut may have been missed — investigate the background worker and cron."

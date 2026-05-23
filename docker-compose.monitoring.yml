@@ -1,0 +1,25 @@
+# Optional monitoring stack for E-Parking v2.
+#
+#   docker compose -f docker-compose.monitoring.yml up -d
+#
+# Prometheus scrapes the API /metrics endpoint and evaluates monitoring/alerts.yml.
+# The API binds 127.0.0.1:8000 on the host, so Prometheus uses host networking to
+# reach it. Add an Alertmanager target in monitoring/prometheus.yml to route alerts.
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: parking-prometheus
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+
+volumes:
+  prometheus_data:

@@ -1,0 +1,30 @@
+# Prometheus scrape config for E-Parking v2.
+#
+# The API exposes /metrics (prometheus_client) on 127.0.0.1:8000. Run Prometheus
+# on the same host (or give it network access to the API) and point it here:
+#   prometheus --config.file=monitoring/prometheus.yml
+#
+# Field default assumes Prometheus + the API share a host. Override the target
+# via the PARKING_API_TARGET label if the API lives elsewhere.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    system: eparking
+
+rule_files:
+  - alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []  # set to your Alertmanager host:port, e.g. ["localhost:9093"]
+
+scrape_configs:
+  - job_name: parking-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["127.0.0.1:8000"]
+        labels:
+          service: api
