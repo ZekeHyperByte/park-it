@@ -1,132 +1,118 @@
 <template>
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-    <div class="w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-2xl">
-      <!-- Header -->
-      <div class="mb-6 text-center">
-        <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-          <svg class="h-6 w-6 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
-        </div>
-        <h2 class="text-lg font-semibold text-foreground">Mulai Shift</h2>
-        <p class="mt-1 text-sm text-muted-foreground">
-          Pilih nama Anda dan masukkan PIN untuk memulai shift
-        </p>
-      </div>
+  <Teleport to="body">
+    <div class="fixed inset-0 z-50 flex items-center justify-center sketch-backdrop p-6" @keydown.esc.stop>
+      <div class="sketch-box w-full max-w-3xl p-7">
+        <!-- Header -->
+        <div class="text-xs uppercase tracking-[0.2em] font-hand-tight text-sketch-muted">BLOCKING · SEBELUM TRANSAKSI</div>
+        <h2 class="font-hand text-4xl mt-1 leading-none">Belum ada petugas</h2>
+        <p class="font-hand-body text-sm text-sketch-muted mt-2">pilih nama Anda lalu masukkan PIN untuk mulai shift.</p>
+        <div class="sketch-divider my-4"></div>
 
-      <!-- Step 1: Pick worker -->
-      <div v-if="step === 'pick'" class="space-y-2">
-        <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">Pilih petugas</p>
-        <button
-          v-for="worker in workers"
-          :key="worker.id"
-          :class="[
-            'w-full rounded-lg border px-4 py-3 text-left transition-colors',
-            selectedWorker?.id === worker.id
-              ? 'border-primary bg-primary/10 text-foreground'
-              : 'border-border bg-surface hover:border-primary/50 hover:bg-surface/80 text-foreground',
-          ]"
-          @click="selectWorker(worker)"
-        >
-          <span class="font-medium">{{ worker.full_name || worker.username }}</span>
-          <span class="ml-2 text-xs text-muted-foreground">{{ worker.role }}</span>
-        </button>
-
-        <div v-if="workers.length === 0" class="py-8 text-center text-sm text-muted-foreground">
-          Tidak ada petugas tersedia — hubungi admin untuk mengatur PIN
-        </div>
-
-        <div class="mt-4 flex items-center gap-2">
-          <label class="flex items-center gap-2 cursor-pointer select-none text-sm text-muted-foreground">
-            <input v-model="isSubstitute" type="checkbox" class="accent-primary" />
-            Saya menggantikan petugas lain
-          </label>
-        </div>
-
-        <div v-if="isSubstitute" class="mt-2">
-          <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Menggantikan siapa?</p>
-          <select
-            v-model="originalWorkerId"
-            class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+        <!-- Worker tiles -->
+        <div class="text-[11px] uppercase tracking-widest font-hand-tight text-sketch-muted mb-2">PETUGAS</div>
+        <div class="grid grid-cols-5 gap-2 mb-5">
+          <button
+            v-for="(worker, idx) in workers"
+            :key="worker.id"
+            class="sketch-tile px-3 py-3 text-left"
+            :class="{ 'is-active': selectedWorker?.id === worker.id }"
+            @click="pickWorker(worker)"
           >
-            <option :value="null">— Pilih petugas asli —</option>
-            <option v-for="w in workers.filter(w => w.id !== selectedWorker?.id)" :key="w.id" :value="w.id">
-              {{ w.full_name || w.username }}
-            </option>
-          </select>
-        </div>
-
-        <button
-          :disabled="!selectedWorker"
-          class="mt-4 w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-40"
-          @click="step = 'pin'"
-        >
-          Lanjutkan
-        </button>
-      </div>
-
-      <!-- Step 2: Enter PIN -->
-      <div v-else-if="step === 'pin'" class="space-y-4">
-        <div class="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3">
-          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary font-bold text-sm">
-            {{ initials(selectedWorker) }}
+            <div class="font-hand text-xl leading-none truncate">{{ worker.full_name || worker.username }}</div>
+            <div class="text-[10px] font-hand-tight text-sketch-muted truncate">{{ workerSub(worker) }}</div>
+          </button>
+          <div v-if="!workers.length" class="col-span-5 py-6 text-center font-hand-body text-sm text-sketch-muted">
+            Tidak ada petugas aktif — hubungi admin untuk mengatur PIN.
           </div>
-          <span class="font-medium text-foreground">{{ selectedWorker?.full_name || selectedWorker?.username }}</span>
-          <button class="ml-auto text-xs text-muted-foreground hover:text-foreground" @click="step = 'pick'">Ganti</button>
         </div>
 
-        <div>
-          <label class="block text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Masukkan PIN (4 digit)</label>
+        <!-- PIN boxes -->
+        <div class="text-[11px] uppercase tracking-widest font-hand-tight text-sketch-muted mb-2">PIN · 4 ANGKA</div>
+        <div class="flex items-end gap-5 mb-5">
+          <div class="flex gap-2">
+            <div
+              v-for="i in 4"
+              :key="i"
+              class="sketch-pin-box"
+              :class="{
+                'is-filled': pin.length >= i,
+                'is-current': pin.length === i - 1 && selectedWorker
+              }"
+            >{{ pin[i - 1] ? '•' : (pin.length === i - 1 && selectedWorker ? '|' : '') }}</div>
+          </div>
           <input
             ref="pinInput"
             v-model="pin"
             type="password"
             inputmode="numeric"
             maxlength="4"
-            placeholder="••••"
-            class="w-full rounded-lg border border-border bg-surface px-4 py-3 text-center text-2xl tracking-[0.5em] text-foreground placeholder:text-muted-foreground/40 focus:border-primary focus:outline-none"
+            class="sr-only"
             @keydown.enter="submit"
           />
+          <div class="ml-auto text-xs font-hand-body text-sketch-muted">
+            <span v-if="errorMsg" class="text-[color:var(--color-sketch-accent-red)]">{{ errorMsg }}</span>
+            <span v-else>salah PIN? hubungi supervisor</span>
+          </div>
         </div>
 
-        <div v-if="errorMsg" class="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
-          {{ errorMsg }}
-        </div>
-
-        <div class="flex gap-2">
-          <button
-            class="flex-1 rounded-lg border border-border px-4 py-3 text-sm font-medium text-foreground hover:bg-surface transition-colors"
-            @click="step = 'pick'"
+        <!-- Substitute toggle -->
+        <div class="flex items-center gap-3 mb-4">
+          <label class="flex items-center gap-2 cursor-pointer font-hand-body text-sm">
+            <input v-model="isSubstitute" type="checkbox" class="accent-[color:var(--color-sketch-ink)]" />
+            Saya menggantikan petugas lain
+          </label>
+          <select
+            v-if="isSubstitute"
+            v-model="originalWorkerId"
+            class="sketch-input px-3 py-1 font-hand-body text-sm"
           >
-            Kembali
-          </button>
+            <option :value="null">— pilih petugas asli —</option>
+            <option v-for="w in workers.filter(w => w.id !== selectedWorker?.id)" :key="w.id" :value="w.id">
+              {{ w.full_name || w.username }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Action -->
+        <div class="flex items-center justify-end gap-2">
           <button
-            :disabled="pin.length < 4 || isLoading"
-            class="flex-1 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-40"
+            class="sketch-btn is-go"
+            :disabled="!selectedWorker || pin.length < 4 || isLoading"
             @click="submit"
           >
+            <span class="sketch-chip mr-1 px-1.5 py-0">Enter</span>
             <span v-if="isLoading">Memproses...</span>
-            <span v-else>Mulai Shift</span>
+            <span v-else>MASUK SHIFT →</span>
           </button>
+        </div>
+
+        <!-- Bottom keyboard strip -->
+        <div class="mt-6 flex items-center justify-between pt-3 border-t border-dashed border-[color:var(--color-sketch-ink)]/40">
+          <div class="flex items-center gap-3 font-hand-body text-xs text-sketch-muted">
+            <span><span class="sketch-chip px-1.5 py-0">1–{{ Math.min(workers.length, 9) }}</span> Pilih petugas</span>
+            <span><span class="sketch-chip px-1.5 py-0">0–9</span> PIN</span>
+            <span><span class="sketch-chip px-1.5 py-0">Enter</span> Masuk Shift</span>
+          </div>
+          <div class="flex items-center gap-1 font-hand-body text-xs text-sketch-muted">
+            <span class="inline-block w-2 h-2 rounded-full bg-[color:var(--color-sketch-accent-red)]"></span>
+            Booth belum di check-in
+          </div>
         </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, nextTick, watch } from 'vue'
+import { ref, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
   gateId: { type: Number, required: true },
   workers: { type: Array, default: () => [] },
   isLoading: { type: Boolean, default: false },
 })
-
 const emit = defineEmits(['check-in'])
 
-const step = ref('pick')
 const selectedWorker = ref(null)
 const pin = ref('')
 const errorMsg = ref('')
@@ -134,27 +120,44 @@ const isSubstitute = ref(false)
 const originalWorkerId = ref(null)
 const pinInput = ref(null)
 
-function selectWorker(worker) {
-  selectedWorker.value = worker
+function workerSub(w) {
+  return w.shift_name || w.role || ''
+}
+function pickWorker(w) {
+  selectedWorker.value = w
+  pin.value = ''
+  errorMsg.value = ''
+  nextTick(() => pinInput.value?.focus())
 }
 
-function initials(worker) {
-  if (!worker) return '?'
-  const name = worker.full_name || worker.username || '?'
-  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-}
-
-watch(step, async (val) => {
-  if (val === 'pin') {
-    pin.value = ''
-    errorMsg.value = ''
-    await nextTick()
+function onKey(e) {
+  // Number 1..9 picks worker if PIN empty
+  if (!selectedWorker.value && /^[1-9]$/.test(e.key)) {
+    const idx = parseInt(e.key, 10) - 1
+    if (props.workers[idx]) {
+      pickWorker(props.workers[idx])
+      e.preventDefault()
+      return
+    }
+  }
+  // Focus PIN on numeric when worker selected
+  if (selectedWorker.value && /^[0-9]$/.test(e.key)) {
     pinInput.value?.focus()
   }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  nextTick(() => pinInput.value?.focus())
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+
+watch(pin, (val) => {
+  if (val.length > 4) pin.value = val.slice(0, 4)
 })
 
 async function submit() {
-  if (pin.value.length < 4 || props.isLoading) return
+  if (!selectedWorker.value || pin.value.length < 4 || props.isLoading) return
   errorMsg.value = ''
   try {
     await emit('check-in', {
@@ -165,8 +168,10 @@ async function submit() {
       originalWorkerId: isSubstitute.value ? originalWorkerId.value : null,
     })
   } catch (err) {
-    errorMsg.value = err.message || 'PIN salah atau terjadi kesalahan'
+    errorMsg.value = err.message || 'PIN salah'
     pin.value = ''
   }
 }
+
+defineExpose({ setError: (m) => { errorMsg.value = m; pin.value = '' } })
 </script>

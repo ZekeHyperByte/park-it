@@ -1,236 +1,209 @@
 <template>
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-    <div class="w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-2xl">
+  <Teleport to="body">
+    <div class="fixed inset-0 z-50 flex items-center justify-center sketch-backdrop p-6">
+      <div class="sketch-box w-full max-w-3xl p-7">
 
-      <!-- OUTGOING: step 1 — current worker confirms leaving -->
-      <template v-if="internalStep === 'outgoing'">
-        <div class="mb-6 text-center">
-          <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-warning/10">
-            <svg class="h-6 w-6 text-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-          </div>
-          <h2 class="text-lg font-semibold text-foreground">Selesai Shift</h2>
-          <p class="mt-1 text-sm text-muted-foreground">
-            Masukkan PIN Anda untuk mengkonfirmasi bahwa Anda selesai bertugas
-          </p>
-        </div>
-
-        <div class="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 mb-4">
-          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-warning/20 text-warning font-bold text-sm">
-            {{ initials(currentWorker) }}
-          </div>
+        <!-- Header -->
+        <div class="flex items-baseline justify-between">
           <div>
-            <p class="font-medium text-foreground">{{ currentWorker?.full_name || currentWorker?.username }}</p>
-            <p class="text-xs text-muted-foreground">Petugas aktif saat ini</p>
+            <div class="text-xs uppercase tracking-[0.2em] font-hand-tight text-sketch-muted">MULTI-STEP · SERAH TERIMA</div>
+            <h2 class="font-hand text-4xl mt-1 leading-none">{{ stepTitle }}</h2>
+          </div>
+          <div class="text-xs font-hand-body text-sketch-muted text-right max-w-[220px]">
+            Esc untuk batal · transaksi yang berjalan ditunda
           </div>
         </div>
 
-        <div class="mb-4">
-          <label class="block text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">PIN Anda (4 digit)</label>
-          <input
-            ref="outgoingPinInput"
-            v-model="outgoingPin"
-            type="password"
-            inputmode="numeric"
-            maxlength="4"
-            placeholder="••••"
-            class="w-full rounded-lg border border-border bg-surface px-4 py-3 text-center text-2xl tracking-[0.5em] text-foreground placeholder:text-muted-foreground/40 focus:border-primary focus:outline-none"
-            @keydown.enter="submitOutgoing"
-          />
-        </div>
-
-        <div v-if="earlyLeave" class="mb-4">
-          <label class="block text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Alasan pergi lebih awal</label>
-          <input
-            v-model="endReason"
-            type="text"
-            maxlength="255"
-            placeholder="Isi alasan..."
-            class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-          />
-        </div>
-
-        <div v-if="errorMsg" class="mb-3 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
-          {{ errorMsg }}
-        </div>
-
-        <div class="flex gap-2">
-          <button
-            class="flex-1 rounded-lg border border-border px-4 py-3 text-sm font-medium text-foreground hover:bg-surface transition-colors"
-            @click="$emit('cancel')"
-          >
-            Batal
-          </button>
-          <button
-            :disabled="outgoingPin.length < 4 || isLoading"
-            class="flex-1 rounded-lg bg-warning px-4 py-3 text-sm font-semibold text-warning-foreground transition-opacity disabled:opacity-40"
-            @click="submitOutgoing"
-          >
-            <span v-if="isLoading">Memproses...</span>
-            <span v-else>Konfirmasi Selesai</span>
-          </button>
-        </div>
-      </template>
-
-      <!-- PENDING: waiting for incoming worker -->
-      <template v-else-if="internalStep === 'pending'">
-        <div class="mb-6 text-center">
-          <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <svg class="h-6 w-6 text-primary animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-            </svg>
+        <!-- Stepper -->
+        <div class="flex items-center gap-3 my-5">
+          <div class="flex items-center gap-2">
+            <span class="sketch-stepper-dot" :class="stepClass(0)">{{ stepIdx > 0 ? '✓' : '1' }}</span>
+            <span class="font-hand-tight text-sm" :class="stepIdx === 0 ? '' : 'text-sketch-muted'">Petugas keluar</span>
           </div>
-          <h2 class="text-lg font-semibold text-foreground">Menunggu Petugas Pengganti</h2>
-          <p class="mt-1 text-sm text-muted-foreground">
-            Petugas pengganti harus konfirmasi sebelum Anda dapat meninggalkan pos
-          </p>
+          <span class="flex-1 h-px border-t border-dashed border-[color:var(--color-sketch-ink)]/50"></span>
+          <div class="flex items-center gap-2">
+            <span class="sketch-stepper-dot" :class="stepClass(1)">{{ stepIdx > 1 ? '✓' : '2' }}</span>
+            <span class="font-hand-tight text-sm" :class="stepIdx === 1 ? '' : 'text-sketch-muted'">Petugas masuk</span>
+          </div>
+          <span class="flex-1 h-px border-t border-dashed border-[color:var(--color-sketch-ink)]/50"></span>
+          <div class="flex items-center gap-2">
+            <span class="sketch-stepper-dot" :class="stepClass(2)">{{ stepIdx > 2 ? '✓' : '3' }}</span>
+            <span class="font-hand-tight text-sm" :class="stepIdx === 2 ? '' : 'text-sketch-muted'">Konfirmasi tutup kas</span>
+          </div>
         </div>
 
-        <!-- Incoming: pick + PIN -->
-        <div class="space-y-3">
-          <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Petugas pengganti</p>
-          <div class="grid grid-cols-2 gap-2">
+        <!-- Step 0: outgoing PIN -->
+        <template v-if="internalStep === 'outgoing'">
+          <div class="sketch-tile p-4 mb-4">
+            <div class="text-[11px] uppercase tracking-widest font-hand-tight text-sketch-muted">PETUGAS AKTIF</div>
+            <div class="font-hand text-2xl">{{ currentWorker?.full_name || currentWorker?.username }}</div>
+          </div>
+          <div class="text-[11px] uppercase tracking-widest font-hand-tight text-sketch-muted mb-2">PIN ANDA</div>
+          <div class="flex gap-2 mb-4">
+            <div v-for="i in 4" :key="i" class="sketch-pin-box"
+              :class="{ 'is-filled': outgoingPin.length >= i, 'is-current': outgoingPin.length === i - 1 }">
+              {{ outgoingPin[i - 1] ? '•' : (outgoingPin.length === i - 1 ? '|' : '') }}
+            </div>
+            <input ref="outgoingPinInput" v-model="outgoingPin" type="password" inputmode="numeric"
+              maxlength="4" class="sr-only" @keydown.enter="submitOutgoing" />
+          </div>
+
+          <div v-if="earlyLeave" class="mb-4">
+            <div class="text-[11px] uppercase tracking-widest font-hand-tight text-sketch-muted mb-1">ALASAN PERGI LEBIH AWAL</div>
+            <input v-model="endReason" type="text" maxlength="255" placeholder="Isi alasan..."
+              class="sketch-input w-full px-3 py-2 font-hand-body" />
+          </div>
+        </template>
+
+        <!-- Step 1: incoming worker + PIN -->
+        <template v-else-if="internalStep === 'pending'">
+          <div class="sketch-tile is-active p-3 mb-4">
+            <div class="flex items-center gap-2">
+              <span class="font-hand-tight text-xs uppercase tracking-widest">SUDAH SELESAI · LANGKAH 1</span>
+              <span class="ml-auto text-sketch-accent-green">✓</span>
+            </div>
+            <div class="font-hand text-lg leading-tight">
+              {{ currentWorker?.full_name || currentWorker?.username }} keluar shift · PIN diverifikasi
+            </div>
+            <div class="font-hand-body text-xs text-sketch-muted">tutup kas: Rp {{ formatRp(closingAmount) }} · {{ txCount }} transaksi</div>
+          </div>
+
+          <div class="text-[11px] uppercase tracking-widest font-hand-tight text-sketch-muted mb-2">SIAPA YANG MASUK?</div>
+          <div class="grid grid-cols-4 gap-2 mb-4">
             <button
-              v-for="worker in availableWorkers"
-              :key="worker.id"
-              :class="[
-                'rounded-lg border px-3 py-2.5 text-left text-sm transition-colors',
-                incomingWorker?.id === worker.id
-                  ? 'border-primary bg-primary/10 text-foreground'
-                  : 'border-border bg-surface hover:border-primary/50 text-foreground',
-              ]"
-              @click="incomingWorker = worker"
+              v-for="w in availableWorkers"
+              :key="w.id"
+              class="sketch-tile px-3 py-2.5 text-left"
+              :class="{ 'is-active': incomingWorker?.id === w.id }"
+              @click="incomingWorker = w; focusIncomingPin()"
             >
-              <span class="block font-medium">{{ worker.full_name || worker.username }}</span>
-              <span class="text-xs text-muted-foreground">{{ worker.role }}</span>
+              <div class="font-hand text-lg leading-none truncate">{{ w.full_name || w.username }}</div>
+              <div class="text-[10px] font-hand-tight text-sketch-muted truncate">{{ w.shift_name || w.role }}</div>
             </button>
+            <div v-if="!availableWorkers.length" class="col-span-4 py-4 text-center font-hand-body text-sm text-sketch-muted">
+              Tidak ada petugas lain tersedia.
+            </div>
           </div>
 
           <div v-if="incomingWorker">
-            <label class="block text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">PIN Petugas Pengganti</label>
-            <input
-              ref="incomingPinInput"
-              v-model="incomingPin"
-              type="password"
-              inputmode="numeric"
-              maxlength="4"
-              placeholder="••••"
-              class="w-full rounded-lg border border-border bg-surface px-4 py-3 text-center text-2xl tracking-[0.5em] text-foreground placeholder:text-muted-foreground/40 focus:border-primary focus:outline-none"
-              @keydown.enter="submitIncoming"
-            />
+            <div class="text-[11px] uppercase tracking-widest font-hand-tight text-sketch-muted mb-2">
+              PIN {{ (incomingWorker.full_name || incomingWorker.username).toUpperCase() }}
+            </div>
+            <div class="flex gap-2 mb-4">
+              <div v-for="i in 4" :key="i" class="sketch-pin-box"
+                :class="{ 'is-filled': incomingPin.length >= i, 'is-current': incomingPin.length === i - 1 }">
+                {{ incomingPin[i - 1] ? '•' : (incomingPin.length === i - 1 ? '|' : '') }}
+              </div>
+              <input ref="incomingPinInput" v-model="incomingPin" type="password" inputmode="numeric"
+                maxlength="4" class="sr-only" @keydown.enter="submitIncoming" />
+            </div>
           </div>
+        </template>
 
-          <div v-if="errorMsg" class="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
-            {{ errorMsg }}
+        <!-- Step 2: force-leave -->
+        <template v-else-if="internalStep === 'force'">
+          <p class="font-hand-body text-sm mb-3 text-sketch-muted">
+            Admin akan diberitahu. Pos dianggap tidak terjaga sampai petugas baru check-in.
+          </p>
+          <div class="mb-3">
+            <div class="text-[11px] uppercase tracking-widest font-hand-tight text-sketch-muted mb-1">ALASAN (WAJIB)</div>
+            <input v-model="forceLeaveReason" type="text" maxlength="255"
+              placeholder="darurat keluarga, sakit mendadak..."
+              class="sketch-input w-full px-3 py-2 font-hand-body" />
           </div>
+          <div class="mb-4">
+            <div class="text-[11px] uppercase tracking-widest font-hand-tight text-sketch-muted mb-1">KONFIRMASI PIN ANDA</div>
+            <div class="flex gap-2">
+              <div v-for="i in 4" :key="i" class="sketch-pin-box"
+                :class="{ 'is-filled': forcePin.length >= i, 'is-current': forcePin.length === i - 1 }">
+                {{ forcePin[i - 1] ? '•' : (forcePin.length === i - 1 ? '|' : '') }}
+              </div>
+              <input ref="forcePinInput" v-model="forcePin" type="password" inputmode="numeric"
+                maxlength="4" class="sr-only" @keydown.enter="submitForceLeave" />
+            </div>
+          </div>
+        </template>
 
+        <!-- Error -->
+        <div v-if="errorMsg" class="font-hand-body text-sm text-[color:var(--color-sketch-accent-red)] mb-3">
+          {{ errorMsg }}
+        </div>
+
+        <!-- Footer actions -->
+        <div class="flex items-center justify-between mt-4">
+          <div class="font-hand-body text-xs text-sketch-muted italic max-w-md">
+            <template v-if="internalStep === 'outgoing'">setelah langkah 1 → konfirmasi tutup kas oleh petugas masuk</template>
+            <template v-else-if="internalStep === 'pending'">petugas pengganti harus konfirmasi sebelum Anda boleh meninggalkan pos</template>
+            <template v-else>tindakan ini dicatat audit</template>
+          </div>
           <div class="flex gap-2">
-            <button
-              class="rounded-lg border border-destructive/30 px-3 py-2.5 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
-              @click="showForceLeave = true"
-            >
+            <button v-if="internalStep === 'pending'" class="sketch-btn is-danger" @click="internalStep = 'force'">
               Terpaksa Pergi
             </button>
+            <button class="sketch-btn" @click="$emit('cancel')">
+              <span class="sketch-chip mr-1 px-1.5 py-0">Esc</span> Batal
+            </button>
             <button
+              v-if="internalStep === 'outgoing'"
+              class="sketch-btn is-primary"
+              :disabled="outgoingPin.length < 4 || isLoading"
+              @click="submitOutgoing"
+            >
+              <span class="sketch-chip mr-1 px-1.5 py-0">Enter</span> LANJUT →
+            </button>
+            <button
+              v-else-if="internalStep === 'pending'"
+              class="sketch-btn is-go"
               :disabled="!incomingWorker || incomingPin.length < 4 || isLoading"
-              class="flex-1 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-40"
               @click="submitIncoming"
             >
-              <span v-if="isLoading">Memproses...</span>
-              <span v-else>Konfirmasi Serah Terima</span>
-            </button>
-          </div>
-        </div>
-      </template>
-
-      <!-- FORCE LEAVE confirmation -->
-      <template v-else-if="internalStep === 'force'">
-        <div class="mb-6 text-center">
-          <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
-            <svg class="h-6 w-6 text-destructive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-          </div>
-          <h2 class="text-lg font-semibold text-foreground">Terpaksa Meninggalkan Pos</h2>
-          <p class="mt-1 text-sm text-muted-foreground">
-            Admin akan diberitahu. Pos akan dianggap tidak terjaga sampai petugas baru check-in.
-          </p>
-        </div>
-
-        <div class="space-y-3">
-          <div>
-            <label class="block text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Alasan (wajib)</label>
-            <input
-              v-model="forceLeaveReason"
-              type="text"
-              maxlength="255"
-              placeholder="Contoh: darurat keluarga, sakit mendadak..."
-              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-            />
-          </div>
-          <div>
-            <label class="block text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Konfirmasi PIN Anda</label>
-            <input
-              v-model="forcePin"
-              type="password"
-              inputmode="numeric"
-              maxlength="4"
-              placeholder="••••"
-              class="w-full rounded-lg border border-border bg-surface px-4 py-3 text-center text-2xl tracking-[0.5em] text-foreground placeholder:text-muted-foreground/40 focus:border-primary focus:outline-none"
-              @keydown.enter="submitForceLeave"
-            />
-          </div>
-
-          <div v-if="errorMsg" class="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
-            {{ errorMsg }}
-          </div>
-
-          <div class="flex gap-2">
-            <button
-              class="flex-1 rounded-lg border border-border px-4 py-3 text-sm font-medium text-foreground hover:bg-surface transition-colors"
-              @click="internalStep = 'pending'; showForceLeave = false"
-            >
-              Kembali
+              <span class="sketch-chip mr-1 px-1.5 py-0">Enter</span> SERAH TERIMA →
             </button>
             <button
+              v-else
+              class="sketch-btn is-danger"
               :disabled="forcePin.length < 4 || !forceLeaveReason.trim() || isLoading"
-              class="flex-1 rounded-lg bg-destructive px-4 py-3 text-sm font-semibold text-destructive-foreground transition-opacity disabled:opacity-40"
               @click="submitForceLeave"
             >
-              <span v-if="isLoading">Memproses...</span>
-              <span v-else>Tinggalkan Pos</span>
+              <span class="sketch-chip mr-1 px-1.5 py-0">Enter</span> TINGGALKAN POS →
             </button>
           </div>
         </div>
-      </template>
 
+        <!-- Bottom keyboard strip -->
+        <div class="mt-6 flex items-center justify-between pt-3 border-t border-dashed border-[color:var(--color-sketch-ink)]/40">
+          <div class="flex items-center gap-3 font-hand-body text-xs text-sketch-muted">
+            <span><span class="sketch-chip px-1.5 py-0">1–9</span> Pilih petugas masuk</span>
+            <span><span class="sketch-chip px-1.5 py-0">0–9</span> PIN</span>
+            <span><span class="sketch-chip px-1.5 py-0">Enter</span> Lanjut</span>
+            <span><span class="sketch-chip px-1.5 py-0">Esc</span> Batal</span>
+          </div>
+          <div class="flex items-center gap-1 font-hand-body text-xs text-sketch-muted">
+            <span class="inline-block w-2 h-2 rounded-full bg-[color:var(--color-sketch-highlight)]"></span>
+            Serah-terima shift · langkah {{ stepIdx + 1 }} dari 3
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
   sessionId: { type: Number, required: true },
   currentWorker: { type: Object, default: null },
   workers: { type: Array, default: () => [] },
   isLoading: { type: Boolean, default: false },
-  // 'outgoing' = show outgoing confirm, 'pending' = already PENDING_HANDOVER
   initialStep: { type: String, default: 'outgoing' },
   earlyLeave: { type: Boolean, default: false },
+  closingAmount: { type: Number, default: 0 },
+  txCount: { type: Number, default: 0 },
 })
-
 const emit = defineEmits(['confirm-outgoing', 'confirm-incoming', 'force-leave', 'cancel'])
 
 const internalStep = ref(props.initialStep)
-const showForceLeave = ref(false)
-
 const outgoingPin = ref('')
 const endReason = ref('')
 const incomingWorker = ref(null)
@@ -241,39 +214,60 @@ const errorMsg = ref('')
 
 const outgoingPinInput = ref(null)
 const incomingPinInput = ref(null)
+const forcePinInput = ref(null)
 
 const availableWorkers = computed(() =>
   props.workers.filter(w => w.id !== props.currentWorker?.id)
 )
-
-watch(showForceLeave, (val) => {
-  if (val) internalStep.value = 'force'
+const stepIdx = computed(() => {
+  if (internalStep.value === 'outgoing') return 0
+  if (internalStep.value === 'pending') return 1
+  if (internalStep.value === 'force') return 1
+  return 2
+})
+const stepTitle = computed(() => {
+  if (internalStep.value === 'outgoing') return 'Petugas keluar'
+  if (internalStep.value === 'pending') return 'Petugas masuk'
+  return 'Tinggalkan pos'
 })
 
-watch(() => props.initialStep, (val) => {
-  internalStep.value = val
-})
+function stepClass(i) {
+  if (stepIdx.value > i) return 'is-done'
+  if (stepIdx.value === i) return 'is-active'
+  return ''
+}
+function formatRp(v) {
+  return Number(v || 0).toLocaleString('id-ID')
+}
+function focusIncomingPin() {
+  incomingPin.value = ''
+  nextTick(() => incomingPinInput.value?.focus())
+}
 
+watch(() => props.initialStep, (val) => { internalStep.value = val })
 watch(internalStep, async (val) => {
   errorMsg.value = ''
-  if (val === 'outgoing') {
-    outgoingPin.value = ''
-    await nextTick()
-    outgoingPinInput.value?.focus()
-  }
-})
-
-watch(incomingWorker, async () => {
-  incomingPin.value = ''
   await nextTick()
-  incomingPinInput.value?.focus()
+  if (val === 'outgoing') outgoingPinInput.value?.focus()
+  else if (val === 'pending') incomingPinInput.value?.focus()
+  else if (val === 'force') forcePinInput.value?.focus()
 })
 
-function initials(worker) {
-  if (!worker) return '?'
-  const name = worker.full_name || worker.username || '?'
-  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+function onKey(e) {
+  if (internalStep.value === 'pending' && !incomingWorker.value && /^[1-9]$/.test(e.key)) {
+    const idx = parseInt(e.key, 10) - 1
+    if (availableWorkers.value[idx]) {
+      incomingWorker.value = availableWorkers.value[idx]
+      focusIncomingPin()
+      e.preventDefault()
+    }
+  }
 }
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  nextTick(() => outgoingPinInput.value?.focus())
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 async function submitOutgoing() {
   if (outgoingPin.value.length < 4 || props.isLoading) return
@@ -287,11 +281,10 @@ async function submitOutgoing() {
     })
     internalStep.value = 'pending'
   } catch (err) {
-    errorMsg.value = err.message || 'PIN salah atau terjadi kesalahan'
+    errorMsg.value = err.message || 'PIN salah'
     outgoingPin.value = ''
   }
 }
-
 async function submitIncoming() {
   if (!incomingWorker.value || incomingPin.value.length < 4 || props.isLoading) return
   errorMsg.value = ''
@@ -302,11 +295,10 @@ async function submitIncoming() {
       pin: incomingPin.value,
     })
   } catch (err) {
-    errorMsg.value = err.message || 'PIN salah atau terjadi kesalahan'
+    errorMsg.value = err.message || 'PIN salah'
     incomingPin.value = ''
   }
 }
-
 async function submitForceLeave() {
   if (forcePin.value.length < 4 || !forceLeaveReason.value.trim() || props.isLoading) return
   errorMsg.value = ''
@@ -317,8 +309,10 @@ async function submitForceLeave() {
       reason: forceLeaveReason.value.trim(),
     })
   } catch (err) {
-    errorMsg.value = err.message || 'PIN salah atau terjadi kesalahan'
+    errorMsg.value = err.message || 'PIN salah'
     forcePin.value = ''
   }
 }
+
+defineExpose({ setError: (m) => { errorMsg.value = m } })
 </script>
