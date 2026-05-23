@@ -121,7 +121,7 @@ sudo -u "$APP_USER" bash -lc "
   cd '$INSTALL_DIR'
   python -m venv .venv
   .venv/bin/pip install --upgrade pip
-  .venv/bin/pip install -e '.[dev]'
+  .venv/bin/pip install -e .
   .venv/bin/pip install evdev pyscard
 "
 
@@ -205,12 +205,15 @@ systemctl enable --now parking-worker-snapshot.service
 systemctl enable --now parking-worker-bg.service
 systemctl enable --now booth-bridge.service 2>/dev/null || warn "booth-bridge.service skipped (no booth config yet)"
 
-# Per-gate daemons
+# Per-gate daemons. Only entry gates run an autonomous daemon; exit lanes are
+# driven by booth-bridge (no gate-out daemon — removed in f4a3eb0).
 for gid in "${GATE_IDS[@]}"; do
-  log "Enabling gate daemon for $gid..."
   case "$gid" in
-    GIN-*) systemctl enable --now "parking-daemon-gate-in@$gid.service" ;;
-    GOUT-*) systemctl enable --now "parking-daemon-gate-out@$gid.service" ;;
+    GIN-*)
+      log "Enabling gate-in daemon for $gid..."
+      systemctl enable --now "parking-daemon-gate-in@$gid.service" ;;
+    GOUT-*)
+      warn "$gid is an exit lane — no daemon needed; booth-bridge drives the relay. Skipping." ;;
     *) warn "Unknown gate prefix in $gid (expected GIN-* or GOUT-*)" ;;
   esac
 done
@@ -228,8 +231,8 @@ Next steps:
   3. Open http://localhost:3000/setup to configure gates, POS booths, members
   4. For each Omnikey reader: flip to HID keyboard mode via HID Workbench (Windows)
   5. For each gate, set hardware_config.open_command in /setup or DB
-  6. Re-run with --gate-id to enable daemons:
-     sudo $0 --gate-id GIN-01 GOUT-01
+  6. Re-run with --gate-id to enable entry-gate daemons (exit lanes need none):
+     sudo $0 --gate-id GIN-01
 
 Logs:
   journalctl -u parking-api -f
