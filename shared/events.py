@@ -28,7 +28,6 @@ class GateMode(StrEnum):
 
     CASH = "CASH"
     RFID = "RFID"
-    EMONEY = "EMONEY"
 
 
 class DeductStatus(StrEnum):
@@ -95,14 +94,6 @@ class RfidCardReadEvent(BaseEvent):
     channel: str  # W or X
 
 
-class PasstiCardTapEvent(BaseEvent):
-    """PASSTI card tapped."""
-
-    event_type: Literal["passti_card_tap"] = "passti_card_tap"
-    card_number: str
-    card_type: str
-
-
 class TicketButtonPressedEvent(BaseEvent):
     """Ticket button pressed."""
 
@@ -119,16 +110,6 @@ class VehiclePassedEvent(BaseEvent):
     """Vehicle has passed through gate."""
 
     event_type: Literal["vehicle_passed"] = "vehicle_passed"
-
-
-class EmoneyPrintDecisionEvent(BaseEvent):
-    """Driver made print decision at entry gate (e-money mode)."""
-
-    event_type: Literal["emoney_print_decision"] = "emoney_print_decision"
-    printed: bool
-    card_number: str
-    card_type: str
-    balance: int
 
 
 class GateOpenedEvent(BaseEvent):
@@ -204,11 +185,9 @@ RedisEvent = (
     VehicleDetectedEvent
     | GateClosedEvent
     | RfidCardReadEvent
-    | PasstiCardTapEvent
     | TicketButtonPressedEvent
     | HelpButtonPressedEvent
     | VehiclePassedEvent
-    | EmoneyPrintDecisionEvent
     | GateOpenedEvent
     | DeductResultEvent
     | CancelCorrectionResultEvent

@@ -1,7 +1,6 @@
 """Redis Pub/Sub event consumer for server-side event processing.
 
 Subscribes to parking.events.* and handles business logic for specific event types:
-- passti_card_tap: logged (entry flow is daemon-driven)
 - deduct_result: delegates to payment service to complete e-money exit
 """
 
@@ -74,14 +73,10 @@ class EventConsumer:
             logger.warning("event_consumer_missing_event_type", channel=channel, payload=payload)
             return
 
-        if event_type == "passti_card_tap":
-            await self._handle_passti_card_tap(payload)
-        elif event_type == "ticket_button_pressed":
+        if event_type == "ticket_button_pressed":
             await self._handle_ticket_button_pressed(payload)
         elif event_type == "rfid_card_read":
             await self._handle_rfid_card_read(payload)
-        elif event_type == "emoney_print_decision":
-            await self._handle_emoney_print_decision(payload)
         elif event_type == "deduct_result":
             await self._handle_deduct_result(payload)
         elif event_type == "vehicle_detected":
@@ -90,58 +85,6 @@ class EventConsumer:
             await self._handle_help_button_pressed(payload)
         else:
             pass
-
-    async def _handle_passti_card_tap(self, payload: dict) -> None:
-        """Handle passti_card_tap event.
-
-        The entry gate daemon drives the entry flow (sends check_balance and
-        waits for response). For now we just log the tap.
-        """
-        gate_id = payload.get("gate_id", "unknown")
-        card_number = payload.get("card_number", "unknown")
-        card_type = payload.get("card_type", "unknown")
-        logger.info(
-            "passti_card_tap_received",
-            gate_id=gate_id,
-            card_number=card_number,
-            card_type=card_type,
-        )
-
-    async def _handle_emoney_print_decision(self, event: dict) -> None:
-        """Handle print decision at entry gate — create transaction and open gate."""
-        from sqlalchemy import select
-
-        from api.app.models import Gate
-        from api.app.services.gate_command import publish_command
-        from api.app.services.transaction import create_entry_transaction
-        from api.database import AsyncSessionLocal
-        from shared.events import OpenGateCommand
-
-        gate_code = event.get("gate_id", "")
-        card_number = event.get("card_number", "")
-
-        logger.info("entry_emoney_decision", gate_id=gate_code, card_number=card_number)
-
-        async with AsyncSessionLocal() as db:
-            try:
-                result = await db.execute(select(Gate).where(Gate.code == gate_code))
-                gate = result.scalar_one_or_none()
-                if gate is None:
-                    logger.error("entry_emoney_gate_not_found", gate_id=gate_code)
-                    return
-
-                tx = await create_entry_transaction(
-                    db,
-                    gate_in_id=gate.id,
-                    card_number=card_number,
-                    payment_method="EMONEY",
-                )
-                await db.commit()
-
-                await publish_command(OpenGateCommand(gate_id=gate_code))
-                logger.info("entry_emoney_gate_opened", gate_id=gate_code, transaction_id=tx.id)
-            except Exception as e:
-                logger.error("entry_emoney_decision_error", gate_id=gate_code, error=str(e))
 
     async def _handle_deduct_result(self, payload: dict) -> None:
         """Handle deduct_result event by processing the e-money payment."""
@@ -269,7 +212,12 @@ class EventConsumer:
         from api.app.services.gate_command import publish_command
         from api.app.services.transaction import create_entry_transaction
         from api.database import AsyncSessionLocal
-        from shared.events import DisplayTextCommand, OpenGateCommand, PlayAudioCommand, RejectCardCommand
+        from shared.events import (
+            DisplayTextCommand,
+            OpenGateCommand,
+            PlayAudioCommand,
+            RejectCardCommand,
+        )
 
         gate_code = payload.get("gate_id", "")
         card_number = payload.get("card_number", "")

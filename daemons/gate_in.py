@@ -1,7 +1,8 @@
 """Gate-in daemon — combined entry state machine.
 
-Single WAITING_INPUT state handles all payment methods simultaneously:
-button (cash), Wiegand W/X (RFID/UHF), PASSTI (e-money).
+Single WAITING_INPUT state handles entry payment methods: ticket button (cash)
+and Wiegand W/X (RFID member). E-money no longer participates at entry — it is
+exit-only (driver presents printed ticket, taps card at exit).
 
 States: IDLE → WAITING_INPUT → method branch → OPENING → IDLE
 """
@@ -34,13 +35,10 @@ from protocols.compass.protocol import (
     cmd_stop1,
     cmd_trig1,
 )
-from protocols.passti.transport import ControllerPassthroughTransport
 from shared.events import (
     BaseEvent,
-    EmoneyPrintDecisionEvent,
     GateOpenedEvent,
     HelpButtonPressedEvent,
-    PasstiCardTapEvent,
     PlayAudioEvent,
     RfidCardReadEvent,
     TicketButtonPressedEvent,
@@ -55,8 +53,6 @@ logger = get_logger(__name__)
 STATE_IDLE = "IDLE"
 STATE_WAITING_INPUT = "WAITING_INPUT"
 STATE_VALIDATING = "VALIDATING"
-STATE_CHECKING_BALANCE = "CHECKING_BALANCE"
-STATE_WAITING_PRINT_DECISION = "WAITING_PRINT_DECISION"
 STATE_PROCESSING = "PROCESSING"
 STATE_OPENING = "OPENING"
 STATE_ERROR = "ERROR"
@@ -70,13 +66,10 @@ class GateInDaemon(BaseDaemon):
         self.hw = config.get("hardware_config", {})
         self.has_rfid = self.hw.get("rfid", {}).get("enabled", False)
         self.has_ticket_printer = self.hw.get("ticket_printer", {}).get("enabled", False)
-        self.has_emoney = self.hw.get("emoney", {}).get("enabled", False)
 
         self.controller: CompassTransport | SerialTransport | None = None
-        self.passti_transport: ControllerPassthroughTransport | None = None
         self._controller_lock = asyncio.Lock()
         self._poll_task: asyncio.Task | None = None
-        self._print_decision_timer: asyncio.Task | None = None
         self._validating_task: asyncio.Task | None = None
         self._in1_on = False
 
@@ -136,19 +129,15 @@ class GateInDaemon(BaseDaemon):
                     return
                 self.controller = CompassTransport(host, port)
                 self.controller.connect(timeout=5.0)
-                if self.has_emoney:
-                    self.passti_transport = ControllerPassthroughTransport(self.controller._sock)
                 logger.info("controller_connected", gate_id=self.gate_id, host=host, port=port)
         except Exception as e:
             logger.error("controller_connect_failed", gate_id=self.gate_id, error=str(e))
             self.controller = None
-            self.passti_transport = None
 
     async def _disconnect_controller(self) -> None:
         if self.controller:
             self.controller.close()
             self.controller = None
-            self.passti_transport = None
             logger.info("controller_disconnected", gate_id=self.gate_id)
 
     # ------------------------------------------------------------------
@@ -270,8 +259,6 @@ class GateInDaemon(BaseDaemon):
                 return
             if self.state == STATE_WAITING_INPUT:
                 await self._on_ticket_button_pressed()
-            elif self.state == STATE_WAITING_PRINT_DECISION:
-                await self._on_print_decision(printed=True)
 
         elif "IN3ON" in text:
             await self._send_controller_command(cmd_ack_in3on())
@@ -308,32 +295,6 @@ class GateInDaemon(BaseDaemon):
                         await self._on_rfid_card_read(parsed["wiegand_x"], "X")
 
     # ------------------------------------------------------------------
-    # PASSTI polling (serial port — not RSS-pushable)
-    # ------------------------------------------------------------------
-
-    async def _passti_poll_loop(self) -> None:
-        while self.state == STATE_WAITING_INPUT and self._running:
-            await self._check_passti_tap()
-            await asyncio.sleep(0.5)
-
-    async def _check_passti_tap(self) -> None:
-        if not self.passti_transport:
-            return
-        try:
-            from protocols.passti.commands import cmd_check_balance
-            frame = cmd_check_balance(timeout_sec=10)
-            result = await self.passti_transport.send_recv(frame, timeout=2.0)
-            if result.get("ok"):
-                body = result.get("body", b"")
-                if len(body) >= 13:
-                    card_number = body[1:9].hex().upper()
-                    card_type_code = body[0]
-                    balance = int.from_bytes(body[9:13], "big")
-                    await self._on_passti_card_tap(card_number, card_type_code, balance)
-        except Exception as e:
-            logger.debug("passti_poll_no_card", gate_id=self.gate_id, error=str(e))
-
-    # ------------------------------------------------------------------
     # State transition handlers
     # ------------------------------------------------------------------
 
@@ -348,8 +309,6 @@ class GateInDaemon(BaseDaemon):
             track = audio_cfg.get("welcome_track", 1)
             await self._cmd_play_audio(track)
         await self._display("Selamat Datang", "Tombol/Tempel Kartu")
-        if self.has_emoney:
-            asyncio.create_task(self._passti_poll_loop(), name="passti_poll")
 
     async def _on_vehicle_backed_up(self) -> None:
         """Vehicle reversed before completing entry."""
@@ -401,46 +360,6 @@ class GateInDaemon(BaseDaemon):
             logger.warning("validating_timeout_reset", gate_id=self.gate_id)
             await self._transition(STATE_IDLE)
             await self._display()
-
-    async def _on_passti_card_tap(self, card_number: str, card_type_code: int, balance: int) -> None:
-        """E-money card tapped — notify API to check balance threshold."""
-        await self._transition(STATE_CHECKING_BALANCE)
-        card_type = self._card_type_name(card_type_code)
-        self.state_data["passti_card_number"] = card_number
-        self.state_data["passti_card_type"] = card_type
-        self.state_data["passti_balance"] = balance
-        await self.publish_event(
-            PasstiCardTapEvent(
-                event_type="passti_card_tap",
-                gate_id=self.gate_id,
-                card_number=card_number,
-                card_type=card_type,
-            )
-        )
-
-    async def _start_print_decision_timer(self, timeout: float) -> None:
-        async def timer() -> None:
-            await asyncio.sleep(timeout)
-            if self.state == STATE_WAITING_PRINT_DECISION:
-                await self._on_print_decision(printed=False)
-        self._print_decision_timer = asyncio.create_task(timer(), name="print_timer")
-
-    async def _on_print_decision(self, printed: bool) -> None:
-        """Driver made print decision (button or timeout)."""
-        if self._print_decision_timer and not self._print_decision_timer.done():
-            self._print_decision_timer.cancel()
-        self.state_data["ticket_printed"] = printed
-        await self._transition(STATE_PROCESSING)
-        await self.publish_event(
-            EmoneyPrintDecisionEvent(
-                event_type="emoney_print_decision",
-                gate_id=self.gate_id,
-                printed=printed,
-                card_number=self.state_data.get("passti_card_number", ""),
-                card_type=self.state_data.get("passti_card_type", ""),
-                balance=self.state_data.get("passti_balance", 0),
-            )
-        )
 
     async def _on_gate_opened(self) -> None:
         await self._transition(STATE_OPENING)
@@ -494,10 +413,6 @@ class GateInDaemon(BaseDaemon):
                 await self._cmd_print_ticket_then_open(
                     command_data.get("barcode", ""),
                     command_data.get("gate_name", self.config.get("name", "")),
-                )
-            elif command_type == "check_balance":
-                await self._cmd_check_balance(
-                    int(command_data.get("minimum_threshold", 10000))
                 )
             elif command_type == "reject_card":
                 await self._cmd_reject_card(
@@ -604,37 +519,6 @@ class GateInDaemon(BaseDaemon):
 
         await self._cmd_open_gate()
 
-    async def _cmd_check_balance(self, minimum_threshold: int) -> None:
-        if not self.passti_transport:
-            logger.error("passti_not_connected", gate_id=self.gate_id)
-            return
-        try:
-            from protocols.passti.commands import cmd_check_balance
-            frame = cmd_check_balance(timeout_sec=10)
-            result = await self.passti_transport.send_recv(frame, timeout=5.0)
-            if result.get("ok"):
-                body = result.get("body", b"")
-                if len(body) >= 13:
-                    balance = int.from_bytes(body[9:13], "big")
-                    if balance < minimum_threshold:
-                        await self._display("Saldo Tidak Cukup", f"Rp {balance:,}")
-                        await self._cmd_play_audio(6)
-                        await self._transition(STATE_IDLE)
-                    else:
-                        await self._transition(STATE_WAITING_PRINT_DECISION)
-                        await self._display("Cetak Tiket?", "Tekan Tombol")
-                        timeout = self.hw.get("emoney", {}).get("print_decision_timeout_seconds", 10)
-                        await self._start_print_decision_timer(timeout)
-                else:
-                    await self._display("Kartu Error", "Coba Lagi")
-                    await self._transition(STATE_IDLE)
-            else:
-                await self._display("Error", result.get("status_msg", ""))
-                await self._transition(STATE_IDLE)
-        except Exception as e:
-            logger.error("check_balance_error", gate_id=self.gate_id, error=str(e))
-            await self._transition(STATE_IDLE)
-
     async def _cmd_reject_card(self, line1: str, line2: str, audio_track: int, display_seconds: float) -> None:
         """Show rejection message then return to WAITING_INPUT — driver can retry immediately."""
         if self._validating_task and not self._validating_task.done():
@@ -644,8 +528,6 @@ class GateInDaemon(BaseDaemon):
         await asyncio.sleep(display_seconds)
         await self._transition(STATE_WAITING_INPUT)
         await self._display("Selamat Datang", "Tombol/Tempel Kartu")
-        if self.has_emoney:
-            asyncio.create_task(self._passti_poll_loop(), name="passti_poll")
 
     async def _cmd_reset_gate(self, reason: str) -> None:
         logger.info("reset_gate", gate_id=self.gate_id, reason=reason)
@@ -726,8 +608,3 @@ class GateInDaemon(BaseDaemon):
                     gate_id=self.gate_id,
                     cooldown_s=self._cb_cooldown_s,
                 )
-
-    @staticmethod
-    def _card_type_name(code: int) -> str:
-        from protocols.passti.frame import CARD_TYPES
-        return CARD_TYPES.get(code, f"Unknown({code:02X})")
