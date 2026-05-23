@@ -228,23 +228,52 @@ const gateStatuses = computed(() => {
   return statuses
 })
 
-// Alert operator when a gate controller transitions to disconnected
+// Alert operator when a gate controller transitions to disconnected.
+// Debounced: a disconnect must persist GATE_FLAP_GRACE_MS before alerting, so
+// brief network flap (drop + immediate reconnect) doesn't spam the operator.
+const GATE_FLAP_GRACE_MS = 3000
 const _prevGateConnected = new Map()
+const _disconnectTimers = new Map()
+const _disconnectAlerted = new Map()
+
 watch(
   gateStatuses,
   (statuses) => {
     for (const g of statuses) {
       const prev = _prevGateConnected.get(g.name)
       if (prev === true && g.connected === false) {
-        toast.error(`Controller ${g.name} terputus`)
+        // Wait out the grace window — only alert if still down afterwards.
+        if (!_disconnectTimers.has(g.name)) {
+          const timer = setTimeout(() => {
+            _disconnectTimers.delete(g.name)
+            toast.error(`Controller ${g.name} terputus`)
+            _disconnectAlerted.set(g.name, true)
+          }, GATE_FLAP_GRACE_MS)
+          _disconnectTimers.set(g.name, timer)
+        }
       } else if (prev === false && g.connected === true) {
-        toast.success(`Controller ${g.name} terhubung kembali`)
+        // Reconnected — cancel any pending disconnect alert.
+        const timer = _disconnectTimers.get(g.name)
+        if (timer) {
+          clearTimeout(timer)
+          _disconnectTimers.delete(g.name)
+        }
+        // Only announce recovery if we actually surfaced the outage.
+        if (_disconnectAlerted.get(g.name)) {
+          toast.success(`Controller ${g.name} terhubung kembali`)
+          _disconnectAlerted.set(g.name, false)
+        }
       }
       _prevGateConnected.set(g.name, g.connected)
     }
   },
   { deep: true },
 )
+
+onBeforeUnmount(() => {
+  for (const timer of _disconnectTimers.values()) clearTimeout(timer)
+  _disconnectTimers.clear()
+})
 
 const gatecameras = computed(() => {
   const hw = selectedGate.value?.hardware_config
@@ -342,7 +371,15 @@ useKeyboard([
       if (vt) onVehicleTypeChange(vt.id)
     },
   },
-])
+], {
+  // Suppress F-key/letter shortcuts while a modal owns input focus so they
+  // don't hijack PIN/amount typing. Escape still passes through.
+  isBlocked: () =>
+    showCashDialog.value ||
+    showRfidDialog.value ||
+    showCheckInDialog.value ||
+    showHandoverDialog.value,
+})
 
 // Actions
 async function onBarcodeLookup(input) {

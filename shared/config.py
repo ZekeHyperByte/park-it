@@ -159,6 +159,10 @@ class Settings(BaseSettings):
                 )
             if self.jwt_secret in ("dev-secret", ""):
                 raise ValueError("JWT_SECRET must be changed from default in production")
+            if self.db_password in ("parking_secret", ""):
+                raise ValueError("DB_PASSWORD must be changed from default in production")
+            # Debug mode leaks tracebacks and exposes /api/docs — never in prod.
+            self.debug = False
         return self
 
     @property
