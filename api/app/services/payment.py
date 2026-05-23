@@ -1,31 +1,59 @@
 """Payment service — orchestrates cash, RFID, and e-money payments.
 
 Business logic for processing payments at gate-out. This service:
-1. Finds the active transaction
+1. Finds the active transaction (by barcode for cash/emoney, by card for RFID)
 2. Calculates the tariff
 3. Updates the transaction record
-4. Publishes the appropriate gate command to the daemon
+4. For e-money: arms a pending state for the gate; PASSTI tap result correlates by gate_id
 """
 
+import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.models import Member
-from api.app.services.gate_command import publish_command
 from api.app.services.transaction import (
     calculate_transaction_fee,
     complete_exit_transaction,
     find_active_transaction,
     get_current_shift,
 )
-from shared.events import (
-    DeductStatus,
-    DisplayTextCommand,
-    PlayAudioCommand,
-)
+from shared.events import DeductStatus
 from shared.logging import get_logger
+from shared.redis import redis_client
 
 logger = get_logger("payment_service")
+
+EMONEY_PENDING_TTL_SECONDS = 180
+
+
+def _emoney_pending_key(gate_id: str) -> str:
+    return f"emoney:pending:{gate_id}"
+
+
+async def _set_emoney_pending(gate_id: str, transaction_id: int, gate_out_id: int, fee: int) -> None:
+    await redis_client.connect()
+    await redis_client.set(
+        _emoney_pending_key(gate_id),
+        json.dumps({"transaction_id": transaction_id, "gate_out_id": gate_out_id, "fee": fee}),
+        ex=EMONEY_PENDING_TTL_SECONDS,
+    )
+
+
+async def _get_emoney_pending(gate_id: str) -> dict | None:
+    await redis_client.connect()
+    raw = await redis_client.get(_emoney_pending_key(gate_id))
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+
+
+async def _clear_emoney_pending(gate_id: str) -> None:
+    await redis_client.connect()
+    await redis_client.delete(_emoney_pending_key(gate_id))
 
 
 async def _enqueue_print_receipt(db: AsyncSession, gate_id: str, transaction_data: dict) -> None:
@@ -271,67 +299,55 @@ async def process_emoney_deduct(
     *,
     gate_id: str,
     gate_out_id: int,
-    card_number: str,
-    expected_transaction_counter: int = 0,
+    barcode: str,
+    vehicle_type_id: int | None = None,
     operator_id: int | None = None,
 ) -> dict:
-    """Initiate an e-money deduct at gate-out.
+    """Arm an e-money deduct at gate-out.
 
-    Finds the active transaction, calculates the fee, and publishes a
-    `deduct` command to the daemon. The daemon will execute the deduct
-    on the PASSTI reader and publish a `deduct_result` event.
+    Locates the active transaction by ticket barcode, computes the fee,
+    and stores a pending state in Redis keyed by gate_id. The booth bridge
+    will execute the deduct when the driver taps the PASSTI reader; the
+    booth-result callback uses the pending state to correlate.
 
     Args:
         db: Database session
-        gate_id: Daemon gate ID
+        gate_id: Booth gate ID
         gate_out_id: Gate-out database ID
-        card_number: E-money card number
-        expected_transaction_counter: Expected transaction counter for verification
+        barcode: Ticket barcode
+        vehicle_type_id: Vehicle type override for tariff calculation
         operator_id: POS operator ID
 
     Returns:
-        dict with transaction, fee, status="PENDING"
+        dict with transaction, fee, status="ARMED"
 
     Raises:
         ValueError: If no active transaction found
     """
-    from shared.events import DeductCommand
-
-    tx = await find_active_transaction(db, card_number=card_number, for_update=True)
+    tx = await find_active_transaction(db, barcode=barcode, for_update=True)
     if tx is None:
-        raise ValueError("No active transaction found for this card")
+        raise ValueError("No active transaction found for this ticket")
+
+    if vehicle_type_id is not None:
+        tx.vehicle_type_id = vehicle_type_id
+        await db.flush()
 
     fee = await calculate_transaction_fee(db, tx)
 
-    # Update transaction to PENDING while deduct is in progress
-    tx.payment_method = "PENDING"
-    tx.fee = fee
-    tx.gate_out_id = gate_out_id
-    await db.flush()
-
-    # Publish deduct command to daemon
-    await publish_command(
-        DeductCommand(
-            gate_id=gate_id,
-            amount=fee,
-            timeout_seconds=30,
-            expected_card_number=card_number,
-            expected_transaction_counter=expected_transaction_counter,
-        )
-    )
+    await _set_emoney_pending(gate_id, tx.id, gate_out_id, fee)
 
     logger.info(
-        "emoney_deduct_initiated",
+        "emoney_deduct_armed",
         transaction_id=tx.id,
         fee=fee,
-        card_number=card_number,
+        barcode=barcode,
         gate_id=gate_id,
     )
 
     return {
         "transaction": tx,
         "fee": fee,
-        "status": "PENDING",
+        "status": "ARMED",
     }
 
 
@@ -373,11 +389,21 @@ async def process_emoney_result(
     Returns:
         dict with transaction, emoney_transaction_id, success bool
     """
-    from api.app.models import EmoneyTransaction
+    from api.app.models import EmoneyTransaction, ParkingTransaction
 
-    tx = await find_active_transaction(db, card_number=card_number, for_update=True)
-    if tx is None:
-        raise ValueError("No active transaction found for this card")
+    pending = await _get_emoney_pending(gate_id)
+    if pending is None:
+        raise ValueError("No pending e-money deduct for this gate (timeout or never armed)")
+
+    tx = await db.get(ParkingTransaction, pending["transaction_id"], with_for_update=True)
+    if tx is None or tx.status != "ACTIVE":
+        await _clear_emoney_pending(gate_id)
+        raise ValueError("Pending transaction missing or already completed")
+
+    # Persist the card_number on the parking transaction now that we know which card paid.
+    if card_number:
+        tx.card_number = card_number
+        await db.flush()
 
     # Create EmoneyTransaction record
     emoney_tx = EmoneyTransaction(
@@ -409,11 +435,14 @@ async def process_emoney_result(
 
     if success:
         shift = await get_current_shift(db)
+        # Prefer gate_out_id from pending state (set at arm time) over the
+        # one the booth bridge echoes back.
+        effective_gate_out_id = pending.get("gate_out_id") or gate_out_id
 
         tx = await complete_exit_transaction(
             db,
             transaction=tx,
-            gate_out_id=gate_out_id,
+            gate_out_id=effective_gate_out_id,
             payment_method="EMONEY",
             fee=deduct_amount,
             paid_amount=deduct_amount,
@@ -422,6 +451,7 @@ async def process_emoney_result(
             shift_id=shift.id if shift else None,
         )
 
+        await _clear_emoney_pending(gate_id)
         await _enqueue_exit_snapshot(db, gate_id, tx.id)
 
         # Attended exit: POS shows payment result, operator opens gate via booth_bridge.
@@ -451,8 +481,7 @@ async def process_emoney_result(
         )
 
     elif is_intermediate:
-        # LOST_CONTACT: keep transaction in PENDING, prompt user to retry same card
-        # Do NOT reset payment_method — the daemon will auto-retry
+        # LOST_CONTACT: keep pending state so operator can ask driver to re-tap same card.
         logger.warning(
             "emoney_lost_contact",
             transaction_id=tx.id,
@@ -460,41 +489,14 @@ async def process_emoney_result(
             gate_id=gate_id,
         )
 
-        # Notify operator and driver
-        await publish_command(
-            DisplayTextCommand(
-                gate_id=gate_id,
-                line1="Proses Koreksi",
-                line2="Tempel Kartu Lagi",
-            )
-        )
-        await publish_command(PlayAudioCommand(gate_id=gate_id, track=7))
-
-    elif is_terminal_failure:
-        # Reset payment method so other methods can be tried
-        tx.payment_method = None
-        tx.fee = None
-        await db.flush()
-
+    elif is_terminal_failure or status == DeductStatus.TIMEOUT:
+        # Clear pending; transaction stays ACTIVE so operator can fall back to cash.
+        await _clear_emoney_pending(gate_id)
         logger.warning(
             "emoney_payment_failed",
             transaction_id=tx.id,
             emoney_transaction_id=emoney_tx.id,
             status=status.value,
-            gate_id=gate_id,
-        )
-
-    elif status == DeductStatus.TIMEOUT:
-        # TIMEOUT: daemon should have run GetLastTransaction internally
-        # If daemon still sends TIMEOUT, treat as terminal failure
-        tx.payment_method = None
-        tx.fee = None
-        await db.flush()
-
-        logger.warning(
-            "emoney_payment_timeout",
-            transaction_id=tx.id,
-            emoney_transaction_id=emoney_tx.id,
             gate_id=gate_id,
         )
 

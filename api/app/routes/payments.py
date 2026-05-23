@@ -175,14 +175,14 @@ async def emoney_deduct(
             db,
             gate_id=payment.gate_id,
             gate_out_id=payment.gate_out_id,
-            card_number=payment.card_number,
-            expected_transaction_counter=payment.expected_transaction_counter,
+            barcode=payment.barcode,
+            vehicle_type_id=payment.vehicle_type_id,
             operator_id=_get_operator_id(user),
         )
         payment_success_total.labels(method="emoney").inc()
         return PaymentResponse(
             success=True,
-            message="E-money deduct initiated",
+            message="Tempel kartu untuk pembayaran",
             transaction_id=result["transaction"].id,
             fee=result["fee"],
             payment_method="PENDING",

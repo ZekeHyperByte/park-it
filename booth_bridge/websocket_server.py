@@ -243,14 +243,18 @@ class WebSocketServer:
             if self._api_config:
                 asyncio.create_task(self._call_api_booth_result(result_payload))
 
-            # Auto-open relay on SUCCESS; broadcast result to all POS clients
+            # Auto-open relay on SUCCESS only; broadcast result to all POS clients
             if deduct_status == "SUCCESS" and self.gate_opener is not None:
                 asyncio.create_task(self.gate_opener.open())
 
+            broadcast_event = (
+                "emoney_payment_completed" if deduct_status == "SUCCESS"
+                else "emoney_payment_failed"
+            )
             asyncio.create_task(
                 self.broadcast(
                     {
-                        "event": "emoney_payment_completed",
+                        "event": broadcast_event,
                         "status": deduct_status,
                         "card_number": result_payload.get("card_number"),
                         "deduct_amount": result_payload.get("deduct_amount"),

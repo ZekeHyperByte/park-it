@@ -28,12 +28,12 @@ class RfidPaymentRequest(BaseModel):
 
 
 class EmoneyDeductRequest(BaseModel):
-    """E-money deduct initiation request."""
+    """E-money deduct arm request — operator scanned ticket, ready for driver tap."""
 
-    gate_id: str = Field(..., description="Daemon gate ID")
+    gate_id: str = Field(..., description="Booth gate ID")
     gate_out_id: int = Field(..., description="Gate-out database ID")
-    card_number: str = Field(..., min_length=4, max_length=32, description="E-money card number")
-    expected_transaction_counter: int = Field(default=0, description="Expected transaction counter")
+    barcode: str = Field(..., min_length=4, max_length=64, description="Ticket barcode")
+    vehicle_type_id: int | None = Field(None, description="Vehicle type override for tariff calculation")
 
 
 class EmoneyResultRequest(BaseModel):
