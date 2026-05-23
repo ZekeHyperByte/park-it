@@ -18,6 +18,40 @@ from shared.logging import get_logger
 logger = get_logger("print_worker")
 
 
+async def _retry_or_alert(ctx: dict[str, Any], gate_id: str, kind: str, error: str) -> dict[str, str]:
+    """Retry the print job, or on the final attempt raise an operator alert.
+
+    ARQ caps attempts at ``max_tries``. Re-raising ``Retry`` on the last attempt
+    would let the job die silently — the operator never learns the ticket/receipt
+    didn't come out. On the final try we instead publish a ``print_failed_alert``
+    event (POS listens) so the operator can reprint manually, and return a failed
+    result so the job ends cleanly.
+    """
+    job_try = ctx.get("job_try", 1)
+    max_tries = ctx.get("max_tries", 3)
+    if job_try < max_tries:
+        raise Retry(defer=job_try * 5)
+
+    logger.error("print_giving_up", gate_id=gate_id, kind=kind, error=error, job_try=job_try)
+    redis = ctx.get("redis")
+    if redis is not None:
+        import json
+
+        try:
+            await redis.publish(
+                f"parking.events.{gate_id}",
+                json.dumps({
+                    "event_type": "print_failed_alert",
+                    "gate_id": gate_id,
+                    "kind": kind,
+                    "error": error,
+                }),
+            )
+        except Exception as e:
+            logger.error("print_alert_publish_failed", gate_id=gate_id, error=str(e))
+    return {"status": "failed", "message": f"{kind} print failed after {max_tries} attempts", "error": error}
+
+
 def _mock_write(gate_id: str, kind: str, escpos_data: bytes) -> str:
     """Write ESC/POS bytes + decoded text to MOCK_HARDWARE_DIR/print/. Returns path."""
     from datetime import datetime
@@ -311,7 +345,7 @@ async def print_ticket(
         logger.error("print_ticket_failed", gate_id=gate_id, error=str(e))
         from api.app.middleware.metrics import print_jobs_total
         print_jobs_total.labels(kind="ticket", result="failure").inc()
-        raise Retry(defer=ctx.get("job_try", 1) * 5)
+        return await _retry_or_alert(ctx, gate_id, "ticket", str(e))
 
 
 async def print_receipt(
@@ -379,7 +413,7 @@ async def print_receipt(
         logger.error("print_receipt_failed", gate_id=gate_id, error=str(e))
         from api.app.middleware.metrics import print_jobs_total
         print_jobs_total.labels(kind="receipt", result="failure").inc()
-        raise Retry(defer=ctx.get("job_try", 1) * 5)
+        return await _retry_or_alert(ctx, gate_id, "receipt", str(e))
 
 
 def _print_via_controller(escpos_data: bytes, config: dict[str, Any]) -> None:
