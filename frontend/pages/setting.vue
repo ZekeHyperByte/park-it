@@ -191,6 +191,7 @@
 </template>
 
 <script setup>
+import { toast } from 'vue-sonner'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 
@@ -342,8 +343,39 @@ onMounted(() => { loadSiteConfig(); loadSettings(); loadVehicleTypes(); loadShif
 
 async function loadSiteConfig() { try { const { data } = await fetchApi('/api/site-config'); siteConfig.value = data } catch (e) { /* ok */ } }
 async function saveSiteConfig() { try { await fetchApi('/api/site-config', { method: 'PUT', body: JSON.stringify(siteConfig.value) }) } catch (e) { console.error(e) } }
-async function loadSettings() { try { settings.value = await fetchApi('/api/settings') } catch (e) { console.error(e) } }
-async function saveSetting(row) { try { await fetchApi(`/api/settings/${row.key}`, { method: 'PATCH', body: JSON.stringify({ value: row.value }) }) } catch (e) { console.error(e) } }
+// Snapshot of last-saved values so an invalid edit or failed save can revert.
+const _settingOriginals = {}
+async function loadSettings() {
+  try {
+    settings.value = await fetchApi('/api/settings')
+    for (const row of settings.value) _settingOriginals[row.key] = row.value
+  } catch (e) { console.error(e) }
+}
+async function saveSetting(row) {
+  const original = _settingOriginals[row.key]
+  // No change — skip the round-trip.
+  if (row.value === original) return
+  // If the setting was previously numeric, the new value must be a
+  // non-negative number. Reject silently-bad input before it reaches the API.
+  const wasNumeric = original !== '' && original != null && !Number.isNaN(Number(original))
+  if (wasNumeric) {
+    const n = Number(row.value)
+    if (Number.isNaN(n) || n < 0) {
+      toast.error(`Nilai "${row.label || row.key}" harus angka ≥ 0`)
+      row.value = original
+      return
+    }
+  }
+  try {
+    await fetchApi(`/api/settings/${row.key}`, { method: 'PATCH', body: JSON.stringify({ value: row.value }) })
+    _settingOriginals[row.key] = row.value
+    toast.success(`"${row.label || row.key}" tersimpan`)
+  } catch (e) {
+    console.error(e)
+    toast.error(`Gagal menyimpan "${row.label || row.key}"`)
+    row.value = original
+  }
+}
 
 async function loadVehicleTypes() { loadingVehicleTypes.value = true; try { vehicleTypes.value = await vtCrud.list() } catch (e) { console.error(e) } finally { loadingVehicleTypes.value = false } }
 function openVehicleTypeModal(row = null) { vehicleTypeEditing.value = !!row; vehicleTypeForm.value = row ? { ...row } : {}; vehicleTypeModalVisible.value = true }

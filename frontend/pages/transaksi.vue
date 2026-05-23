@@ -43,7 +43,7 @@
           <option value="COMPLETED">Selesai</option>
           <option value="LOST_CONTACT">Lost Contact</option>
         </select>
-        <Button size="sm" @click="loadTransactions">Filter</Button>
+        <Button size="sm" @click="applyTransactionFilter">Filter</Button>
       </div>
       <DataTable
         :data="transactions"
@@ -186,6 +186,13 @@ async function loadTransactions() {
   } finally {
     loadingTransactions.value = false
   }
+}
+
+// Applying a new filter must reset to page 1, otherwise a narrower result set
+// can leave the operator stranded on an out-of-range (empty) page.
+function applyTransactionFilter() {
+  transactionPage.value = 1
+  loadTransactions()
 }
 
 function handleTransactionPageChange(page, size) {
