@@ -169,12 +169,10 @@ class GateInDaemon(BaseDaemon):
     # ------------------------------------------------------------------
 
     async def _start_polling(self) -> None:
-        self._poll_task = asyncio.create_task(self._rss_listener(), name="poll")
-        self._tasks.append(self._poll_task)
-        self._tasks.append(asyncio.create_task(self._controller_heartbeat(), name="ctrl_hb"))
+        self._poll_task = self._spawn_tracked(self._rss_listener(), name="poll")
+        self._spawn_tracked(self._controller_heartbeat(), name="ctrl_hb")
         if self.has_rfid and self.hw.get("rfid", {}).get("connection") == "direct_serial":
-            task = asyncio.create_task(self._rfid_serial_reader_task(), name="rfid_serial")
-            self._tasks.append(task)
+            self._spawn_tracked(self._rfid_serial_reader_task(), name="rfid_serial")
 
     async def _controller_heartbeat(self) -> None:
         """Send periodic STAT to keep controller's connected-client state alive.
@@ -201,15 +199,34 @@ class GateInDaemon(BaseDaemon):
     async def _rss_listener(self) -> None:
         await self._setup_rss()
         buffer = b""
+        reconnect_delay = 1.0
         while self._running:
             try:
                 if self.controller and self.controller.is_connected():
+                    reconnect_delay = 1.0
                     chunk = await self.controller.recv_async(timeout=0.5)
                     if chunk:
                         buffer += chunk
                         buffer = await self._process_rss_buffer(buffer)
                 else:
-                    await asyncio.sleep(0.1)
+                    # Controller down — attempt reconnect with capped backoff
+                    # instead of spinning forever on a dead socket. Without this
+                    # a single TCP drop leaves the gate dead until manual restart.
+                    buffer = b""
+                    logger.warning(
+                        "rss_controller_down_reconnecting",
+                        gate_id=self.gate_id,
+                        next_retry_s=reconnect_delay,
+                    )
+                    await self._disconnect_controller()
+                    await self._connect_controller()
+                    if self.controller and self.controller.is_connected():
+                        await self._setup_rss()
+                        logger.info("rss_controller_reconnected", gate_id=self.gate_id)
+                        reconnect_delay = 1.0
+                    else:
+                        await asyncio.sleep(reconnect_delay)
+                        reconnect_delay = min(reconnect_delay * 2, 30.0)
             except asyncio.CancelledError:
                 logger.debug("rss_listener_cancelled", gate_id=self.gate_id)
                 raise
@@ -351,7 +368,7 @@ class GateInDaemon(BaseDaemon):
                 channel=channel,
             )
         )
-        self._validating_task = asyncio.create_task(self._validating_timeout(), name="validating_timeout")
+        self._validating_task = self._spawn_tracked(self._validating_timeout(), name="validating_timeout")
 
     async def _validating_timeout(self) -> None:
         timeout = self.config.get("gate_open_timeout_s") or 10
@@ -366,7 +383,7 @@ class GateInDaemon(BaseDaemon):
         await self.publish_event(
             GateOpenedEvent(event_type="gate_opened", gate_id=self.gate_id)
         )
-        asyncio.create_task(self._vehicle_pass_timer())
+        self._spawn_tracked(self._vehicle_pass_timer(), name="vehicle_pass_timer")
 
     async def _vehicle_pass_timer(self) -> None:
         await asyncio.sleep(self.config.get("gate_open_timeout_s") or 10)

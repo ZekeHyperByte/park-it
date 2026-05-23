@@ -163,6 +163,34 @@ class BaseDaemon(ABC):
         """
         pass
 
+    def _spawn_tracked(self, coro: Any, name: str) -> asyncio.Task:
+        """Create a background task that is tracked and exception-logged.
+
+        Bare ``asyncio.create_task`` swallows exceptions silently — if the
+        coroutine raises, the failure vanishes and the state machine can wedge
+        with no trace. This wraps creation so every task is cancelled on
+        shutdown and any non-cancellation exception is logged.
+        """
+        task = asyncio.create_task(coro, name=name)
+        self._tasks.append(task)
+
+        def _on_done(t: asyncio.Task) -> None:
+            if t in self._tasks:
+                self._tasks.remove(t)
+            if t.cancelled():
+                return
+            exc = t.exception()
+            if exc is not None:
+                logger.error(
+                    "tracked_task_error",
+                    gate_id=self.gate_id,
+                    task=name,
+                    error=str(exc),
+                )
+
+        task.add_done_callback(_on_done)
+        return task
+
     # ------------------------------------------------------------------
     # Redis Streams — Command Consumption
     # ------------------------------------------------------------------

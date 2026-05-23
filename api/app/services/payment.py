@@ -9,6 +9,7 @@ Business logic for processing payments at gate-out. This service:
 
 import json
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.models import Member
@@ -395,6 +396,10 @@ async def process_emoney_result(
     if pending is None:
         raise ValueError("No pending e-money deduct for this gate (timeout or never armed)")
 
+    # Bound the FOR UPDATE wait: if another booth-result is mid-flight on the
+    # same row, fail fast instead of holding the connection (and blocking all
+    # other payment ops) until the slow path commits.
+    await db.execute(text("SET LOCAL lock_timeout = '3s'"))
     tx = await db.get(ParkingTransaction, pending["transaction_id"], with_for_update=True)
     if tx is None or tx.status != "ACTIVE":
         await _clear_emoney_pending(gate_id)

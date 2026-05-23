@@ -40,6 +40,22 @@ class WebSocketServer:
         self.gate_opener = gate_opener
         self._server = None
         self._clients: set = set()
+        self._bg_tasks: set = set()
+
+    def _spawn(self, coro, name: str) -> None:
+        """Fire a background task with a strong ref + exception logging.
+
+        Bare ``asyncio.create_task`` here gets garbage-collected mid-flight and
+        swallows exceptions. Keep a ref until done and log any failure."""
+        task = asyncio.create_task(coro, name=name)
+        self._bg_tasks.add(task)
+
+        def _on_done(t: asyncio.Task) -> None:
+            self._bg_tasks.discard(t)
+            if not t.cancelled() and t.exception() is not None:
+                logger.error("bg_task_error", task=name, error=str(t.exception()))
+
+        task.add_done_callback(_on_done)
 
     async def broadcast(self, payload: dict) -> None:
         """Send JSON payload to every connected client."""
@@ -169,12 +185,14 @@ class WebSocketServer:
 
             import serial
             ser = serial.Serial(device, baudrate, timeout=1)
-            ser.write(open_cmd)
-            if close_cmd:
-                import time
-                time.sleep(1)
-                ser.write(close_cmd)
-            ser.close()
+            try:
+                ser.write(open_cmd)
+                if close_cmd:
+                    import time
+                    time.sleep(1)
+                    ser.write(close_cmd)
+            finally:
+                ser.close()
             return {"status": True, "message": "Gate opened"}
 
         elif action == "emoney_check_balance":
@@ -241,17 +259,17 @@ class WebSocketServer:
             }
 
             if self._api_config:
-                asyncio.create_task(self._call_api_booth_result(result_payload))
+                self._spawn(self._call_api_booth_result(result_payload), name="api_booth_result")
 
             # Auto-open relay on SUCCESS only; broadcast result to all POS clients
             if deduct_status == "SUCCESS" and self.gate_opener is not None:
-                asyncio.create_task(self.gate_opener.open())
+                self._spawn(self.gate_opener.open(), name="gate_opener_open")
 
             broadcast_event = (
                 "emoney_payment_completed" if deduct_status == "SUCCESS"
                 else "emoney_payment_failed"
             )
-            asyncio.create_task(
+            self._spawn(
                 self.broadcast(
                     {
                         "event": broadcast_event,
@@ -261,7 +279,8 @@ class WebSocketServer:
                         "balance_after": result_payload.get("balance_after"),
                         "gate_id": gate_id,
                     }
-                )
+                ),
+                name="emoney_broadcast",
             )
 
             return result_payload
