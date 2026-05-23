@@ -16,6 +16,7 @@ class CashPaymentRequest(BaseModel):
     barcode: str | None = Field(None, description="Ticket barcode")
     plate_number: str | None = Field(None, description="License plate")
     paid_amount: int = Field(..., ge=0, description="Amount received from driver")
+    vehicle_type_id: int | None = Field(None, description="Vehicle type override for tariff calculation")
 
 
 class RfidPaymentRequest(BaseModel):
@@ -74,6 +75,21 @@ class TransactionLookupRequest(BaseModel):
     barcode: str | None = None
     card_number: str | None = None
     plate_number: str | None = None
+    vehicle_type_id: int | None = None
+
+
+class CalculateFeeRequest(BaseModel):
+    """Fee recalculation request (for vehicle type override)."""
+
+    transaction_id: int = Field(..., description="Active transaction ID")
+    vehicle_type_id: int | None = Field(None, description="Vehicle type override")
+
+
+class CalculateFeeResponse(BaseModel):
+    """Fee recalculation response."""
+
+    fee: int
+    vehicle_type_id: int | None = None
 
 
 # =============================================================================

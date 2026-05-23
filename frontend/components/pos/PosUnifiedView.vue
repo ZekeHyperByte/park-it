@@ -1,79 +1,86 @@
 <template>
-  <div class="flex h-full min-h-0 flex-col p-3 gap-2">
-    <!-- Photos: fixed compact height, only when transaction active -->
-    <div v-if="hasTransaction" class="flex-shrink-0 h-28">
-      <PhotoComparison
-        :entry-photo-url="entryPhotoUrl"
-        :exit-photo-url="exitPhotoUrl"
-        :entry-time="transaction?.entry_time"
-        :entry-gate-name="transaction?.entry_gate_name"
-      />
-    </div>
-    <div
-      v-else
-      class="flex-shrink-0 flex flex-col items-center justify-center py-4 gap-1 text-muted-foreground/30"
-    >
-      <ScanLine class="h-10 w-10" />
-      <span class="text-sm">Scan barcode atau nomor plat kendaraan</span>
-    </div>
+  <!-- IDLE: ambient clock view -->
+  <PosIdleAmbient
+    v-if="!hasTransaction"
+    :cameras="cameras"
+    :shift-name="shiftName"
+    :transaction-count="transactionCount"
+    :cash-collected="cashCollected"
+    :last-entry="lastEntry"
+    @barcode-lookup="(v) => $emit('barcode-lookup', v)"
+  />
 
-    <!-- Transaction Info: flex-1 with overflow guard -->
-    <div class="flex-1 min-h-0 overflow-y-auto space-y-2">
-      <!-- Plate Number -->
-      <div class="text-center">
-        <div class="text-[10px] uppercase text-muted-foreground">Nomor Plat</div>
-        <div
-          :class="[
-            'font-mono text-4xl font-black tracking-widest leading-tight',
-            hasTransaction ? 'text-foreground' : 'text-muted-foreground/30'
-          ]"
-        >
-          {{ transaction?.plate_number || '---' }}
+  <!-- ACTIVE: transaction layout (wireframe redesign) -->
+  <div v-else class="flex h-full min-h-0 gap-4 p-4 overflow-hidden">
+    <!-- Left: Main transaction stage -->
+    <div class="flex flex-1 min-h-0 flex-col">
+      <!-- Top row: meta (left) + scan-plat chip (right) -->
+      <div class="flex items-start justify-between gap-4 flex-shrink-0">
+        <div class="flex items-start gap-6">
+          <div class="flex flex-col">
+            <span class="h-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70 leading-none">Durasi</span>
+            <span class="mt-1 flex h-9 items-center text-2xl font-bold tabular-nums leading-none text-foreground">{{ formattedDuration || '--' }}</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="h-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70 leading-none">Masuk</span>
+            <span class="mt-1 flex h-9 items-center text-2xl font-bold tabular-nums leading-none text-foreground">{{ formattedEntryTime || '--' }}</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="h-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70 leading-none">Jenis</span>
+            <div v-if="isMixedLane" class="mt-1 h-9">
+              <select
+                :value="activeVehicleTypeId || ''"
+                class="h-9 rounded border border-border bg-surface px-2 text-base font-bold uppercase text-foreground focus:outline-none focus:ring-1 focus:ring-primary min-w-[96px]"
+                @change="$emit('update:vehicle-type-id', $event.target.value ? Number($event.target.value) : null)"
+              >
+                <option value="">?</option>
+                <option v-for="vt in vehicleTypes" :key="vt.id" :value="vt.id">{{ vt.name }}</option>
+              </select>
+            </div>
+            <span v-else class="mt-1 flex h-9 items-center text-2xl font-bold uppercase leading-none text-foreground">{{ vehicleTypeName || '--' }}</span>
+          </div>
         </div>
+
       </div>
 
-      <!-- Info Row -->
-      <div class="flex justify-center gap-4">
-        <InfoItem label="Durasi" :value="formattedDuration" />
-        <div class="h-8 w-px bg-border" />
-        <InfoItem label="Masuk" :value="formattedEntryTime" />
-        <div class="h-8 w-px bg-border" />
-        <InfoItem label="Jenis" :value="vehicleTypeName" />
-      </div>
-
-      <!-- Price -->
-      <div class="text-center py-1">
-        <div class="text-xs uppercase text-muted-foreground">Total Parkir</div>
-        <div
-          :class="[
-            'text-5xl font-black tabular-nums leading-tight',
-            hasTransaction ? 'text-success' : 'text-muted-foreground/30'
-          ]"
-        >
-          {{ formattedTariff }}
+      <!-- Center: Plate + tariff stage -->
+      <div class="flex flex-1 min-h-0 flex-col items-center justify-center gap-6">
+        <div class="flex flex-col items-center w-full">
+          <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 self-start ml-[10%]">Plat Nomor</span>
+          <div class="font-mono text-[7rem] font-black tracking-wider leading-none text-foreground mt-2 border-b-4 border-foreground/80 px-8 pb-2">
+            {{ transaction.plate_number }}
+          </div>
         </div>
+
+        <!-- Tariff highlighted chip -->
+        <div class="inline-flex items-center rounded-md bg-warning px-10 py-4 shadow-sm">
+          <span class="font-mono text-5xl font-black tabular-nums text-black">
+            {{ formattedTariff }}
+          </span>
+        </div>
+
+        <!-- E-money inline status (when active) -->
+        <EmoneyInlineStatus
+          v-if="showEmoneyStatus"
+          class="w-full max-w-md"
+          :emoney-state="emoneyState"
+          :card-info="cardInfo"
+          :balance="balance"
+          :has-card-number="!!transaction?.card_number"
+          @retry="$emit('retry-emoney')"
+          @cancel="$emit('cancel-emoney')"
+        />
       </div>
 
-      <!-- E-money Status (only when relevant) -->
-      <EmoneyInlineStatus
-        v-if="showEmoneyStatus"
-        :emoney-state="emoneyState"
-        :card-info="cardInfo"
-        :balance="balance"
-        :has-card-number="!!transaction?.card_number"
-        @retry="$emit('retry-emoney')"
-        @cancel="$emit('cancel-emoney')"
-      />
-
-      <!-- Timeout Progress (only when relevant) -->
-      <div v-if="showTimeout" class="space-y-1">
-        <div class="flex items-center justify-between text-[10px]">
-          <span class="uppercase tracking-wide text-muted-foreground">Waktu Tunggu</span>
+      <!-- Bottom: Timeout progress -->
+      <div v-if="showTimeout" class="flex-shrink-0 space-y-1.5">
+        <div class="flex items-center justify-between text-xs">
+          <span class="uppercase tracking-wider font-semibold text-muted-foreground/70">Timeout</span>
           <span :class="timeoutTextColor" class="font-mono tabular-nums font-semibold">
             {{ waitingSeconds }}s / {{ timeoutSeconds }}s
           </span>
         </div>
-        <div class="h-1 w-full rounded-full bg-surface/50 overflow-hidden">
+        <div class="h-2 w-full rounded-full bg-surface overflow-hidden">
           <div
             :class="['h-full rounded-full transition-all duration-1000', timeoutBarColor]"
             :style="{ width: `${timeoutPercent}%` }"
@@ -82,98 +89,84 @@
       </div>
     </div>
 
-    <!-- Barcode Input: Always visible -->
-    <div class="flex-shrink-0">
-      <Input
-        ref="barcodeInput"
-        v-model="barcodeValue"
-        data-barcode-input
-        placeholder="Scan barcode atau masukkan nomor plat..."
-        :disabled="awaitingGateOpen"
-        class="h-12 text-center font-mono"
-        @keydown.enter="onBarcodeSubmit"
-      />
-    </div>
-
-    <!-- Payment Buttons: Always visible, disabled when no transaction -->
-    <div class="flex-shrink-0 space-y-2">
-      <PaymentButton
-        icon="cash"
-        label="TUNAI"
-        shortcut="F1"
-        :disabled="!canPayCash"
-        :processing="isProcessing"
-        @click="$emit('pay-cash')"
-      />
-      <PaymentButton
-        icon="rfid"
-        label="MEMBER RFID"
-        shortcut="F2"
-        :disabled="!canPayRfid"
-        :processing="isProcessing"
-        @click="$emit('pay-rfid')"
-      />
-      <PaymentButton
-        icon="emoney"
-        label="E-MONEY"
-        shortcut="F3"
-        :disabled="!canPayEmoney"
-        :processing="isProcessing"
-        @click="$emit('pay-emoney')"
-      />
-    </div>
+    <!-- Right rail (matches idle aside structure for stable transition) -->
+    <aside class="flex w-96 flex-shrink-0 flex-col gap-3 min-h-0">
+      <section>
+        <div class="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span>Live Exit</span>
+          <span v-if="liveExitCameras[0]?.label" class="text-muted-foreground/60">{{ liveExitCameras[0].label }}</span>
+        </div>
+        <CameraColumn :cameras="liveExitCameras" :placeholder-count="1" />
+      </section>
+      <section>
+        <div class="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span>Snapshot Masuk</span>
+          <span v-if="entryCameras[0]?.label" class="text-muted-foreground/60">{{ entryCameras[0].label }}</span>
+        </div>
+        <CameraColumn :cameras="entryCameras" :placeholder-count="1" />
+      </section>
+    </aside>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
-import { ScanLine } from 'lucide-vue-next'
+import { computed } from 'vue'
 import { useFormatters } from '~/composables/useFormatters'
-import { Input } from '~/components/ui/input'
-import PhotoComparison from './PhotoComparison.vue'
-import InfoItem from './InfoItem.vue'
-import PaymentButton from './PaymentButton.vue'
 import EmoneyInlineStatus from './EmoneyInlineStatus.vue'
+import CameraColumn from './CameraColumn.vue'
+import PosIdleAmbient from './PosIdleAmbient.vue'
 
 const props = defineProps({
   transaction: { type: Object, default: null },
+  cameras: { type: Array, default: () => [] },
   durationSeconds: { type: Number, default: 0 },
   waitingSeconds: { type: Number, default: 0 },
   paymentState: { type: String, default: 'IDLE' },
   emoneyState: { type: String, default: 'IDLE' },
   vehicleTypes: { type: Array, default: () => [] },
-  entryPhotoUrl: { type: String, default: null },
-  exitPhotoUrl: { type: String, default: null },
   timeoutSeconds: { type: Number, default: 120 },
   canPayCash: { type: Boolean, default: false },
-  canPayRfid: { type: Boolean, default: false },
   canPayEmoney: { type: Boolean, default: false },
   cardInfo: { type: Object, default: null },
   balance: { type: Number, default: null },
   awaitingGateOpen: { type: Boolean, default: false },
   isProcessing: { type: Boolean, default: false },
+  isMixedLane: { type: Boolean, default: false },
+  activeVehicleTypeId: { type: Number, default: null },
+  activeTariff: { type: Number, default: null },
+  shiftName: { type: String, default: '' },
+  transactionCount: { type: Number, default: 0 },
+  cashCollected: { type: Number, default: 0 },
+  lastEntry: { type: Object, default: null },
 })
 
-const emit = defineEmits([
-  'barcode-lookup',
+defineEmits([
   'pay-cash',
-  'pay-rfid',
-  'pay-emoney',
   'retry-emoney',
   'cancel-emoney',
+  'update:vehicle-type-id',
+  'barcode-lookup',
 ])
 
 const { formatCurrency, formatDuration, formatTime } = useFormatters()
 
-const barcodeInput = ref(null)
-const barcodeValue = ref('')
-
-// Computed
 const hasTransaction = computed(() => props.transaction !== null)
+
+const liveExitCameras = computed(() => {
+  const exit = props.cameras.filter((c) => /exit|out|keluar/i.test(c.label || ''))
+  return exit.length ? exit.slice(0, 1) : props.cameras.slice(0, 1)
+})
+
+const entryCameras = computed(() => {
+  const entry = props.cameras.filter((c) => /entry|in|masuk/i.test(c.label || ''))
+  if (entry.length) return entry.slice(0, 1)
+  return props.cameras.slice(1, 2)
+})
 
 const formattedTariff = computed(() => {
   if (!hasTransaction.value) return 'Rp -----'
-  return formatCurrency(props.transaction?.tariff || props.transaction?.fee || 0)
+  const tariff = props.activeTariff ?? (props.transaction?.tariff || props.transaction?.fee || 0)
+  return formatCurrency(tariff)
 })
 
 const formattedDuration = computed(() => {
@@ -187,9 +180,11 @@ const formattedEntryTime = computed(() => {
 })
 
 const vehicleTypeName = computed(() => {
-  if (!hasTransaction.value || !props.transaction?.vehicle_type_id) return null
-  const vt = props.vehicleTypes.find((t) => t.id === props.transaction.vehicle_type_id)
-  return vt?.name || props.transaction.vehicle_type || null
+  if (!hasTransaction.value) return null
+  const vtId = props.activeVehicleTypeId || props.transaction?.vehicle_type_id
+  if (!vtId) return null
+  const vt = props.vehicleTypes.find((t) => t.id === vtId)
+  return vt?.name || props.transaction?.vehicle_type || null
 })
 
 const timeoutPercent = computed(() => {
@@ -209,50 +204,13 @@ const timeoutTextColor = computed(() => {
   return 'text-success'
 })
 
-const showTimeout = computed(() => {
-  return hasTransaction.value && (props.paymentState === 'WAITING_PAYMENT' || props.paymentState === 'TIMEOUT_ALERT')
-})
+const showTimeout = computed(() =>
+  hasTransaction.value &&
+  (props.paymentState === 'WAITING_PAYMENT' || props.paymentState === 'TIMEOUT_ALERT'),
+)
 
-const showEmoneyStatus = computed(() => {
-  return hasTransaction.value && props.emoneyState !== 'IDLE'
-})
+const showEmoneyStatus = computed(() =>
+  hasTransaction.value && props.emoneyState !== 'IDLE',
+)
 
-// Methods
-function onBarcodeSubmit() {
-  if (barcodeValue.value.trim() && !props.awaitingGateOpen) {
-    emit('barcode-lookup', barcodeValue.value.trim())
-    barcodeValue.value = ''
-  }
-}
-
-function focusBarcode() {
-  nextTick(() => {
-    const ref = barcodeInput.value
-    const el = ref?.$el ?? ref
-    const input = el?.querySelector?.('input') ?? (el?.tagName === 'INPUT' ? el : null)
-    input?.focus?.()
-  })
-}
-
-// Focus management: Always keep barcode input focused
-watch(() => props.transaction, () => {
-  // Don't steal focus when transaction arrives - let operator continue scanning
-  nextTick(() => {
-    if (!props.transaction) {
-      focusBarcode()
-    }
-  })
-})
-
-watch(() => props.awaitingGateOpen, (isAwaiting) => {
-  if (!isAwaiting) {
-    focusBarcode()
-  }
-})
-
-onMounted(() => {
-  focusBarcode()
-})
-
-defineExpose({ focusBarcode })
 </script>

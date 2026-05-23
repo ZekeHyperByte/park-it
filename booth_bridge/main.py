@@ -123,6 +123,21 @@ async def main():
         rfid_poller.start()
         logger.info("rfid_poller_started")
 
+    async def _hardware_status_heartbeat() -> None:
+        while True:
+            payload = {
+                "type": "hardware_status",
+                "rfid": {"connected": bool(rfid_poller and rfid_poller.connected)},
+                "palang": {"connected": bool(gate_opener and gate_opener.is_present())},
+            }
+            try:
+                await ws_server.broadcast(payload)
+            except Exception as e:
+                logger.warning("hardware_status_broadcast_failed", extra={"error": str(e)})
+            await asyncio.sleep(5)
+
+    heartbeat_task = asyncio.create_task(_hardware_status_heartbeat(), name="hw_status_heartbeat")
+
     # Supervisor loops: if the Omnikey poller's underlying task dies (USB
     # replug, driver error, partial frame parse blow-up), restart it without
     # taking down the booth process. WS server already manages clients with
@@ -145,6 +160,11 @@ async def main():
     try:
         await asyncio.Event().wait()
     finally:
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except (asyncio.CancelledError, Exception):
+            pass
         for sup in supervisors:
             sup.cancel()
         if supervisors:

@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.app.middleware.api_key import require_api_key
 from api.app.middleware.auth import require_operator
 from api.app.schemas.payment import (
+    CalculateFeeRequest,
+    CalculateFeeResponse,
     CashPaymentRequest,
     EmoneyBoothResultRequest,
     EmoneyDeductRequest,
@@ -96,6 +98,7 @@ async def cash_payment(
             plate_number=payment.plate_number,
             paid_amount=payment.paid_amount,
             operator_id=_get_operator_id(user),
+            vehicle_type_id=payment.vehicle_type_id,
         )
         payment_success_total.labels(method="cash").inc()
         resp = PaymentResponse(
@@ -335,7 +338,7 @@ async def lookup_transaction(
     if tx is None:
         return TransactionLookupResponse(found=False)
 
-    fee = await calculate_transaction_fee(db, tx)
+    fee = await calculate_transaction_fee(db, tx, vehicle_type_id_override=lookup.vehicle_type_id)
 
     return TransactionLookupResponse(
         found=True,
@@ -351,3 +354,22 @@ async def lookup_transaction(
         },
         fee=fee,
     )
+
+
+@router.post("/calculate-fee", response_model=CalculateFeeResponse)
+async def calculate_fee_endpoint(
+    req: CalculateFeeRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_operator),
+) -> CalculateFeeResponse:
+    """Recalculate fee for an active transaction with optional vehicle type override."""
+    from api.app.models import ParkingTransaction
+
+    tx = await db.get(ParkingTransaction, req.transaction_id)
+    if tx is None or tx.status != "ACTIVE":
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Active transaction not found")
+
+    fee = await calculate_transaction_fee(db, tx, vehicle_type_id_override=req.vehicle_type_id)
+    effective_vt_id = req.vehicle_type_id if req.vehicle_type_id is not None else tx.vehicle_type_id
+    return CalculateFeeResponse(fee=fee, vehicle_type_id=effective_vt_id)

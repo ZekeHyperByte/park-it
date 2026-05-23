@@ -8,7 +8,7 @@ from api.app.middleware.api_key import require_api_key
 from api.app.middleware.auth import require_admin, require_auth, require_operator
 from api.app.models.gate import Gate
 from api.app.schemas.common import SuccessResponse
-from api.app.schemas.gate import GateCreate, GateResponse, GateUpdate
+from api.app.schemas.gate import GateCreate, GateLaneConfigUpdate, GateResponse, GateUpdate
 from api.app.schemas.gate_control import GateControlRequest, GateControlResponse
 from api.app.services.gate_command import publish_command
 from api.database import get_db
@@ -95,6 +95,32 @@ async def update_gate(
     await db.commit()
     await db.refresh(gate)
     logger.info("gate_updated", gate_id=gate.id)
+    return GateResponse.model_validate(gate)
+
+
+@router.patch("/{gate_id}/lane-config", response_model=GateResponse)
+async def update_gate_lane_config(
+    gate_id: int,
+    data: GateLaneConfigUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_admin),
+) -> GateResponse:
+    """Update only the lane type and default vehicle type without touching other hardware config."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    gate = await db.get(Gate, gate_id)
+    if gate is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gate not found")
+
+    hw = dict(gate.hardware_config)
+    hw["lane_type"] = data.lane_type
+    hw["default_vehicle_type_id"] = data.default_vehicle_type_id
+    gate.hardware_config = hw
+    flag_modified(gate, "hardware_config")
+
+    await db.commit()
+    await db.refresh(gate)
+    logger.info("gate_lane_config_updated", gate_id=gate.id, lane_type=data.lane_type)
     return GateResponse.model_validate(gate)
 
 

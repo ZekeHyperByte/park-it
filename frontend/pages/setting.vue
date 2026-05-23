@@ -100,6 +100,88 @@
       <DataTable :data="areas" :columns="areaColumns" :loading="loadingAreas" @add="openAreaModal()" @edit="openAreaModal" @delete="confirmDeleteArea" />
     </div>
 
+    <!-- Gates Lane Config -->
+    <div v-if="activeTab === 'gates'" class="space-y-4">
+      <div class="flex items-center justify-between">
+        <p class="text-sm text-muted-foreground">Konfigurasi jenis lajur untuk setiap gate keluar (POS).</p>
+      </div>
+      <div class="rounded-lg border border-border overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-muted">
+            <tr>
+              <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-muted-foreground">Nama</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-muted-foreground w-24">Kode</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-muted-foreground w-32">Jenis Lajur</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-muted-foreground">Kendaraan Default</th>
+              <th class="px-3 py-2 w-20" />
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loadingGates" class="border-t border-border">
+              <td colspan="5" class="px-3 py-4 text-center text-muted-foreground text-xs">Memuat...</td>
+            </tr>
+            <tr v-else-if="gateOutList.length === 0" class="border-t border-border">
+              <td colspan="5" class="px-3 py-4 text-center text-muted-foreground text-xs">Tidak ada gate keluar</td>
+            </tr>
+            <tr v-for="gate in gateOutList" :key="gate.id" class="border-t border-border hover:bg-surface/50">
+              <td class="px-3 py-2 font-medium text-foreground">{{ gate.name }}</td>
+              <td class="px-3 py-2 font-mono text-xs text-muted-foreground">{{ gate.code }}</td>
+              <td class="px-3 py-2">
+                <span :class="[
+                  'rounded-full px-2 py-0.5 text-xs font-medium',
+                  gate.hardware_config?.lane_type === 'SINGLE' ? 'bg-primary/10 text-primary' : 'bg-warning/10 text-warning'
+                ]">
+                  {{ gate.hardware_config?.lane_type === 'SINGLE' ? 'Single' : 'Campuran' }}
+                </span>
+              </td>
+              <td class="px-3 py-2 text-muted-foreground">
+                {{ getVehicleTypeName(gate.hardware_config?.default_vehicle_type_id) || '—' }}
+              </td>
+              <td class="px-3 py-2 text-right">
+                <button class="rounded px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10" @click="openGateLaneModal(gate)">Edit</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Gate Lane Config Modal -->
+      <div v-if="gateLaneModalVisible" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div class="w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-xl space-y-4">
+          <h3 class="font-semibold text-foreground">Konfigurasi Lajur — {{ editingGate?.name }}</h3>
+
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-foreground">Jenis Lajur</label>
+            <div class="flex gap-3">
+              <label v-for="opt in laneTypeOptions" :key="opt.value" class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" :value="opt.value" v-model="gateLaneForm.lane_type" class="accent-primary" />
+                <span class="text-sm text-foreground">{{ opt.label }}</span>
+              </label>
+            </div>
+            <p class="text-xs text-muted-foreground">
+              <span v-if="gateLaneForm.lane_type === 'SINGLE'">Tipe kendaraan otomatis — operator tidak perlu memilih.</span>
+              <span v-else>Campuran — operator harus memilih tipe sebelum bayar.</span>
+            </p>
+          </div>
+
+          <div v-if="gateLaneForm.lane_type === 'SINGLE'" class="space-y-2">
+            <label class="text-sm font-medium text-foreground">Jenis Kendaraan Default</label>
+            <select v-model.number="gateLaneForm.default_vehicle_type_id" class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+              <option :value="null">— Pilih jenis —</option>
+              <option v-for="vt in vehicleTypes" :key="vt.id" :value="vt.id">{{ vt.name }} ({{ vt.code }})</option>
+            </select>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-2">
+            <Button variant="outline" @click="gateLaneModalVisible = false">Batal</Button>
+            <Button :disabled="submitting" @click="saveGateLaneConfig">
+              {{ submitting ? 'Menyimpan...' : 'Simpan' }}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modals -->
     <CrudModal v-model="vehicleTypeModalVisible" :title="vehicleTypeEditing ? 'Edit Jenis Kendaraan' : 'Tambah Jenis Kendaraan'" :fields="vehicleTypeFields" :initial-data="vehicleTypeForm" :submitting="submitting" @submit="saveVehicleType" />
     <CrudModal v-model="shiftModalVisible" :title="shiftEditing ? 'Edit Shift' : 'Tambah Shift'" :fields="shiftFields" :initial-data="shiftForm" :submitting="submitting" @submit="saveShift" />
@@ -126,6 +208,7 @@ const tabs = [
   { key: 'vehicle-types', label: 'Jenis Kendaraan' },
   { key: 'shifts', label: 'Shift' },
   { key: 'areas', label: 'Area Parkir' },
+  { key: 'gates', label: 'Konfigurasi Gate' },
 ]
 
 const activeTab = ref('general')
@@ -204,7 +287,58 @@ const deleteDialogVisible = ref(false)
 const deleteTargetName = ref('')
 const deleteAction = ref(null)
 
-onMounted(() => { loadSiteConfig(); loadSettings(); loadVehicleTypes(); loadShifts(); loadAreas() })
+const gateOutList = ref([])
+const loadingGates = ref(false)
+const gateLaneModalVisible = ref(false)
+const editingGate = ref(null)
+const gateLaneForm = ref({ lane_type: 'MIXED', default_vehicle_type_id: null })
+const laneTypeOptions = [
+  { value: 'MIXED', label: 'Campuran' },
+  { value: 'SINGLE', label: 'Single' },
+]
+
+function getVehicleTypeName(id) {
+  if (!id) return null
+  return vehicleTypes.value.find((v) => v.id === id)?.name || null
+}
+
+function openGateLaneModal(gate) {
+  editingGate.value = gate
+  gateLaneForm.value = {
+    lane_type: gate.hardware_config?.lane_type || 'MIXED',
+    default_vehicle_type_id: gate.hardware_config?.default_vehicle_type_id || null,
+  }
+  gateLaneModalVisible.value = true
+}
+
+async function saveGateLaneConfig() {
+  submitting.value = true
+  try {
+    await fetchApi(`/api/gates/${editingGate.value.id}/lane-config`, {
+      method: 'PATCH',
+      body: JSON.stringify(gateLaneForm.value),
+    })
+    gateLaneModalVisible.value = false
+    await loadGates()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function loadGates() {
+  loadingGates.value = true
+  try {
+    gateOutList.value = await fetchApi('/api/gates?direction=OUT')
+  } catch (e) {
+    console.error(e)
+  } finally {
+    loadingGates.value = false
+  }
+}
+
+onMounted(() => { loadSiteConfig(); loadSettings(); loadVehicleTypes(); loadShifts(); loadAreas(); loadGates() })
 
 async function loadSiteConfig() { try { const { data } = await fetchApi('/api/site-config'); siteConfig.value = data } catch (e) { /* ok */ } }
 async function saveSiteConfig() { try { await fetchApi('/api/site-config', { method: 'PUT', body: JSON.stringify(siteConfig.value) }) } catch (e) { console.error(e) } }

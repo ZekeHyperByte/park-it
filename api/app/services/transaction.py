@@ -183,6 +183,7 @@ async def calculate_transaction_fee(
     db: AsyncSession,
     transaction: ParkingTransaction,
     exit_time: datetime | None = None,
+    vehicle_type_id_override: int | None = None,
 ) -> int:
     """Calculate parking fee for a transaction.
 
@@ -190,6 +191,7 @@ async def calculate_transaction_fee(
         db: Database session
         transaction: The parking transaction
         exit_time: Exit timestamp (defaults to now)
+        vehicle_type_id_override: Use this vehicle type instead of the one on the transaction
 
     Returns:
         Fee in IDR
@@ -197,13 +199,14 @@ async def calculate_transaction_fee(
     if exit_time is None:
         exit_time = datetime.now(timezone.utc)
 
-    config = await get_vehicle_type_tariff_config(db, transaction.vehicle_type_id)
+    effective_vt_id = vehicle_type_id_override if vehicle_type_id_override is not None else transaction.vehicle_type_id
+    config = await get_vehicle_type_tariff_config(db, effective_vt_id)
 
     # Determine vehicle type code
     vt_code = "MOBIL"  # default
-    if transaction.vehicle_type_id:
+    if effective_vt_id:
         result = await db.execute(
-            select(VehicleType.code).where(VehicleType.id == transaction.vehicle_type_id)
+            select(VehicleType.code).where(VehicleType.id == effective_vt_id)
         )
         code = result.scalar_one_or_none()
         if code:

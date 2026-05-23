@@ -105,6 +105,7 @@ async def process_cash_payment(
     plate_number: str | None = None,
     paid_amount: int,
     operator_id: int | None = None,
+    vehicle_type_id: int | None = None,
 ) -> dict:
     """Process a cash payment at gate-out.
 
@@ -117,6 +118,7 @@ async def process_cash_payment(
         plate_number: Transaction plate number
         paid_amount: Amount received from driver
         operator_id: POS operator ID
+        vehicle_type_id: Vehicle type override (mixed-lane operator selection)
 
     Returns:
         dict with transaction, fee, change_amount
@@ -130,6 +132,10 @@ async def process_cash_payment(
     )
     if tx is None:
         raise ValueError("No active transaction found")
+
+    if vehicle_type_id is not None:
+        tx.vehicle_type_id = vehicle_type_id
+        await db.flush()
 
     await _enqueue_exit_snapshot(db, gate_id, tx.id)
 

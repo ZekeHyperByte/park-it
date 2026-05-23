@@ -233,6 +233,10 @@ class HardwareConfig(BaseModel):
     close_command: str = ""
     close_delay_seconds: float = 3.0
 
+    # Lane configuration (for exit POS gates)
+    lane_type: str = Field(default="MIXED", pattern="^(SINGLE|MIXED)$")
+    default_vehicle_type_id: int | None = None
+
     # Peripherals (all optional, enabled=false by default)
     rfid: RfidConfig = Field(default_factory=RfidConfig)
     ticket_printer: PrinterConfig = Field(default_factory=PrinterConfig)
@@ -286,6 +290,13 @@ class GateUpdate(BaseModel):
     relay_mode: str | None = Field(None, pattern="^(SINGLE|DUAL|TRIPLE)$")
     hardware_config: HardwareConfig | None = None
     is_active: bool | None = None
+
+
+class GateLaneConfigUpdate(BaseModel):
+    """Update only lane configuration (safe merge into hardware_config)."""
+
+    lane_type: str = Field(..., pattern="^(SINGLE|MIXED)$")
+    default_vehicle_type_id: int | None = None
 
 
 class GateResponse(GateBase):

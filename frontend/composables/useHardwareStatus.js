@@ -14,6 +14,8 @@ export function useHardwareStatus() {
     printer: { status: 'unknown', paperPercent: 0, label: 'Printer' },
     camera: { status: 'unknown', enabled: false, label: 'Camera' },
     websocket: { status: 'unknown', label: 'WS' },
+    rfid: { status: 'unknown', label: 'RFID' },
+    palang: { status: 'unknown', label: 'Palang' },
   })
 
   let pollInterval = null
@@ -96,6 +98,20 @@ export function useHardwareStatus() {
     hardwareStatus.value.websocket.status = connected ? 'connected' : 'disconnected'
   }
 
+  function updateBoothHardware(data) {
+    if (data?.rfid) {
+      hardwareStatus.value.rfid.status = data.rfid.connected ? 'connected' : 'disconnected'
+    }
+    if (data?.palang) {
+      hardwareStatus.value.palang.status = data.palang.connected ? 'connected' : 'disconnected'
+    }
+  }
+
+  function resetBoothHardware() {
+    hardwareStatus.value.rfid.status = 'disconnected'
+    hardwareStatus.value.palang.status = 'disconnected'
+  }
+
   async function refreshPrinterStatus() {
     try {
       const data = await fetchApi('/api/printers/status/summary')
@@ -141,6 +157,8 @@ export function useHardwareStatus() {
     getStatusIcon,
     updateFromGate,
     updateWebSocketStatus,
+    updateBoothHardware,
+    resetBoothHardware,
     refreshPrinterStatus,
     startPolling,
     stopPolling,

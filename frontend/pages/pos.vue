@@ -4,12 +4,8 @@
       <div class="flex items-center gap-2 w-full min-w-0">
         <PosStatusBar
           class="flex-1 min-w-0"
-          :gate-name="selectedGate?.name || '--'"
-          :ws-connected="gateStore.wsConnected"
           :booth-connected="gateStore.boothConnected"
           :hardware-status="hardwareStatus"
-          :transaction-count="posSession.transactionCount"
-          :cash-collected="posSession.cashCollected"
         />
         <div class="h-5 w-px bg-border shrink-0" />
         <PosWorkerBadge
@@ -48,29 +44,32 @@
       <!-- UNIFIED: consistent layout for both IDLE and ACTIVE states -->
       <PosUnifiedView
         v-else
-        ref="unifiedViewRef"
         :transaction="gateStore.currentTransaction"
+        :cameras="gatecameras"
         :duration-seconds="gateStore.durationSeconds"
         :waiting-seconds="gateStore.waitingSeconds"
         :payment-state="gateStore.paymentState"
         :emoney-state="gateStore.emoneyPaymentState"
         :vehicle-types="websiteStore.vehicleTypes"
-        :entry-photo-url="entryPhotoUrl"
-        :exit-photo-url="exitPhotoUrl"
         :timeout-seconds="timeoutSeconds"
         :can-pay-cash="gateStore.canPayCash"
-        :can-pay-rfid="gateStore.canPayRfid"
         :can-pay-emoney="gateStore.canPayEmoney"
         :card-info="emoneyCardInfo"
         :balance="emoneyBalance"
         :awaiting-gate-open="gateStore.awaitingGateOpen"
         :is-processing="isPaymentProcessing"
+        :is-mixed-lane="isMixedLane"
+        :active-vehicle-type-id="activeVehicleTypeId"
+        :active-tariff="displayTariff"
+        :shift-name="posSession.shiftName"
+        :transaction-count="posSession.transactionCount"
+        :cash-collected="posSession.cashCollected"
+        :last-entry="lastEntry"
         @barcode-lookup="onBarcodeLookup"
         @pay-cash="showCashDialog = true"
-        @pay-rfid="showRfidDialog = true"
-        @pay-emoney="startEmoneyPayment"
         @retry-emoney="retryEmoney"
         @cancel-emoney="cancelEmoney"
+        @update:vehicle-type-id="onVehicleTypeChange"
       />
     </div>
 
@@ -80,10 +79,10 @@
         :emoney-state="gateStore.emoneyPaymentState"
         :awaiting-gate-open="gateStore.awaitingGateOpen"
         :can-pay-cash="gateStore.canPayCash"
-        :can-pay-rfid="gateStore.canPayRfid"
-        :can-pay-emoney="gateStore.canPayEmoney"
         :gate-name="selectedGate?.name || ''"
         :shift-name="posSession.shiftName"
+        :is-mixed-lane="isMixedLane"
+        :active-vehicle-type-name="activeVehicleTypeName"
       />
     </template>
 
@@ -132,7 +131,7 @@ import { useKeyboard } from '~/composables/useKeyboard'
 import { useFormatters } from '~/composables/useFormatters'
 
 definePageMeta({
-  middleware: 'auth',
+  // middleware: 'auth',
   layout: false,
 })
 
@@ -145,7 +144,7 @@ const { $ws } = useNuxtApp()
 const config = useRuntimeConfig()
 const { fetchApi } = useApi()
 const sound = useSound()
-const { hardwareStatus, updateFromGate, updateWebSocketStatus, startPolling, stopPolling } = useHardwareStatus()
+const { hardwareStatus, updateFromGate, updateWebSocketStatus, updateBoothHardware, resetBoothHardware, startPolling, stopPolling } = useHardwareStatus()
 const { detectCardType, maskCardNumber } = useFormatters()
 
 // Worker session state
@@ -179,7 +178,7 @@ const showRfidDialog = ref(false)
 const emoneyBalance = ref(null)
 const isPaymentProcessing = ref(false)
 const recentTransactions = ref([])
-const unifiedViewRef = ref(null)
+const lastEntry = ref(null)
 
 // View state (priority: GATE_OPEN > ERROR > UNIFIED)
 // UNIFIED view is always shown unless we're in a special state
@@ -210,13 +209,74 @@ const selectedGate = computed(() =>
   websiteStore.activeGateOuts.find((g) => g.id === gateStore.selectedGateOutId)
 )
 
-const currentTariff = computed(() =>
-  gateStore.currentTransaction?.tariff || gateStore.currentTransaction?.fee || 0
+const gateStatuses = computed(() => {
+  const statuses = []
+  if (selectedGate.value) {
+    statuses.push({
+      name: selectedGate.value.name,
+      direction: 'OUT',
+      connected: gateStore.wsConnected,
+    })
+  }
+  for (const g of websiteStore.activeGateIns) {
+    statuses.push({
+      name: g.name,
+      direction: 'IN',
+      connected: g.is_online ?? false,
+    })
+  }
+  return statuses
+})
+
+// Alert operator when a gate controller transitions to disconnected
+const _prevGateConnected = new Map()
+watch(
+  gateStatuses,
+  (statuses) => {
+    for (const g of statuses) {
+      const prev = _prevGateConnected.get(g.name)
+      if (prev === true && g.connected === false) {
+        toast.error(`Controller ${g.name} terputus`)
+      } else if (prev === false && g.connected === true) {
+        toast.success(`Controller ${g.name} terhubung kembali`)
+      }
+      _prevGateConnected.set(g.name, g.connected)
+    }
+  },
+  { deep: true },
 )
+
+const gatecameras = computed(() => {
+  const hw = selectedGate.value?.hardware_config
+  if (!hw) return []
+  const list = hw.cameras || []
+  if (list.length) return list.filter((c) => c.url && c.enabled !== false)
+  const cam = hw.camera
+  if (cam?.enabled && cam?.url) return [{ url: cam.url, label: null }]
+  return []
+})
+
+const displayTariff = ref(0)
+
+const currentTariff = computed(() => displayTariff.value)
 
 const timeoutSeconds = computed(() =>
   parseInt(websiteStore.getSetting('payment_timeout_seconds', '120'))
 )
+
+// Vehicle type selection
+const activeVehicleTypeId = ref(null)
+
+const isMixedLane = computed(() => {
+  const hw = selectedGate.value?.hardware_config
+  if (!hw || !hw.lane_type) return true
+  return hw.lane_type === 'MIXED'
+})
+
+const activeVehicleTypeName = computed(() => {
+  if (!activeVehicleTypeId.value) return null
+  return websiteStore.vehicleTypes.find((t) => t.id === activeVehicleTypeId.value)?.name || null
+})
 
 const entryPhotoUrl = computed(() => {
   const tx = gateStore.currentTransaction
@@ -235,33 +295,75 @@ const emoneyCardInfo = computed(() => {
   }
 })
 
-// Focus management on view transitions
-watch(viewState, (newState) => {
-  nextTick(() => {
-    if (newState === 'UNIFIED') {
-      unifiedViewRef.value?.focusBarcode?.()
+// Sync displayTariff when transaction loads/clears
+watch(() => gateStore.currentTransaction, (tx) => {
+  displayTariff.value = tx?.tariff || tx?.fee || 0
+  if (tx?.entry_snapshot_id && tx?.plate_number) {
+    lastEntry.value = {
+      plateNumber: tx.plate_number,
+      snapshotUrl: `/api/snapshots/${tx.entry_snapshot_id}/image`,
+      gateLabel: tx.entry_gate_name || tx.entry_gate_code || null,
+      subtitle: 'baru saja masuk',
     }
-  })
+  }
 })
+
+// Auto-set vehicle type for single-lane gates
+watch(selectedGate, (gate) => {
+  if (gate && !isMixedLane.value) {
+    activeVehicleTypeId.value = gate.hardware_config?.default_vehicle_type_id || null
+  } else {
+    activeVehicleTypeId.value = null
+  }
+}, { immediate: true })
 
 // Keyboard shortcuts
 useKeyboard([
   { keys: ['F1'], action: () => gateStore.canPayCash && (showCashDialog.value = true) },
-  { keys: ['F2'], action: () => gateStore.canPayRfid && (showRfidDialog.value = true) },
-  { keys: ['F3'], action: () => gateStore.canPayEmoney && startEmoneyPayment() },
+  { keys: ['F2'], action: () => gateStore.canPayRfid && (showRfidDialog.value = true) }, // hidden fallback
+  { keys: ['F3'], action: () => gateStore.canPayEmoney && startEmoneyPayment() }, // hidden fallback
   { keys: [' '], action: () => gateStore.awaitingGateOpen && openGateAction() },
   { keys: ['Escape'], action: () => { showCashDialog.value = false; showRfidDialog.value = false } },
+  {
+    keys: ['c', 'C'],
+    action: () => {
+      if (!isMixedLane.value) return
+      const vt = websiteStore.vehicleTypes.find((t) => /MOB|CAR/i.test(t.code))
+        || websiteStore.vehicleTypes[0]
+      if (vt) onVehicleTypeChange(vt.id)
+    },
+  },
+  {
+    keys: ['m', 'M'],
+    action: () => {
+      if (!isMixedLane.value) return
+      const vt = websiteStore.vehicleTypes.find((t) => /MOT/i.test(t.code))
+        || websiteStore.vehicleTypes[1]
+      if (vt) onVehicleTypeChange(vt.id)
+    },
+  },
 ])
 
 // Actions
 async function onBarcodeLookup(input) {
-  if (!input.trim()) return
-  const found = await gateStore.lookupTransaction({
-    barcode: input.trim(),
-    plateNumber: input.trim(),
-  })
-  if (!found) {
-    toast.warning('Transaksi tidak ditemukan')
+  const v = input?.trim()
+  if (!v) return
+  const found = await gateStore.lookupTransaction({ barcode: v, plateNumber: v })
+  if (!found) toast.warning('Transaksi tidak ditemukan')
+}
+
+async function onVehicleTypeChange(vehicleTypeId) {
+  activeVehicleTypeId.value = vehicleTypeId
+  const tx = gateStore.currentTransaction
+  if (!tx?.id) return
+  try {
+    const res = await fetchApi('/api/payments/calculate-fee', {
+      method: 'POST',
+      body: JSON.stringify({ transaction_id: tx.id, vehicle_type_id: vehicleTypeId }),
+    })
+    displayTariff.value = res.fee
+  } catch (e) {
+    console.error('Fee calculation failed:', e)
   }
 }
 
@@ -274,6 +376,7 @@ async function confirmCashPayment(amount) {
       gateId: gateCode,
       gateOutId: selectedGate.value.id,
       paidAmount: amount,
+      vehicleTypeId: activeVehicleTypeId.value,
     })
     if (result?.success) {
       sound.paymentSuccess()
@@ -395,6 +498,7 @@ function connectBooth() {
   if (boothWsReconnectAttempts >= BOOTH_MAX_RECONNECT_ATTEMPTS) {
     console.warn('Booth bridge: max reconnect attempts reached, giving up')
     gateStore.setBoothConnected(false)
+    resetBoothHardware()
     return
   }
 
@@ -415,9 +519,10 @@ function connectBooth() {
       console.error('Booth message parse error:', e)
     }
   }
-  boothWs.onerror = () => gateStore.setBoothConnected(false)
+  boothWs.onerror = () => { gateStore.setBoothConnected(false); resetBoothHardware() }
   boothWs.onclose = () => {
     gateStore.setBoothConnected(false)
+    resetBoothHardware()
     if (!boothWsReconnectTimer) {
       boothWsReconnectAttempts++
       const delay = Math.min(3000 * Math.pow(2, boothWsReconnectAttempts - 1), 60000)
@@ -439,10 +544,15 @@ function disconnectBooth() {
     boothWs = null
   }
   gateStore.setBoothConnected(false)
+  resetBoothHardware()
 }
 
 function handleBoothMessage(data) {
   // Server-pushed events from booth_bridge (UHF auto-flow, eMoney broadcast)
+  if (data.type === 'hardware_status') {
+    updateBoothHardware(data)
+    return
+  }
   if (data.event === 'member_card_scanned') {
     if (data.success) {
       sound.gateOpen()

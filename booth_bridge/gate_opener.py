@@ -8,6 +8,7 @@ for autonomous exit flows (UHF auto-success, eMoney auto-success).
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from typing import Any
 
@@ -42,6 +43,10 @@ class GateOpener:
             except ValueError:
                 pass
         return value.encode()
+
+    def is_present(self) -> bool:
+        """True if the configured serial device path exists on disk."""
+        return bool(self.device) and os.path.exists(self.device)
 
     async def open(self) -> bool:
         """Open boom barrier, schedule auto-close. Returns True on serial write success."""

@@ -63,6 +63,7 @@ class OmnikeyPoller:
         self._last_card: str | None = None
         self._last_card_at: float = 0.0
         self._event_queue: asyncio.Queue | None = None
+        self.connected: bool = False
 
     def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -114,6 +115,7 @@ class OmnikeyPoller:
             dev = await loop.run_in_executor(None, self._find_device)
             if dev is None:
                 logger.warning("omnikey_device_not_found", match=self.device_name_match)
+                self.connected = False
                 await asyncio.sleep(3)
                 continue
 
@@ -121,9 +123,11 @@ class OmnikeyPoller:
                 dev.grab()
             except Exception as e:
                 logger.error("omnikey_grab_failed", device=dev.path, error=str(e))
+                self.connected = False
                 await asyncio.sleep(3)
                 continue
 
+            self.connected = True
             logger.info("omnikey_device_opened", device=dev.path, name=dev.name, gate_id=self.gate_id)
 
             queue: asyncio.Queue = asyncio.Queue()
@@ -181,6 +185,7 @@ class OmnikeyPoller:
             except Exception as e:
                 logger.error("omnikey_loop_error", error=str(e))
             finally:
+                self.connected = False
                 try:
                     loop.remove_reader(dev.fd)
                 except Exception:

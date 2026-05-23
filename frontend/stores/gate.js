@@ -147,7 +147,7 @@ export const useGateStore = defineStore('gate', () => {
    * Confirm cash payment.
    * Returns { success, change_amount, message } — caller handles notifications.
    */
-  async function confirmCashPayment({ gateId, gateOutId, paidAmount }) {
+  async function confirmCashPayment({ gateId, gateOutId, paidAmount, vehicleTypeId = null }) {
     isLoading.value = true
     try {
       const { fetchApi } = useApi()
@@ -159,6 +159,7 @@ export const useGateStore = defineStore('gate', () => {
           barcode: currentTransaction.value?.barcode,
           plate_number: currentTransaction.value?.plate_number,
           paid_amount: paidAmount,
+          vehicle_type_id: vehicleTypeId,
         }),
       })
       if (res.success) {
