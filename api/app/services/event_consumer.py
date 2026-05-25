@@ -1,7 +1,6 @@
 """Redis Pub/Sub event consumer for server-side event processing.
 
-Subscribes to parking.events.* and handles business logic for specific event types:
-- deduct_result: delegates to payment service to complete e-money exit
+Subscribes to parking.events.* and handles business logic for incoming gate events.
 """
 
 import asyncio
@@ -77,87 +76,10 @@ class EventConsumer:
             await self._handle_ticket_button_pressed(payload)
         elif event_type == "rfid_card_read":
             await self._handle_rfid_card_read(payload)
-        elif event_type == "deduct_result":
-            await self._handle_deduct_result(payload)
         elif event_type == "vehicle_detected":
             await self._handle_vehicle_detected(payload)
         elif event_type == "help_button_pressed":
             await self._handle_help_button_pressed(payload)
-        else:
-            pass
-
-    async def _handle_deduct_result(self, payload: dict) -> None:
-        """Handle deduct_result event by processing the e-money payment."""
-        from sqlalchemy import select
-
-        from api.app.models import Gate
-        from api.app.services.payment import process_emoney_result
-        from api.database import AsyncSessionLocal
-        from shared.events import DeductStatus
-
-        gate_id = payload.get("gate_id")
-        if gate_id is None:
-            logger.error("deduct_result_missing_gate_id", payload=payload)
-            return
-
-        async with AsyncSessionLocal() as db:
-            try:
-                # Look up gate by code to obtain the integer DB id
-                result = await db.execute(select(Gate).where(Gate.code == gate_id))
-                gate = result.scalar_one_or_none()
-                if gate is None:
-                    logger.error("deduct_result_gate_not_found", gate_id=gate_id)
-                    return
-
-                status_str = payload.get("status")
-                try:
-                    status = DeductStatus(status_str)
-                except ValueError:
-                    logger.error(
-                        "deduct_result_invalid_status",
-                        gate_id=gate_id,
-                        status=status_str,
-                    )
-                    return
-
-                await process_emoney_result(
-                    db,
-                    gate_id=gate_id,
-                    gate_out_id=gate.id,
-                    card_number=payload.get("card_number", ""),
-                    status=status,
-                    deduct_amount=payload.get("deduct_amount", 0),
-                    balance_before=payload.get("balance_before", 0),
-                    balance_after=payload.get("balance_after", 0),
-                    transaction_counter=payload.get("transaction_counter", 0),
-                    raw_response_hex=payload.get("raw_response_hex", ""),
-                    settlement_payload_hex=payload.get("settlement_payload_hex", ""),
-                    card_type=payload.get("card_type"),
-                    card_type_code=(
-                        payload.get("card_type_code") or None
-                    ),
-                )
-
-                from api.app.services.gate_command import publish_command
-                from shared.events import PlayAudioCommand
-                if status == DeductStatus.WRONG_CARD:
-                    await publish_command(PlayAudioCommand(gate_id=gate_id, track=7))
-                elif status == DeductStatus.INSUFFICIENT_BALANCE:
-                    await publish_command(PlayAudioCommand(gate_id=gate_id, track=6))
-
-                logger.info(
-                    "deduct_result_processed",
-                    gate_id=gate_id,
-                    gate_out_id=gate.id,
-                    status=status.value,
-                )
-            except Exception as e:
-                logger.error(
-                    "deduct_result_processing_error",
-                    gate_id=gate_id,
-                    error=str(e),
-                )
-
 
     async def _handle_ticket_button_pressed(self, payload: dict) -> None:
         """Cash entry: create transaction, send print_ticket_then_open to daemon."""

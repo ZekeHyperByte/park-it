@@ -246,7 +246,6 @@ class TestHeartbeat:
             event_type="heartbeat",
             gate_id="gate-in-1",
             controller_ok=True,
-            passti_ok=True,
         )
         await test_daemon.publish_event(hb)
         channel = test_daemon._fake_redis.pubsub["parking.events.gate-in-1"]

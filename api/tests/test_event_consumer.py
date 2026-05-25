@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from api.app.services.event_consumer import EventConsumer
-from shared.events import DeductStatus
 
 
 class MockPubSub:
@@ -70,70 +69,3 @@ async def test_event_consumer_subscribes_to_redis():
         assert mock_pubsub.closed is True
 
 
-@pytest.mark.asyncio
-async def test_deduct_result_triggers_process_emoney_result():
-    """A deduct_result event should call process_emoney_result with parsed data."""
-    event_payload = {
-        "event_type": "deduct_result",
-        "gate_id": "GOUT01",
-        "status": DeductStatus.SUCCESS.value,
-        "card_number": "1234567890",
-        "card_type": "FLAZZ",
-        "deduct_amount": 5000,
-        "balance_before": 50000,
-        "balance_after": 45000,
-        "transaction_counter": 7,
-        "raw_response_hex": "EF0105...",
-    }
-
-    mock_pubsub = MockPubSub(
-        messages=[
-            {
-                "type": "pmessage",
-                "channel": "parking.events.GOUT01",
-                "data": json.dumps(event_payload),
-            }
-        ]
-    )
-    mock_rc = _make_mock_redis_client(mock_pubsub)
-
-    # Mock DB session + gate lookup
-    mock_gate = MagicMock()
-    mock_gate.id = 42
-
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = mock_gate
-
-    mock_session = AsyncMock()
-    mock_session.execute.return_value = mock_result
-
-    mock_session_ctx = AsyncMock()
-    mock_session_ctx.__aenter__.return_value = mock_session
-    mock_session_ctx.__aexit__.return_value = None
-
-    with patch("api.app.services.event_consumer.redis_client", mock_rc):
-        with patch(
-            "api.database.AsyncSessionLocal",
-            return_value=mock_session_ctx,
-        ):
-            with patch(
-                "api.app.services.payment.process_emoney_result",
-                new_callable=AsyncMock,
-            ) as mock_process:
-                consumer = EventConsumer()
-                await consumer.start()
-                # Allow time for the message to be processed
-                await asyncio.sleep(0.2)
-                await consumer.stop()
-
-    mock_process.assert_awaited_once()
-    call_kwargs = mock_process.await_args.kwargs
-    assert call_kwargs["gate_id"] == "GOUT01"
-    assert call_kwargs["gate_out_id"] == 42
-    assert call_kwargs["card_number"] == "1234567890"
-    assert call_kwargs["status"] == DeductStatus.SUCCESS
-    assert call_kwargs["deduct_amount"] == 5000
-    assert call_kwargs["balance_before"] == 50000
-    assert call_kwargs["balance_after"] == 45000
-    assert call_kwargs["transaction_counter"] == 7
-    assert call_kwargs["raw_response_hex"] == "EF0105..."

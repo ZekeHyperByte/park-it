@@ -39,13 +39,10 @@ class TestableGateInDaemon(GateInDaemon):
         config: dict[str, Any],
         fake_redis: Any,
         mock_compass: Any,
-        mock_passti: Any | None = None,
     ) -> None:
         super().__init__(gate_id, config)
         self._fake_redis = fake_redis
         self.controller = mock_compass
-        if mock_passti:
-            self.passti_transport = mock_passti
 
     async def run(self) -> None:
         """Override to inject fake Redis without connecting real controller."""
@@ -80,10 +77,10 @@ class TestableGateInDaemon(GateInDaemon):
 
 @pytest.fixture
 def gate_in_daemon(
-    fake_redis, gate_in_config, mock_compass, mock_passti
+    fake_redis, gate_in_config, mock_compass
 ) -> TestableGateInDaemon:
     return TestableGateInDaemon(
-        "gate-in-1", gate_in_config, fake_redis, mock_compass, mock_passti
+        "gate-in-1", gate_in_config, fake_redis, mock_compass
     )
 
 

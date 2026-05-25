@@ -1,7 +1,7 @@
 """Unified daemon CLI entry point.
 
-Launches GateInDaemon for IN gates. OUT gates are operator-attended:
-booth_bridge owns serial relay + readers, no autonomous daemon runs.
+Launches GateInDaemon for IN gates. OUT gates are driven by booth_bridge
+(serial relay + readers on booth PC) — no daemon runs for OUT direction.
 
 Usage:
     python -m daemons.cli --gate-id GIN01
@@ -115,9 +115,9 @@ async def _run_daemon(gate_code: str) -> None:
 
         daemon = GateInDaemon(gate_id=gate_code, config=config)
     elif direction == "OUT":
-        # OUT gates are operator-attended: booth_bridge owns serial relay + readers,
-        # POS drives open/close directly. No autonomous daemon needed.
-        logger.info("gate_out_daemon_skipped_attended_mode", gate_id=gate_code)
+        # booth_bridge owns serial relay + RFID/e-money readers on the booth PC.
+        # No daemon runs for OUT gates.
+        logger.info("gate_out_skipped_booth_bridge_mode", gate_id=gate_code)
         return
     else:
         raise RuntimeError(f"Unknown gate direction: {direction}")

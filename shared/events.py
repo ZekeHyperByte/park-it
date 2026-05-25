@@ -30,6 +30,7 @@ class GateMode(StrEnum):
     RFID = "RFID"
 
 
+
 class DeductStatus(StrEnum):
     """E-money deduct result status."""
 
@@ -118,29 +119,6 @@ class GateOpenedEvent(BaseEvent):
     event_type: Literal["gate_opened"] = "gate_opened"
 
 
-class DeductResultEvent(BaseEvent):
-    """E-money deduct result."""
-
-    event_type: Literal["deduct_result"] = "deduct_result"
-    status: DeductStatus
-    card_number: str
-    card_type: str
-    card_type_code: int = 0
-    deduct_amount: int
-    balance_before: int
-    balance_after: int
-    transaction_counter: int
-    raw_response_hex: str
-    settlement_payload_hex: str = ""
-
-
-class CancelCorrectionResultEvent(BaseEvent):
-    """Cancel correction result."""
-
-    event_type: Literal["cancel_correction_result"] = "cancel_correction_result"
-    card_number: str
-    card_type: str
-
 
 class TimeoutAlertEvent(BaseEvent):
     """Payment timeout alert."""
@@ -177,7 +155,6 @@ class HeartbeatEvent(BaseEvent):
 
     event_type: Literal["heartbeat"] = "heartbeat"
     controller_ok: bool
-    passti_ok: bool
 
 
 # Union type for all events
@@ -189,8 +166,6 @@ RedisEvent = (
     | HelpButtonPressedEvent
     | VehiclePassedEvent
     | GateOpenedEvent
-    | DeductResultEvent
-    | CancelCorrectionResultEvent
     | TimeoutAlertEvent
     | VehicleLeftEvent
     | PlayAudioEvent
@@ -274,28 +249,6 @@ class PrintReceiptCommand(BaseCommand):
     transaction_data: dict  # serialized transaction info
 
 
-class CheckBalanceCommand(BaseCommand):
-    """Check PASSTI card balance."""
-
-    command_type: Literal["check_balance"] = "check_balance"
-    minimum_threshold: int
-
-
-class DeductCommand(BaseCommand):
-    """Deduct from PASSTI card."""
-
-    command_type: Literal["deduct"] = "deduct"
-    amount: int
-    timeout_seconds: int
-    expected_card_number: str
-    expected_transaction_counter: int
-
-
-class CancelCorrectionCommand(BaseCommand):
-    """Cancel correction mode."""
-
-    command_type: Literal["cancel_correction"] = "cancel_correction"
-
 
 class CashPaymentConfirmedCommand(BaseCommand):
     """Cash payment confirmed by POS."""
@@ -338,9 +291,6 @@ RedisCommand = (
     | PrintTicketCommand
     | PrintTicketThenOpenCommand
     | PrintReceiptCommand
-    | CheckBalanceCommand
-    | DeductCommand
-    | CancelCorrectionCommand
     | CashPaymentConfirmedCommand
     | EmoneyPaymentConfirmedCommand
     | ResetGateCommand

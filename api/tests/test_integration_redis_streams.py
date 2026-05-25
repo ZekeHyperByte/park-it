@@ -293,7 +293,6 @@ async def test_daemon_event_publish(reset_redis_singleton, cleaned_redis, gate_i
         event_type="heartbeat",
         gate_id="integration-gate-in",
         controller_ok=False,
-        passti_ok=False,
     )
     await daemon.publish_event(event)
 

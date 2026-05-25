@@ -379,7 +379,6 @@ class BaseDaemon(ABC):
                     event_type="heartbeat",
                     gate_id=self.gate_id,
                     controller_ok=True,  # Subclasses should override
-                    passti_ok=True,
                 )
                 await self.publish_event(event)
                 # Publish additional state info for monitoring
