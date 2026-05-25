@@ -194,17 +194,19 @@ The indicator polls every 5 seconds and updates automatically.
 
 ---
 
-## 4. Hybrid Guided Installer
+## 4. Guided Installer
 
 ### Purpose
 
-Install E-Parking v2 on a fresh Ubuntu 24.04 server with confirmation at each step.
+Install E-Parking v2 on a fresh Ubuntu server with role selection
+(server / booth / combo).
 
 ### Requirements
 
-- Ubuntu 24.04 LTS (fresh install preferred)
+- Ubuntu 22.04 / 24.04 LTS (fresh install preferred)
 - Internet connection
-- Run as root: `sudo bash scripts/install.sh`
+- Run as root: `sudo installer/setup.sh` (interactive role prompt) or
+  `sudo installer/setup.sh --role server|booth|combo`
 
 ### Installation Phases
 

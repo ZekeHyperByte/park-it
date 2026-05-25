@@ -170,9 +170,9 @@ If critical issues are detected within 24 hours of deployment:
 ### Rollback Procedure
 ```bash
 # 1. Stop services
-sudo systemctl stop parking-api parking-worker-critical parking-worker-bg
+sudo systemctl stop parking-api parking-worker-critical parking-worker-snapshot parking-worker-bg
 sudo systemctl stop 'parking-daemon-gate-in@*'
-sudo systemctl stop 'parking-daemon-gate-out@*'
+sudo systemctl stop booth-bridge   # exit lanes (no gate-out daemon)
 
 # 2. Restore database from pre-deployment backup
 gunzip < /backup/parking_YYYYMMDD_HHMMSS.sql.gz | psql -U parking -d parking

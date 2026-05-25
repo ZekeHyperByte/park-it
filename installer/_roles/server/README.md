@@ -126,13 +126,9 @@ This script reads all gates from the database and runs the correct `systemctl en
 
 #### Manual Enable (if you prefer)
 ```bash
-# Entry gates
-sudo systemctl enable --now parking-daemon-gate-in@GIN01
-sudo systemctl enable --now parking-daemon-gate-in@GIN02
-
-# Exit gates
-sudo systemctl enable --now parking-daemon-gate-out@GOUT01
-sudo systemctl enable --now parking-daemon-gate-out@GOUT02
+# Entry gates only — exit lanes have no daemon (booth-bridge drives the relay)
+sudo systemctl enable --now parking-daemon-gate-in@GIN-01
+sudo systemctl enable --now parking-daemon-gate-in@GIN-02
 ```
 
 > `enable --now` means: (1) enable auto-start on boot, and (2) start immediately. You only need to run this once per gate.

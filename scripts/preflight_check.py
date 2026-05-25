@@ -130,35 +130,40 @@ class PreflightRunner:
 
 
 def check_environment_variables() -> list[PreflightCheck]:
-    """Check required environment variables."""
+    """Check required settings (loaded from .env via pydantic Settings)."""
     checks = []
-    required_vars = [
-        "DATABASE_URL",
-        "REDIS_URL",
-        "JWT_SECRET",
-        "APP_ENV",
-    ]
+    settings = get_settings()
 
-    for var in required_vars:
-        check = PreflightCheck(f"{var} set", "Environment")
-        value = os.environ.get(var)
-        if not value:
-            check.fail("Not set")
-        elif var == "JWT_SECRET" and len(value) < 32:
-            check.warn(f"Set but only {len(value)} chars (recommend 64+)")
-        else:
-            check.pass_("Set")
-        checks.append(check)
+    check = PreflightCheck("JWT_SECRET set", "Environment")
+    if settings.jwt_secret in ("dev-secret", ""):
+        check.fail("Still default — change before go-live")
+    elif len(settings.jwt_secret) < 32:
+        check.warn(f"Only {len(settings.jwt_secret)} chars (recommend 64+)")
+    else:
+        check.pass_("Set")
+    checks.append(check)
 
-    # Check APP_ENV value
+    check = PreflightCheck("DB_PASSWORD set", "Environment")
+    if settings.db_password in ("parking_secret", "parking", ""):
+        check.fail("Still default — change before go-live")
+    else:
+        check.pass_("Set")
+    checks.append(check)
+
+    check = PreflightCheck("INTERNAL_API_KEY set", "Environment")
+    if not settings.internal_api_key:
+        check.fail("Not set — booth bridge endpoints would be unprotected")
+    else:
+        check.pass_("Set")
+    checks.append(check)
+
     check = PreflightCheck("APP_ENV is production", "Environment")
-    app_env = os.environ.get("APP_ENV", "")
-    if app_env == "production":
+    if settings.app_env == "production":
         check.pass_()
-    elif app_env == "development":
+    elif settings.app_env == "development":
         check.warn("development mode")
     else:
-        check.fail(f"unexpected value: {app_env}")
+        check.fail(f"unexpected value: {settings.app_env}")
     checks.append(check)
 
     return checks
@@ -287,11 +292,12 @@ async def check_database() -> list[PreflightCheck]:
     check = PreflightCheck("PostgreSQL connectivity", "Database")
     try:
         settings = get_settings()
+        from sqlalchemy import text
         from sqlalchemy.ext.asyncio import create_async_engine
         engine = create_async_engine(settings.database_url, pool_pre_ping=True)
         async with engine.connect() as conn:
-            result = await conn.execute("SELECT 1")
-            await result.scalar()
+            result = await conn.execute(text("SELECT 1"))
+            result.scalar()
         await engine.dispose()
         check.pass_()
     except Exception as e:

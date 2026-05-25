@@ -73,7 +73,7 @@ if [[ -z "$RESULT" ]]; then
     echo "  1. Open http://<server-ip>"
     echo "  2. Log in as admin"
     echo "  3. Go to Device → Gates"
-    echo "  4. Add your gates (e.g. GIN01, GIN02, GOUT01, GOUT02)"
+    echo "  4. Add your gates (e.g. GIN-01, GIN-02, GOUT-01, GOUT-02)"
     echo ""
     echo "Then re-run this script."
     exit 1
@@ -85,13 +85,17 @@ echo ""
 COMMANDS=()
 SERIAL_GATES=()
 
+SKIPPED_OUT=0
 while IFS='|' read -r code direction name protocol controller_host controller_device; do
     [[ -z "$code" ]] && continue
-    if [[ "$direction" == "IN" ]]; then
-        UNIT="parking-daemon-gate-in@${code}"
-    else
-        UNIT="parking-daemon-gate-out@${code}"
+    # Exit lanes have no autonomous daemon (gate_out removed in f4a3eb0).
+    # booth_bridge drives the exit relay directly, so skip OUT gates here.
+    if [[ "$direction" != "IN" ]]; then
+        emit "  [$direction] $code — $name  [exit lane: driven by booth_bridge, no daemon]"
+        SKIPPED_OUT=$((SKIPPED_OUT + 1))
+        continue
     fi
+    UNIT="parking-daemon-gate-in@${code}"
 
     if [[ "$protocol" == "serial" ]]; then
         if $INCLUDE_LOCAL_SERIAL && [[ -n "$controller_device" ]] && [[ -e "$controller_device" ]]; then

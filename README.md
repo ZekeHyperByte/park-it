@@ -180,9 +180,9 @@ docker compose -f docker/docker-compose.prod.yml up -d
 
 # Or with systemd
 sudo systemctl start parking-api
-sudo systemctl start parking-daemon-gate-in@pintu_masuk
-sudo systemctl start parking-daemon-gate-out@pintu_keluar
+sudo systemctl start parking-daemon-gate-in@GIN-01   # entry gates only; exit lanes use booth-bridge
 sudo systemctl start parking-worker-critical
+sudo systemctl start parking-worker-snapshot
 sudo systemctl start parking-worker-bg
 ```
 
@@ -192,7 +192,7 @@ For installations with multiple gate-outs across separate booth PCs:
 
 ```bash
 # See full guide for server + booth PC setup
-cat docs/BOOTH_DEPLOYMENT.md
+cat docs/FIELD_TECH_GUIDE.md
 ```
 
 **Quick reference:**
@@ -207,7 +207,7 @@ See `docs/` for full runbook, checklist, and training materials.
 |----------|-------------|
 | `docs/EParking_v2_Development_Plan.md` | Architecture, data models, design decisions |
 | `docs/GATE_FLOW_SPEC.md` | Gate entry/exit flow specifications |
-| `docs/BOOTH_DEPLOYMENT.md` | Multi-PC deployment (server + booth PCs) |
+| `docs/FIELD_TECH_GUIDE.md` | Field install walkthrough (server + booth PCs, wizard) |
 | `docs/DEVELOPMENT_TESTING_GUIDE.md` | Pre-deployment testing procedures |
 | `docs/OPERATIONS_RUNBOOK.md` | Day-to-day operations guide |
 | `docs/ONCALL_RUNBOOK.md` | On-call incident response |

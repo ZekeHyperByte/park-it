@@ -124,6 +124,27 @@ AUTO_LOGIN=${AUTO_LOGIN:-n}
 
 PROJECT_ROOT="/opt/parking-system-v2"
 
+# server/setup.sh generated INTERNAL_API_KEY in its own shell and wrote it to
+# .env. Read it back so booth.json's api_key matches what the API expects.
+INTERNAL_API_KEY=$(grep -m1 '^INTERNAL_API_KEY=' "$PROJECT_ROOT/.env" | cut -d= -f2-)
+if [[ -z "$INTERNAL_API_KEY" ]]; then
+    error "INTERNAL_API_KEY not found in ${PROJECT_ROOT}/.env — server install incomplete."
+    exit 1
+fi
+
+# Base udev rules — Omnikey RFID (input) + serial relay/readers (dialout).
+# Per-device symlinks are added later by the wizard's detect-serial step.
+cat > /etc/udev/rules.d/99-parking.rules <<'EOF'
+KERNEL=="event*", SUBSYSTEM=="input", ATTRS{idVendor}=="076b", ATTRS{idProduct}=="5427", MODE="0660", OWNER="parking", GROUP="input"
+KERNEL=="event*", SUBSYSTEM=="input", ATTRS{idVendor}=="076b", ATTRS{idProduct}=="5428", MODE="0660", OWNER="parking", GROUP="input"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", MODE="0660", OWNER="parking", GROUP="dialout"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", MODE="0660", OWNER="parking", GROUP="dialout"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="067b", MODE="0660", OWNER="parking", GROUP="dialout"
+EOF
+udevadm control --reload-rules
+udevadm trigger --subsystem-match=input --subsystem-match=tty
+ok "udev rules installed (/etc/udev/rules.d/99-parking.rules)"
+
 # Write booth config
 mkdir -p /etc/parking
 chown parking:parking /etc/parking

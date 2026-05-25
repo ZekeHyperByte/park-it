@@ -46,6 +46,29 @@
 
 ---
 
+## Workshop vs. on-site (two-phase install)
+
+Software can be installed in the workshop and the hardware wired on-site later:
+
+- **Workshop:** image the PC, run the installer. Needs no hardware connected.
+  - Server/combo: `sudo installer/setup.sh --role server` (or `combo`).
+  - Booth: `sudo installer/_roles/booth_pc/setup.sh --install-only`.
+- **On-site:** after the box has its real network address:
+  - Server: `sudo scripts/field-reconfig.sh` — fixes `CORS_ORIGINS` for the
+    site IP, restarts the API, and mints a fresh wizard token (the workshop
+    token expires after 24h). Prints the `/setup?token=…` URL.
+  - Booth: `sudo installer/_roles/booth_pc/setup.sh --configure-only` — asks
+    device paths, gate code, and the server's `INTERNAL_API_KEY`, then writes
+    `booth.json` and starts the bridge.
+
+A single-visit install (no workshop pre-stage) just runs the installer with no
+phase flag — both phases run back to back, same as before.
+
+If you only need a new wizard token (token expired, lost the URL):
+`sudo scripts/regen-setup-token.sh`.
+
+---
+
 ## 2. Install the Software
 
 ```bash
@@ -96,7 +119,7 @@ ready yet). The wizard takes you through:
    keyed by USB vendor/product/serial. After this step, `/dev/ttyUSB0` will
    never renumber on you again.
 5. **Gates** — add one row per controller:
-   - `code` short and unique (`GIN01`, `GOUT01`)
+   - `code` short and unique, dashed form (`GIN-01`, `GOUT-01`)
    - `direction` IN or OUT
    - For TCP: `controller_host` + `controller_port` (default 5000)
    - For serial: `controller_device` = `/dev/parking-gate-<code>` (the symlink
@@ -136,7 +159,10 @@ On each booth PC:
 ```bash
 cd /opt/parking-system-v2/installer    # if repo is cloned here
 # or re-clone if not
-sudo ./setup.sh --role booth
+sudo ./setup.sh --role booth                       # install + configure
+# Two-phase (workshop then field):
+#   sudo ./_roles/booth_pc/setup.sh --install-only    # workshop
+#   sudo ./_roles/booth_pc/setup.sh --configure-only  # on-site
 ```
 
 Installs Chrome in kiosk mode pointed at `http://<server-ip>` and the
@@ -196,7 +222,7 @@ Common forms:
 
 ```bash
 parking-doctor                       # full health table on the server
-parking-doctor --gate GIN01          # focus one gate
+parking-doctor --gate GIN-01          # focus one gate
 parking-doctor --json                # for piping into the wizard or a monitor
 parking-doctor --booth               # run on a booth PC (no DB/Redis required)
 parking-doctor --fix                 # interactively run each suggested fix
@@ -219,9 +245,9 @@ to the server.
 ### Daemon stuck in PROCESSING / VALIDATING after restart
 
 ```bash
-sudo systemctl stop parking-daemon-gate-in@GIN01
-redis-cli -a <REDIS_PASSWORD> del "daemon:state:GIN01"
-sudo systemctl start parking-daemon-gate-in@GIN01
+sudo systemctl stop parking-daemon-gate-in@GIN-01
+redis-cli -a <REDIS_PASSWORD> del "daemon:state:GIN-01"
+sudo systemctl start parking-daemon-gate-in@GIN-01
 ```
 
 The daemon persists its state to Redis so it can resume after a crash. If it
@@ -239,18 +265,23 @@ Compass controllers without a display module reject `cmd_ds` and close the
 socket. The migration `a3f4b1d2e5c6_gate_sane_defaults` sets the default to
 `false`, but older rows may still be `true`.
 
-### Cash payment doesn't enable the "Open Gate" button on POS
+### Cash payment doesn't open the gate after operator confirms
 
-The daemon must publish a `gate_closed` event after each cycle. If it doesn't,
-the POS never re-arms. Confirm with:
+Exit lanes have **no daemon** — `booth_bridge` drives the exit relay directly
+(the `gate_out` daemon was removed). Cash exit is two-step: after the receipt
+prints, the operator presses Space/button and `booth_bridge` fires the local
+relay open, then closes after `close_delay_seconds`. If the gate never moves:
 
 ```bash
-redis-cli -a <REDIS_PASSWORD> psubscribe 'parking.events.*'
-# then trigger a gate open + wait for close — you should see gate_closed
+# On the booth PC (where the relay USB is plugged in):
+journalctl -u booth-bridge -n 200
+# Confirm the relay device symlink exists:
+ls -l /dev/parking-*
 ```
 
-If you don't see `gate_closed`, the daemon's close path is silent. Check
-`journalctl -u parking-daemon-gate-out@GOUT01 -n 200`.
+Common causes: relay USB not mapped to a `/dev/parking-*` symlink, wrong
+serial open/close hex in the gate's `hardware_config`, or `booth-bridge`
+not running on that booth PC.
 
 ### Serial port renumbered after reboot
 
@@ -304,7 +335,7 @@ will catch this and tell you which service is down.
 ```
 HEALTH CHECK   sudo -u parking .venv/bin/python /opt/parking-system-v2/scripts/parking_doctor.py
 RESTART API    sudo systemctl restart parking-api
-RESTART GATE   sudo systemctl restart parking-daemon-gate-in@GIN01
+RESTART GATE   sudo systemctl restart parking-daemon-gate-in@GIN-01
 LOGS           sudo journalctl -u parking-api -f
 WIPE STATE     redis-cli -a <pw> del "daemon:state:<CODE>"
 BACKUP NOW     sudo -u postgres pg_dump parking | gzip > /backup/parking_$(date +%F).sql.gz

@@ -115,11 +115,9 @@ Open `http://<server-ip>` and log in as admin.
 # Auto-enable all configured gates
 sudo -u parking /opt/parking-system-v2/scripts/enable-gate-daemons.sh --run
 
-# Or manually:
-sudo systemctl enable --now parking-daemon-gate-in@GIN01
-sudo systemctl enable --now parking-daemon-gate-in@GIN02
-sudo systemctl enable --now parking-daemon-gate-out@GOUT01
-sudo systemctl enable --now parking-daemon-gate-out@GOUT02
+# Or manually (entry gates only — exit lanes have no daemon, booth-bridge drives the relay):
+sudo systemctl enable --now parking-daemon-gate-in@GIN-01
+sudo systemctl enable --now parking-daemon-gate-in@GIN-02
 ```
 
 > `enable --now` enables auto-start on boot **and** starts immediately. Run once per gate.
@@ -183,13 +181,13 @@ sudo journalctl -u booth-bridge-booth_01 -f
 curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" http://localhost:5678/
 ```
 
-**Gate Out 1 daemon won't start**
+**Exit gate doesn't open**
 ```bash
 # Verify gate config in database
-curl -s http://localhost/api/gates/GOUT01
+curl -s http://localhost/api/gates/GOUT-01
 
-# Check daemon logs
-sudo journalctl -u parking-daemon-gate-out@GOUT01 -f
+# Exit lanes have no daemon — booth-bridge drives the relay. Check its logs:
+sudo journalctl -u booth-bridge-booth_01 -f
 ```
 
 ---
@@ -207,7 +205,6 @@ cd frontend && sudo -u parking npm ci && NUXT_PUBLIC_API_BASE_URL="" npm run bui
 sudo systemctl restart parking-api parking-worker-critical parking-worker-bg
 sudo systemctl restart booth-bridge-booth_01
 sudo systemctl restart 'parking-daemon-gate-in@*'
-sudo systemctl restart 'parking-daemon-gate-out@*'
 ```
 
 ---

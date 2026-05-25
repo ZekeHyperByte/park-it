@@ -55,7 +55,7 @@ FastAPI Backend (Gunicorn + Uvicorn)
 
 ### Multi-PC Architecture
 
-For installations with multiple gate-outs (booths), see the dedicated [Booth Deployment Guide](BOOTH_DEPLOYMENT.md). The typical setup is:
+For installations with multiple booths, see the [Field Technician Guide](FIELD_TECH_GUIDE.md). The typical setup is:
 
 - **Server PC**: API, database, Redis, frontend, optionally Booth 1
 - **Booth PC 2..N**: Booth bridge + Chrome POS for additional gate-outs

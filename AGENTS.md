@@ -352,7 +352,7 @@ cd frontend && npm test
 - **Repository:** `<your-repo-url>`
 - **Deployment docs:** `installer/*/README.md`
 - **Operations runbook:** `docs/OPERATIONS_RUNBOOK.md`
-- **Hardware guide:** `docs/BOOTH_DEPLOYMENT.md`
+- **Field install guide:** `docs/FIELD_TECH_GUIDE.md`
 
 ---
 

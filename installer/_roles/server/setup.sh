@@ -68,8 +68,25 @@ if [[ -z "$JWT_SECRET" ]]; then
     warn "Generated random JWT secret"
 fi
 
+# Booth bridge machine-to-machine auth. config.py refuses to start when
+# APP_ENV=production and this is unset, so always generate one.
+INTERNAL_API_KEY=$(openssl rand -hex 32)
+
 read -rp "Git repository URL [${REPO_URL}]: " INPUT_REPO
 REPO_URL=${INPUT_REPO:-$REPO_URL}
+
+# ── 1b. System timezone ───────────────────────────────────────────────────────
+# Settlement files + transaction timestamps are operational-local (WIB). A
+# mismatched clock corrupts the daily Multibank cut, so pin the zone.
+APP_TIMEZONE="${APP_TIMEZONE:-Asia/Jakarta}"
+current_tz="$(timedatectl show -p Timezone --value 2>/dev/null || echo "")"
+if [[ "$current_tz" != "$APP_TIMEZONE" ]]; then
+    timedatectl set-timezone "$APP_TIMEZONE" \
+        && ok "Timezone set to ${APP_TIMEZONE} (was: ${current_tz:-unknown})" \
+        || warn "Failed to set timezone — set ${APP_TIMEZONE} manually before go-live."
+else
+    ok "Timezone already ${APP_TIMEZONE}"
+fi
 
 # ── 2. Update system ──────────────────────────────────────────────────────────
 step "2/12 — Updating System Packages"
@@ -110,7 +127,7 @@ step "4/12 — Creating System User"
 if ! id parking &>/dev/null; then
     useradd -r -s /bin/bash -m -d /home/parking parking
 fi
-usermod -aG dialout parking
+usermod -aG dialout,input parking
 ok "User 'parking' created (groups: $(groups parking))"
 
 # ── 5. Configure PostgreSQL ───────────────────────────────────────────────────
@@ -187,6 +204,7 @@ JWT_SECRET=${JWT_SECRET}
 JWT_ALGORITHM=HS256
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
 JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+INTERNAL_API_KEY=${INTERNAL_API_KEY}
 
 # CORS (server + booth PCs on local network)
 CORS_ORIGINS=http://localhost:3000,http://${SERVER_IP}:3000
@@ -221,6 +239,7 @@ step "11/12 — Installing Systemd Services"
 services=(
     "parking-api.service"
     "parking-worker-critical.service"
+    "parking-worker-snapshot.service"
     "parking-worker-bg.service"
 )
 
@@ -329,7 +348,7 @@ echo -e "${GREEN}═════════════════════
 echo ""
 info "API:        http://${SERVER_IP}:8000"
 info "Frontend:   http://${SERVER_IP}:3000"
-info "API Docs:   http://${SERVER_IP}:8000/docs"
+info "API Docs:   http://${SERVER_IP}:8000/api/docs"
 echo ""
 info "Services:"
 info "  systemctl status parking-api"
