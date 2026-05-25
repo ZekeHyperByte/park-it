@@ -74,6 +74,10 @@ INTERNAL_API_KEY=$(openssl rand -hex 32)
 
 read -rp "Git repository URL [${REPO_URL}]: " INPUT_REPO
 REPO_URL=${INPUT_REPO:-$REPO_URL}
+if [[ "$REPO_URL" == *your-org* ]]; then
+    error "REPO_URL is still the placeholder (your-org). Enter the real repository URL."
+    exit 1
+fi
 
 # ── 1b. System timezone ───────────────────────────────────────────────────────
 # Settlement files + transaction timestamps are operational-local (WIB). A
@@ -238,6 +242,8 @@ step "11/12 — Installing Systemd Services"
 
 services=(
     "parking-api.service"
+    "parking-events.service"
+    "parking-frontend.service"
     "parking-worker-critical.service"
     "parking-worker-snapshot.service"
     "parking-worker-bg.service"
@@ -282,6 +288,10 @@ ok "Sudoers drop installed at /etc/sudoers.d/parking-setup"
 step "11c/12 — Setup Wizard Token"
 
 mkdir -p /etc/parking
+# parking-api (User=parking) must be able to unlink the token on redeem
+# (unlink checks write on the dir, not the file). Own the dir by parking.
+chown parking:parking /etc/parking
+chmod 0750 /etc/parking
 SETUP_TOKEN=$(openssl rand -hex 32)
 echo -n "$SETUP_TOKEN" > /etc/parking/setup-token
 chown root:parking /etc/parking/setup-token
@@ -352,6 +362,8 @@ info "API Docs:   http://${SERVER_IP}:8000/api/docs"
 echo ""
 info "Services:"
 info "  systemctl status parking-api"
+info "  systemctl status parking-events"
+info "  systemctl status parking-frontend"
 info "  systemctl status parking-worker-critical"
 info "  systemctl status parking-worker-bg"
 info "  systemctl status nginx"

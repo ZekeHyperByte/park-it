@@ -25,18 +25,15 @@ async def lifespan(app: FastAPI):
         debug=settings.debug,
     )
 
-    # Start WebSocket broadcaster
+    # Start WebSocket broadcaster. Safe per-worker: each worker fans out only to
+    # its own connected sockets. The DB-mutating EventConsumer runs in its own
+    # single-instance service (parking-events) — see event_consumer_main.py.
     from api.app.websocket.broadcaster import broadcaster
     await broadcaster.start()
-
-    # Start event consumer (after broadcaster)
-    from api.app.services.event_consumer import event_consumer
-    await event_consumer.start()
 
     yield
 
     # Shutdown
-    await event_consumer.stop()
     await broadcaster.stop()
     logger.info("api_shutting_down")
 

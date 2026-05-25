@@ -1,0 +1,22 @@
+[Unit]
+Description=E-Parking Frontend (Nuxt SSR)
+After=network.target parking-api.service
+Wants=parking-api.service
+
+[Service]
+Type=simple
+User=parking
+Group=parking
+WorkingDirectory=/opt/parking-system-v2/frontend
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+ExecStart=/usr/bin/node /opt/parking-system-v2/frontend/.output/server/index.mjs
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=parking-frontend
+
+[Install]
+WantedBy=multi-user.target

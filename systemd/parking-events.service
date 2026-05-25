@@ -1,0 +1,22 @@
+[Unit]
+Description=E-Parking Event Consumer (Redis Pub/Sub -> server-side business logic)
+After=network.target redis.service postgresql.service
+Wants=redis.service postgresql.service
+
+[Service]
+Type=simple
+User=parking
+Group=parking
+WorkingDirectory=/opt/parking-system-v2
+Environment=APP_ENV=production
+Environment=PATH=/opt/parking-system-v2/.venv/bin
+EnvironmentFile=/opt/parking-system-v2/.env
+ExecStart=/opt/parking-system-v2/.venv/bin/python -m api.app.services.event_consumer_main
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=parking-events
+
+[Install]
+WantedBy=multi-user.target

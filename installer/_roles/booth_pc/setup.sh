@@ -74,6 +74,10 @@ phase_install() {
 
     read -rp "Git repository URL [${REPO_URL}]: " INPUT_REPO
     REPO_URL=${INPUT_REPO:-$REPO_URL}
+    if [[ "$REPO_URL" == *your-org* ]]; then
+        error "REPO_URL is still the placeholder (your-org). Enter the real repository URL."
+        exit 1
+    fi
 
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
