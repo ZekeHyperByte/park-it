@@ -67,6 +67,7 @@
         :last-entry="lastEntry"
         @barcode-lookup="onBarcodeLookup"
         @pay-cash="showCashDialog = true"
+        @pay-emoney="startEmoneyPayment"
         @retry-emoney="retryEmoney"
         @cancel-emoney="cancelEmoney"
         @update:vehicle-type-id="onVehicleTypeChange"
@@ -79,6 +80,7 @@
         :emoney-state="gateStore.emoneyPaymentState"
         :awaiting-gate-open="gateStore.awaitingGateOpen"
         :can-pay-cash="gateStore.canPayCash"
+        :can-pay-emoney="gateStore.canPayEmoney"
         :gate-name="selectedGate?.name || ''"
         :shift-name="posSession.shiftName"
         :is-mixed-lane="isMixedLane"
@@ -349,8 +351,8 @@ watch(selectedGate, (gate) => {
 // Keyboard shortcuts
 useKeyboard([
   { keys: ['F1'], action: () => gateStore.canPayCash && (showCashDialog.value = true) },
-  { keys: ['F2'], action: () => gateStore.canPayRfid && (showRfidDialog.value = true) }, // hidden fallback
-  { keys: ['F3'], action: () => gateStore.canPayEmoney && startEmoneyPayment() }, // hidden fallback
+  { keys: ['F2'], action: () => gateStore.canPayEmoney && startEmoneyPayment() },
+  { keys: ['F3'], action: () => gateStore.canPayRfid && (showRfidDialog.value = true) }, // hidden fallback
   { keys: [' '], action: () => gateStore.awaitingGateOpen && openGateAction() },
   { keys: ['Escape'], action: () => { showCashDialog.value = false; showRfidDialog.value = false } },
   {

@@ -42,6 +42,7 @@ const props = defineProps({
   emoneyState: { type: String, default: 'IDLE' },
   awaitingGateOpen: { type: Boolean, default: false },
   canPayCash: { type: Boolean, default: false },
+  canPayEmoney: { type: Boolean, default: false },
   gateName: { type: String, default: '' },
   shiftName: { type: String, default: '' },
   isMixedLane: { type: Boolean, default: false },
@@ -51,6 +52,7 @@ const props = defineProps({
 const shortcuts = computed(() => {
   const base = [
     { key: 'F1', label: 'Tunai', active: props.canPayCash },
+    { key: 'F2', label: 'E-Money', active: props.canPayEmoney },
     { key: 'Space', label: 'Buka Palang', active: props.awaitingGateOpen },
     { key: 'Esc', label: 'Batal', active: true },
   ]

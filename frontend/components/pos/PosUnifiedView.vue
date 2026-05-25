@@ -59,6 +59,24 @@
           </span>
         </div>
 
+        <!-- Payment method choice: operator asks driver cash or e-money -->
+        <div v-if="showPaymentChoice" class="grid w-full max-w-md grid-cols-2 gap-4">
+          <PaymentButton
+            icon="cash"
+            label="Tunai"
+            shortcut="F1"
+            :disabled="!canPayCash"
+            @click="$emit('pay-cash')"
+          />
+          <PaymentButton
+            icon="emoney"
+            label="E-Money"
+            shortcut="F2"
+            :disabled="!canPayEmoney"
+            @click="$emit('pay-emoney')"
+          />
+        </div>
+
         <!-- E-money inline status (when active) -->
         <EmoneyInlineStatus
           v-if="showEmoneyStatus"
@@ -115,6 +133,7 @@ import { useFormatters } from '~/composables/useFormatters'
 import EmoneyInlineStatus from './EmoneyInlineStatus.vue'
 import CameraColumn from './CameraColumn.vue'
 import PosIdleAmbient from './PosIdleAmbient.vue'
+import PaymentButton from './PaymentButton.vue'
 
 const props = defineProps({
   transaction: { type: Object, default: null },
@@ -142,6 +161,7 @@ const props = defineProps({
 
 defineEmits([
   'pay-cash',
+  'pay-emoney',
   'retry-emoney',
   'cancel-emoney',
   'update:vehicle-type-id',
@@ -211,6 +231,15 @@ const showTimeout = computed(() =>
 
 const showEmoneyStatus = computed(() =>
   hasTransaction.value && props.emoneyState !== 'IDLE',
+)
+
+// Operator chooses cash or e-money once tariff is shown, before driver pays.
+// Hidden once an e-money attempt is underway or the gate is awaiting open.
+const showPaymentChoice = computed(() =>
+  hasTransaction.value &&
+  props.emoneyState === 'IDLE' &&
+  !props.awaitingGateOpen &&
+  (props.paymentState === 'WAITING_PAYMENT' || props.paymentState === 'TIMEOUT_ALERT'),
 )
 
 </script>

@@ -23,7 +23,7 @@
           v-model="barcodeValue"
           data-barcode-input
           placeholder="Scan barcode atau ketik nomor plat..."
-          class="h-16 text-center font-mono text-2xl tracking-wider"
+          class="h-16 text-center font-mono text-2xl tracking-wider focus-visible:ring-0 focus-visible:ring-offset-0"
           @keydown.enter="onBarcodeSubmit"
         />
       </div>
@@ -114,13 +114,27 @@ function onBarcodeSubmit() {
   barcodeValue.value = ''
 }
 
+function resolveInputEl() {
+  const r = barcodeInput.value
+  const el = r?.$el ?? r
+  return el?.querySelector?.('input') ?? (el?.tagName === 'INPUT' ? el : null)
+}
+
 function focusBarcode() {
   nextTick(() => {
-    const r = barcodeInput.value
-    const el = r?.$el ?? r
-    const input = el?.querySelector?.('input') ?? (el?.tagName === 'INPUT' ? el : null)
-    input?.focus?.()
+    resolveInputEl()?.focus?.()
   })
+}
+
+// Type anywhere on the idle screen → land in the barcode box (scanner pattern).
+// Refocus when a printable key is pressed and focus isn't already in a field.
+function onGlobalKeydown(e) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return
+  if (e.key.length !== 1) return
+  const active = document.activeElement
+  const tag = active?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || active?.isContentEditable) return
+  resolveInputEl()?.focus?.()
 }
 
 const now = ref(new Date())
@@ -147,11 +161,13 @@ onMounted(() => {
     now.value = new Date()
   }, 1000)
   focusBarcode()
+  window.addEventListener('keydown', onGlobalKeydown)
 })
 
 defineExpose({ focusBarcode })
 
 onBeforeUnmount(() => {
   if (tick) clearInterval(tick)
+  window.removeEventListener('keydown', onGlobalKeydown)
 })
 </script>
