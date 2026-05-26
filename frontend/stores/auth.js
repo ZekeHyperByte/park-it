@@ -8,11 +8,18 @@
 
 import { defineStore } from 'pinia'
 
+// DEV ONLY: lets you browse the admin UI at localhost:3000 without logging in.
+// Stripped from production builds (import.meta.dev is false there). API calls
+// still need a real session cookie, so data tables may 401 / stay empty — this
+// only unlocks the UI shell + admin nav for visual review.
+const DEV_ADMIN = { id: 0, username: 'dev-admin', full_name: 'Dev Admin (no login)', role: 'admin' }
+const devFallbackUser = () => (import.meta.dev ? { ...DEV_ADMIN } : null)
+
 export const useAuthStore = defineStore('auth', () => {
   const { fetchApi } = useApi()
 
   // State
-  const user = ref(null)
+  const user = ref(devFallbackUser())
   const isLoading = ref(false)
   const error = ref(null)
 
@@ -58,7 +65,7 @@ export const useAuthStore = defineStore('auth', () => {
       return data
     } catch (err) {
       if (err.status === 401) {
-        user.value = null
+        user.value = devFallbackUser()
       } else {
         error.value = err.message || 'Failed to fetch user'
       }
@@ -92,7 +99,7 @@ export const useAuthStore = defineStore('auth', () => {
       await fetchApi('/api/auth/refresh', { method: 'POST' })
       return true
     } catch (err) {
-      user.value = null
+      user.value = devFallbackUser()
       return false
     }
   }
@@ -116,7 +123,7 @@ export const useAuthStore = defineStore('auth', () => {
           }
         }
       }
-      user.value = null
+      user.value = devFallbackUser()
     }
   }
 

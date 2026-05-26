@@ -1,23 +1,8 @@
 <template>
   <div>
-    <div class="mb-4 flex items-start justify-between gap-3">
-      <div>
-        <h1 class="text-xl font-semibold text-foreground">Jadwal & Sesi</h1>
-        <p class="text-sm text-muted-foreground">Jadwal penugasan petugas dan rekap sesi kerja harian.</p>
-      </div>
-    </div>
+    <PageHeader title="Jadwal & Sesi" subtitle="Jadwal penugasan petugas dan rekap sesi kerja harian." />
 
-    <!-- Tabs -->
-    <div class="mb-4 flex gap-1 border-b border-border">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        :class="['px-4 py-2 text-sm font-medium transition-colors -mb-px', activeTab === tab.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground']"
-        @click="switchTab(tab.key)"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
+    <TabStrip :model-value="activeTab" :tabs="tabs" @update:model-value="switchTab" />
 
     <!-- Date filter (shared) -->
     <div class="mb-4 flex items-center gap-3">
@@ -179,11 +164,11 @@
     </div>
 
     <!-- Assignment modal -->
-    <div v-if="showAssignmentModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div class="w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-2xl">
-        <h3 class="mb-4 text-base font-semibold text-foreground">
-          {{ editingAssignment ? 'Edit Penugasan' : 'Tambah Penugasan' }}
-        </h3>
+    <Dialog :open="showAssignmentModal" @update:open="(v) => { if (!v) closeAssignmentModal() }">
+      <DialogContent class="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{{ editingAssignment ? 'Edit Penugasan' : 'Tambah Penugasan' }}</DialogTitle>
+        </DialogHeader>
 
         <div class="space-y-3">
           <div v-if="!editingAssignment">
@@ -239,28 +224,30 @@
           {{ assignmentError }}
         </div>
 
-        <div class="mt-4 flex gap-2">
-          <button
-            class="flex-1 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-surface transition-colors"
-            @click="closeAssignmentModal"
-          >
-            Batal
-          </button>
-          <button
-            :disabled="!assignmentForm.worker_id || savingAssignment"
-            class="flex-1 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-40"
-            @click="saveAssignment"
-          >
+        <DialogFooter>
+          <Button variant="outline" @click="closeAssignmentModal">Batal</Button>
+          <Button :disabled="!assignmentForm.worker_id || savingAssignment" @click="saveAssignment">
             {{ savingAssignment ? 'Menyimpan...' : 'Simpan' }}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <ConfirmDialog
+      v-model="confirmVisible"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      :loading="confirmLoading"
+      @confirm="executeConfirm"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { toast } from 'vue-sonner'
+import { Button } from '~/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '~/components/ui/dialog'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -402,6 +389,7 @@ async function saveAssignment() {
   if (!assignmentForm.value.worker_id) return
   savingAssignment.value = true
   assignmentError.value = ''
+  const wasEdit = !!editingAssignment.value
   try {
     if (editingAssignment.value) {
       await fetchApi(`/api/shift-assignments/${editingAssignment.value.id}`, {
@@ -429,6 +417,7 @@ async function saveAssignment() {
     }
     closeAssignmentModal()
     await loadAssignments()
+    toast.success(wasEdit ? 'Penugasan diperbarui' : 'Penugasan dibuat')
   } catch (err) {
     assignmentError.value = err.message || 'Gagal menyimpan penugasan'
   } finally {
@@ -436,14 +425,40 @@ async function saveAssignment() {
   }
 }
 
-async function deleteAssignment(assignment) {
-  if (!confirm(`Hapus penugasan ${assignment.worker?.full_name || ''}?`)) return
+// Confirm dialog (replaces native confirm())
+const confirmVisible = ref(false)
+const confirmTitle = ref('')
+const confirmMessage = ref('')
+const confirmLoading = ref(false)
+const confirmAction = ref(null)
+function askConfirm(title, message, action) {
+  confirmTitle.value = title
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmVisible.value = true
+}
+async function executeConfirm() {
+  if (!confirmAction.value) return
+  confirmLoading.value = true
   try {
-    await fetchApi(`/api/shift-assignments/${assignment.id}`, { method: 'DELETE' })
-    await loadAssignments()
-  } catch (err) {
-    alert(err.message)
+    await confirmAction.value()
+    confirmVisible.value = false
+  } finally {
+    confirmLoading.value = false
   }
+}
+
+function deleteAssignment(assignment) {
+  askConfirm('Hapus Penugasan', `Hapus penugasan ${assignment.worker?.full_name || assignment.worker?.username || ''}?`, async () => {
+    try {
+      await fetchApi(`/api/shift-assignments/${assignment.id}`, { method: 'DELETE' })
+      await loadAssignments()
+      toast.success('Penugasan dihapus')
+    } catch (err) {
+      toast.error(err.message || 'Gagal menghapus penugasan')
+      throw err
+    }
+  })
 }
 
 // Session helpers

@@ -21,6 +21,21 @@ class RedeemTokenRequest(BaseModel):
     token: str = Field(..., min_length=8, max_length=128)
 
 
+class EnrollRequest(BaseModel):
+    """Booth enrollment body — token minted by the server installer."""
+
+    token: str = Field(..., min_length=8, max_length=128)
+
+
+class EnrollResponse(BaseModel):
+    """Secrets + connection details a booth PC needs to join the server."""
+
+    api_base_url: str
+    internal_api_key: str
+    redis_host: str
+    redis_port: int
+
+
 class CreateAdminRequest(BaseModel):
     """First-admin creation body."""
 
@@ -103,7 +118,7 @@ class TestDeviceResponse(BaseModel):
 class WriteUdevRequest(BaseModel):
     """Udev symlink write request."""
 
-    role: Literal["gate", "printer", "emoney", "rfid", "uhf"]
+    role: Literal["gate", "printer", "emoney", "scanner", "rfid"]
     port: str = Field(..., pattern=r"^/dev/")
 
 

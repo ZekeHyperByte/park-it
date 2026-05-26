@@ -1,24 +1,8 @@
 <template>
   <div>
-    <h1 class="text-xl font-semibold text-foreground">Transaksi</h1>
-    <p class="mb-4 text-sm text-muted-foreground">Riwayat transaksi parkir dan log peristiwa.</p>
+    <PageHeader title="Transaksi" subtitle="Riwayat transaksi parkir dan log peristiwa." />
 
-    <!-- Tabs (Tailwind-styled) -->
-    <div class="mb-4 flex gap-1 border-b border-border">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        :class="[
-          'px-4 py-2 text-sm font-medium transition-colors -mb-px',
-          activeTab === tab.key
-            ? 'border-b-2 border-primary text-primary'
-            : 'text-muted-foreground hover:text-foreground',
-        ]"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
+    <TabStrip v-model="activeTab" :tabs="tabs" />
 
     <!-- Transactions tab -->
     <div v-if="activeTab === 'transactions'">
@@ -86,11 +70,31 @@
 </template>
 
 <script setup>
+import { toast } from 'vue-sonner'
 import { Button } from '~/components/ui/button'
 
 definePageMeta({ middleware: 'auth' })
 
 const { fetchApi } = useApi()
+
+// Gate id/code → name lookup so log tables show "Gate Keluar 1" not "5"/"GOUT-01".
+const gateNameMap = ref({})
+function gateLabel(v) {
+  return gateNameMap.value[v] ?? (v ?? '-')
+}
+async function loadGateNames() {
+  try {
+    const res = await fetchApi('/api/gates')
+    const rows = Array.isArray(res) ? res : (res?.items ?? [])
+    const map = {}
+    for (const g of rows) {
+      map[g.id] = g.name
+      if (g.code) map[g.code] = g.name
+    }
+    gateNameMap.value = map
+  } catch { /* non-fatal; columns fall back to raw value */ }
+}
+onMounted(loadGateNames)
 
 const tabs = [
   { key: 'transactions', label: 'Transaksi Parkir' },
@@ -133,7 +137,7 @@ const transactionColumns = [
 
 const manualOpens = ref([])
 const manualOpenColumns = [
-  { prop: 'gate_id', label: 'Gate ID', width: 100 },
+  { prop: 'gate_id', label: 'Gate', width: 140, formatter: (v) => gateLabel(v) },
   { prop: 'gate_type', label: 'Tipe', width: 100 },
   { prop: 'reason', label: 'Alasan' },
   { prop: 'notes', label: 'Catatan' },
@@ -141,7 +145,7 @@ const manualOpenColumns = [
 
 const abandonedVehicles = ref([])
 const abandonedColumns = [
-  { prop: 'gate_out_id', label: 'Gate Out', width: 100 },
+  { prop: 'gate_out_id', label: 'Gate Keluar', width: 140, formatter: (v) => gateLabel(v) },
   { prop: 'waiting_seconds', label: 'Tunggu (detik)', width: 130, sortable: true },
   { prop: 'resolution_type', label: 'Resolusi', width: 150, type: 'enum' },
   { prop: 'notes', label: 'Catatan' },
@@ -182,7 +186,7 @@ async function loadTransactions() {
     transactions.value = result.items ?? []
     transactionTotal.value = typeof result.total === 'number' ? result.total : transactions.value.length
   } catch (err) {
-    console.error('Gagal memuat transaksi:', err)
+    toast.error(`Gagal memuat transaksi: ${err.message}`)
   } finally {
     loadingTransactions.value = false
   }
@@ -213,7 +217,7 @@ async function loadManualOpens() {
     const result = await fetchApi('/api/manual-open-logs')
     manualOpens.value = result.items || []
   } catch (err) {
-    console.error('Gagal memuat log buka manual:', err)
+    toast.error(`Gagal memuat log buka manual: ${err.message}`)
   } finally {
     loadingManualOpens.value = false
   }
@@ -225,7 +229,7 @@ async function loadAbandoned() {
     const result = await fetchApi('/api/abandoned-vehicle-logs')
     abandonedVehicles.value = result.items || []
   } catch (err) {
-    console.error('Gagal memuat kendaraan ditinggal:', err)
+    toast.error(`Gagal memuat kendaraan ditinggal: ${err.message}`)
   } finally {
     loadingAbandoned.value = false
   }

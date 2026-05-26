@@ -1,39 +1,25 @@
 <template>
   <div>
-    <div class="mb-4 flex items-start justify-between gap-3">
-      <div>
-        <h1 class="text-xl font-semibold text-foreground">Perangkat</h1>
-        <p class="text-sm text-muted-foreground">Manajemen gate, booth POS, kamera, printer, dan e-money reader.</p>
-      </div>
-      <NuxtLink
-        v-if="authStore.isAdmin"
-        to="/setup?force=1"
-        class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
-      >
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-        Jalankan Setup Wizard
-      </NuxtLink>
-    </div>
+    <PageHeader
+      title="Perangkat"
+      subtitle="Ubah atau tambah gate, booth POS, kamera, printer, e-money reader satuan. Untuk konfigurasi awal, gunakan Setup Wizard."
+    >
+      <template #action>
+        <NuxtLink
+          v-if="authStore.isAdmin"
+          to="/setup?force=1"
+          class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          Jalankan Setup Wizard
+        </NuxtLink>
+      </template>
+    </PageHeader>
 
-    <!-- Tabs -->
-    <div class="mb-4 flex gap-1 border-b border-border">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        :class="[
-          'px-4 py-2 text-sm font-medium transition-colors -mb-px',
-          activeTab === tab.key
-            ? 'border-b-2 border-primary text-primary'
-            : 'text-muted-foreground hover:text-foreground',
-        ]"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
+    <TabStrip v-model="activeTab" :tabs="tabs" />
 
     <!-- Overview (status cards) -->
     <div v-if="activeTab === 'overview'">
@@ -52,11 +38,57 @@
           @open="openGateRemotely(gate)"
         />
       </div>
+
+      <!-- Peripheral health: printers + e-money readers at a glance -->
+      <div v-if="!loadingGates && (printers.length || emoneyReaders.length)" class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div v-if="printers.length" class="rounded-lg border border-border bg-surface p-4">
+          <h3 class="mb-3 text-sm font-semibold text-foreground">Printer</h3>
+          <div class="space-y-2">
+            <div v-for="p in printers" :key="p.id" class="flex items-center justify-between gap-2 text-sm">
+              <span class="truncate text-foreground">{{ p.name }}</span>
+              <div class="flex shrink-0 items-center gap-2">
+                <span v-if="p.paper_remaining != null" class="text-xs text-muted-foreground">kertas {{ p.paper_remaining }}</span>
+                <StatusPill :status="p.is_active ? 'online' : 'idle'" :label="p.is_active ? 'Aktif' : 'Nonaktif'" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-if="emoneyReaders.length" class="rounded-lg border border-border bg-surface p-4">
+          <h3 class="mb-3 text-sm font-semibold text-foreground">E-Money Reader</h3>
+          <div class="space-y-2">
+            <div v-for="r in emoneyReaders" :key="r.id" class="flex items-center justify-between gap-2 text-sm">
+              <span class="truncate text-foreground">{{ r.name }}</span>
+              <StatusPill
+                :status="r.is_online ? 'online' : (r.is_active ? 'warning' : 'idle')"
+                :label="r.is_online ? 'Online' : (r.is_active ? 'Offline' : 'Nonaktif')"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Gates -->
     <div v-if="activeTab === 'gates'">
-      <DataTable :data="gates" :columns="gateColumns" :loading="loadingGates" @add="openGateModal()" @edit="openGateModal" @delete="confirmDeleteGate" />
+      <DataTable :data="gates" :columns="gateColumns" :loading="loadingGates" @add="openGateModal()" @edit="openGateModal" @delete="confirmDeleteGate">
+        <template #row-actions="{ row }">
+          <button
+            class="rounded p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:opacity-40"
+            :title="testingGateId === row.id ? 'Menguji…' : 'Test koneksi'"
+            :disabled="testingGateId === row.id"
+            @click="testGate(row)"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
+          </button>
+          <button
+            class="rounded p-1.5 text-muted-foreground transition-colors hover:bg-success/10 hover:text-success"
+            title="Buka gate"
+            @click="openGateRemotely(row)"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 9.9-1" /></svg>
+          </button>
+        </template>
+      </DataTable>
     </div>
 
     <!-- POS Booths -->
@@ -91,15 +123,16 @@
 
 <script setup>
 import GateStatusCard from '~/components/dashboard/GateStatusCard.vue'
+import StatusPill from '~/components/setup/StatusPill.vue'
 
 definePageMeta({ middleware: 'auth' })
 
 const { fetchApi } = useApi()
-const gateCrud = useCrud('/api/gates')
-const posCrud = useCrud('/api/pos')
-const cameraCrud = useCrud('/api/cameras')
-const printerCrud = useCrud('/api/printers')
-const readerCrud = useCrud('/api/emoney-readers')
+const gateCrud = useCrud('/api/gates', { label: 'Gate' })
+const posCrud = useCrud('/api/pos', { label: 'Booth POS' })
+const cameraCrud = useCrud('/api/cameras', { label: 'Kamera' })
+const printerCrud = useCrud('/api/printers', { label: 'Printer' })
+const readerCrud = useCrud('/api/emoney-readers', { label: 'E-Money Reader' })
 
 const tabs = [
   { key: 'overview', label: 'Ringkasan' },
@@ -177,7 +210,7 @@ const gateFields = computed(() => {
     { prop: 'protocol', label: 'Protokol', type: 'select', required: true, options: [{ label: 'Compass (TCP)', value: 'compass' }, { label: 'ENET (TCP)', value: 'enet' }, { label: 'Serial / USB', value: 'serial' }] },
     ...(proto === 'serial'
       ? [
-          { prop: 'controller_device', label: 'Device Serial', type: 'text', placeholder: '/dev/ttyUSB0', required: true },
+          { prop: 'controller_device', label: 'Device Serial', type: 'text', placeholder: '/dev/parking-gate', required: true },
           { prop: 'controller_baudrate', label: 'Baudrate', type: 'number', placeholder: '9600' },
         ]
       : [
@@ -195,7 +228,7 @@ const gateFields = computed(() => {
       ...(rfidEnabled ? [
         { prop: '_rfid_connection', label: 'Koneksi RFID', type: 'select', options: RFID_CONN_OPTIONS },
         ...(rfidDirect ? [
-          { prop: '_rfid_device', label: 'Device RFID', type: 'text', placeholder: '/dev/ttyUSB1', required: true },
+          { prop: '_rfid_device', label: 'Device RFID', type: 'text', placeholder: '/dev/parking-rfid', required: true },
           { prop: '_rfid_baudrate', label: 'Baudrate RFID', type: 'number', placeholder: '9600' },
         ] : []),
       ] : []),
@@ -207,12 +240,12 @@ const gateFields = computed(() => {
     )
   } else if (dir === 'OUT') {
     base.push(
-      { prop: 'pos_id', label: 'Booth POS', type: 'number' },
+      { prop: 'pos_id', label: 'Booth POS', type: 'select', options: posOptions.value },
       { prop: '_rfid_enabled', label: 'RFID Member Reader', type: 'boolean' },
       ...(rfidEnabled ? [
         { prop: '_rfid_connection', label: 'Koneksi RFID', type: 'select', options: RFID_CONN_OPTIONS },
         ...(rfidDirect ? [
-          { prop: '_rfid_device', label: 'Device RFID', type: 'text', placeholder: '/dev/ttyUSB1', required: true },
+          { prop: '_rfid_device', label: 'Device RFID', type: 'text', placeholder: '/dev/parking-rfid', required: true },
           { prop: '_rfid_baudrate', label: 'Baudrate RFID', type: 'number', placeholder: '9600' },
         ] : []),
       ] : []),
@@ -220,7 +253,7 @@ const gateFields = computed(() => {
       ...(emoneyEnabled ? [
         { prop: '_emoney_connection', label: 'Koneksi E-Money', type: 'select', options: EMONEY_CONN_OPTIONS },
         ...(emoneyDirect ? [
-          { prop: '_emoney_device', label: 'Device E-Money', type: 'text', placeholder: '/dev/ttyUSB0', required: true },
+          { prop: '_emoney_device', label: 'Device E-Money', type: 'text', placeholder: '/dev/parking-emoney', required: true },
           { prop: '_emoney_baudrate', label: 'Baudrate E-Money', type: 'number', placeholder: '38400' },
         ] : []),
       ] : []),
@@ -315,20 +348,36 @@ const loadingPos = ref(false)
 const posModalVisible = ref(false)
 const posEditing = ref(false)
 const posForm = ref({})
+
+// Foreign-key dropdown sources — show name+code, store id/code. Replaces the
+// old raw numeric/text-code inputs (mislink-prone).
+const gateOutOptions = computed(() =>
+  gates.value.filter((g) => g.direction === 'OUT').map((g) => ({ label: `${g.name} (${g.code})`, value: g.id })),
+)
+const gateCodeOptions = computed(() =>
+  gates.value.map((g) => ({ label: `${g.name} (${g.code})`, value: g.code })),
+)
+const posOptions = computed(() =>
+  posList.value.map((p) => ({ label: `${p.name} (${p.code})`, value: p.id })),
+)
+function gateNameById(id) {
+  const g = gates.value.find((x) => x.id === id)
+  return g ? `${g.name} (${g.code})` : (id ?? '-')
+}
 const posColumns = [
   { prop: 'name', label: 'Nama', sortable: true },
   { prop: 'code', label: 'Kode', width: 120, sortable: true },
   { prop: 'ip_address', label: 'IP Address', width: 150 },
-  { prop: 'default_gate_id', label: 'Gate Default', width: 120 },
+  { prop: 'default_gate_id', label: 'Gate Default', width: 180, formatter: (v) => gateNameById(v) },
   { prop: 'is_active', label: 'Aktif', type: 'boolean', width: 80 },
 ]
-const posFields = [
+const posFields = computed(() => [
   { prop: 'name', label: 'Nama', type: 'text', required: true },
   { prop: 'code', label: 'Kode', type: 'text', required: true },
   { prop: 'ip_address', label: 'IP Address', type: 'text' },
-  { prop: 'default_gate_id', label: 'Gate Default (ID)', type: 'number' },
+  { prop: 'default_gate_id', label: 'Gate Default', type: 'select', options: gateOutOptions.value },
   { prop: 'is_active', label: 'Aktif', type: 'boolean' },
-]
+])
 function openPosModal(row = null) { posEditing.value = !!row; posForm.value = row ? { ...row } : { is_active: true }; posModalVisible.value = true }
 async function savePos(data) { submitting.value = true; try { if (posEditing.value) await posCrud.update(data.id, data); else await posCrud.create(data); posModalVisible.value = false; await loadPos() } catch (err) { console.error(err) } finally { submitting.value = false } }
 function confirmDeletePos(row) { deleteTargetName.value = row.name; deleteAction.value = () => deletePos(row.id); deleteDialogVisible.value = true }
@@ -385,7 +434,7 @@ const printerFields = computed(() => {
   const mode = printerForm.value.mode
   return [
     { prop: 'name', label: 'Nama', type: 'text', required: true },
-    { prop: 'gate_id', label: 'Gate ID (kode)', type: 'text', required: true, placeholder: 'e.g. GATE-OUT-1' },
+    { prop: 'gate_id', label: 'Gate', type: 'select', required: true, options: gateCodeOptions.value },
     { prop: 'gate_type', label: 'Tipe Gate', type: 'select', required: true, options: [{ label: 'Masuk (IN)', value: 'IN' }, { label: 'Keluar (OUT)', value: 'OUT' }] },
     { prop: 'mode', label: 'Mode', type: 'select', required: true, options: [{ label: 'Controller Passthrough', value: 'CONTROLLER_PASSTHROUGH' }, { label: 'Network (TCP/IP)', value: 'NETWORK' }, { label: 'Serial / USB', value: 'SERIAL' }] },
     ...(mode === 'NETWORK'
@@ -395,7 +444,7 @@ const printerFields = computed(() => {
         ]
       : mode === 'SERIAL'
       ? [
-          { prop: 'serial_device', label: 'Device Serial', type: 'text', required: true, placeholder: '/dev/ttyUSB0' },
+          { prop: 'serial_device', label: 'Device Serial', type: 'text', required: true, placeholder: '/dev/parking-printer' },
           { prop: 'baudrate', label: 'Baudrate', type: 'number', placeholder: '9600' },
         ]
       : []
@@ -448,5 +497,16 @@ const deleteTargetName = ref('')
 const deleteAction = ref(null)
 function executeDelete() { if (deleteAction.value) deleteAction.value() }
 
-onMounted(() => { loadGates(); loadPos(); loadCameras(); loadPrinters(); loadEmoneyReaders() })
+// Auto-refresh the Overview tab so gate/peripheral status stays live without a
+// manual reload. Only refetches while Overview is visible.
+let overviewTimer = null
+onMounted(() => {
+  loadGates(); loadPos(); loadCameras(); loadPrinters(); loadEmoneyReaders()
+  overviewTimer = setInterval(() => {
+    if (activeTab.value === 'overview') {
+      loadGates(); loadPrinters(); loadEmoneyReaders()
+    }
+  }, 15000)
+})
+onUnmounted(() => { if (overviewTimer) clearInterval(overviewTimer) })
 </script>

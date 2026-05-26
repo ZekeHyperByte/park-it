@@ -1,18 +1,8 @@
 <template>
   <div>
-    <h1 class="text-xl font-semibold text-foreground">Notifikasi</h1>
-    <p class="mb-4 text-sm text-muted-foreground">Pantau transaksi unresolved, alert, dan status settlement.</p>
+    <PageHeader title="Notifikasi" subtitle="Pantau transaksi unresolved, alert, dan status settlement." />
 
-    <div class="mb-4 flex gap-1 border-b border-border">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        :class="['px-4 py-2 text-sm font-medium transition-colors -mb-px', activeTab === tab.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground']"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
+    <TabStrip v-model="activeTab" :tabs="tabs" />
 
     <!-- Unresolved E-Money -->
     <div v-if="activeTab === 'unresolved'">
@@ -42,11 +32,30 @@
 </template>
 
 <script setup>
+import { toast } from 'vue-sonner'
 import { Button } from '~/components/ui/button'
 
 definePageMeta({ middleware: 'auth' })
 
 const { fetchApi } = useApi()
+
+// Gate id/code → name lookup so the alert table shows gate names, not raw ids.
+const gateNameMap = ref({})
+function gateLabel(v) {
+  return gateNameMap.value[v] ?? (v ?? '-')
+}
+async function loadGateNames() {
+  try {
+    const res = await fetchApi('/api/gates')
+    const rows = Array.isArray(res) ? res : (res?.items ?? [])
+    const map = {}
+    for (const g of rows) {
+      map[g.id] = g.name
+      if (g.code) map[g.code] = g.name
+    }
+    gateNameMap.value = map
+  } catch { /* non-fatal */ }
+}
 
 const tabs = [
   { key: 'unresolved', label: 'E-Money Unresolved' },
@@ -86,7 +95,7 @@ const activeTxColumns = [
 const recentAlerts = ref([])
 const alertColumns = [
   { prop: 'type', label: 'Tipe', width: 150, type: 'enum' },
-  { prop: 'gate_id', label: 'Gate', width: 100 },
+  { prop: 'gate_id', label: 'Gate', width: 140, formatter: (v) => gateLabel(v) },
   { prop: 'message', label: 'Pesan' },
   { prop: 'timestamp', label: 'Waktu', width: 160, formatter: (v) => v ? new Date(v).toLocaleString('id-ID') : '-' },
 ]
@@ -102,7 +111,7 @@ const settlementColumns = [
   { prop: 'created_at', label: 'Dibuat', width: 160, formatter: (v) => v ? new Date(v).toLocaleString('id-ID') : '-' },
 ]
 
-onMounted(() => { loadUnresolved(); loadActive(); loadAlerts(); loadSettlements() })
+onMounted(() => { loadGateNames(); loadUnresolved(); loadActive(); loadAlerts(); loadSettlements() })
 
 async function loadUnresolved() {
   loadingUnresolved.value = true
@@ -146,7 +155,9 @@ async function triggerSettlement() {
   try {
     await fetchApi('/api/settlements/trigger', { method: 'POST' })
     await loadSettlements()
-  } catch (e) { console.error(e) }
-  finally { triggering.value = false }
+    toast.success('Settlement berhasil dibuat & diunggah')
+  } catch (e) {
+    toast.error(`Gagal generate settlement: ${e.message}`)
+  } finally { triggering.value = false }
 }
 </script>

@@ -4,7 +4,7 @@
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-xl font-semibold text-foreground">
-          {{ greeting }}, {{ authStore.user?.username || 'Operator' }}
+          {{ greeting }}, {{ authStore.user?.full_name || authStore.user?.username || 'Pengguna' }}
         </h2>
         <p class="mt-1 text-sm text-muted-foreground">{{ formattedDate }}</p>
       </div>

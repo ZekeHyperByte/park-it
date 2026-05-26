@@ -141,6 +141,9 @@ class Settings(BaseSettings):
     setup_token_path: str = Field(
         default="/etc/parking/setup-token", alias="SETUP_TOKEN_PATH"
     )
+    enroll_token_path: str = Field(
+        default="/etc/parking/enroll-token", alias="ENROLL_TOKEN_PATH"
+    )
     setup_session_ttl_seconds: int = Field(
         default=3600, alias="SETUP_SESSION_TTL_SECONDS"
     )

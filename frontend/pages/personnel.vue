@@ -1,17 +1,10 @@
 <template>
   <div>
-    <div class="mb-4 flex items-start justify-between gap-3">
-      <div>
-        <h1 class="text-xl font-semibold text-foreground">Personil</h1>
-        <p class="text-sm text-muted-foreground">Manajemen akun pengguna dan PIN shift.</p>
-      </div>
-      <button
-        class="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
-        @click="openCreate"
-      >
-        + Tambah Pengguna
-      </button>
-    </div>
+    <PageHeader title="Personil" subtitle="Manajemen akun pengguna dan PIN shift.">
+      <template #action>
+        <Button size="sm" @click="openCreate">+ Tambah Pengguna</Button>
+      </template>
+    </PageHeader>
 
     <!-- User table -->
     <div v-if="loading" class="py-8 text-center text-sm text-muted-foreground">Memuat...</div>
@@ -115,11 +108,11 @@
     </div>
 
     <!-- Create/Edit user modal -->
-    <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div class="w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-2xl">
-        <h3 class="mb-4 text-base font-semibold text-foreground">
-          {{ editingUser ? 'Edit Pengguna' : 'Tambah Pengguna' }}
-        </h3>
+    <Dialog :open="showModal" @update:open="(v) => { if (!v) closeModal() }">
+      <DialogContent class="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{{ editingUser ? 'Edit Pengguna' : 'Tambah Pengguna' }}</DialogTitle>
+        </DialogHeader>
 
         <div class="space-y-3">
           <div>
@@ -160,23 +153,30 @@
           {{ modalError }}
         </div>
 
-        <div class="mt-4 flex gap-2">
-          <button class="flex-1 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-surface transition-colors" @click="closeModal">Batal</button>
-          <button
-            :disabled="!form.username || savingUser"
-            class="flex-1 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-40"
-            @click="saveUser"
-          >
+        <DialogFooter>
+          <Button variant="outline" @click="closeModal">Batal</Button>
+          <Button :disabled="!form.username || savingUser" @click="saveUser">
             {{ savingUser ? 'Menyimpan...' : 'Simpan' }}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <ConfirmDialog
+      v-model="confirmVisible"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      :loading="confirmLoading"
+      @confirm="executeConfirm"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { toast } from 'vue-sonner'
+import { Button } from '~/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '~/components/ui/dialog'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -196,6 +196,29 @@ const form = ref({ username: '', full_name: '', role: 'operator', password: '', 
 const pinEditingId = ref(null)
 const pinValue = ref('')
 const savingPin = ref(false)
+
+// Confirm dialog (replaces native confirm())
+const confirmVisible = ref(false)
+const confirmTitle = ref('')
+const confirmMessage = ref('')
+const confirmLoading = ref(false)
+const confirmAction = ref(null)
+function askConfirm(title, message, action) {
+  confirmTitle.value = title
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmVisible.value = true
+}
+async function executeConfirm() {
+  if (!confirmAction.value) return
+  confirmLoading.value = true
+  try {
+    await confirmAction.value()
+    confirmVisible.value = false
+  } finally {
+    confirmLoading.value = false
+  }
+}
 
 async function loadUsers() {
   loading.value = true
@@ -241,15 +264,17 @@ async function saveUser() {
   savingUser.value = true
   modalError.value = ''
   try {
+    const wasEdit = !!editingUser.value
     const payload = { ...form.value }
     if (!payload.password) delete payload.password
-    if (editingUser.value) {
+    if (wasEdit) {
       await fetchApi(`/api/users/${editingUser.value.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
     } else {
       await fetchApi('/api/users', { method: 'POST', body: JSON.stringify(payload) })
     }
     closeModal()
     await loadUsers()
+    toast.success(wasEdit ? 'Pengguna diperbarui' : 'Pengguna dibuat')
   } catch (err) {
     modalError.value = err.message || 'Gagal menyimpan'
   } finally {
@@ -257,14 +282,17 @@ async function saveUser() {
   }
 }
 
-async function deleteUser(user) {
-  if (!confirm(`Hapus pengguna ${user.username}?`)) return
-  try {
-    await fetchApi(`/api/users/${user.id}`, { method: 'DELETE' })
-    await loadUsers()
-  } catch (err) {
-    alert(err.message)
-  }
+function deleteUser(user) {
+  askConfirm('Hapus Pengguna', `Hapus pengguna ${user.username}?`, async () => {
+    try {
+      await fetchApi(`/api/users/${user.id}`, { method: 'DELETE' })
+      await loadUsers()
+      toast.success(`Pengguna ${user.username} dihapus`)
+    } catch (err) {
+      toast.error(err.message || 'Gagal menghapus pengguna')
+      throw err
+    }
+  })
 }
 
 // PIN management
@@ -288,21 +316,25 @@ async function savePin(userId) {
     })
     cancelPinEdit()
     await loadUsers()
+    toast.success('PIN tersimpan')
   } catch (err) {
-    alert(err.message)
+    toast.error(err.message || 'Gagal menyimpan PIN')
   } finally {
     savingPin.value = false
   }
 }
 
-async function removePin(user) {
-  if (!confirm(`Hapus PIN ${user.full_name || user.username}?`)) return
-  try {
-    await fetchApi(`/api/users/${user.id}/pin`, { method: 'DELETE' })
-    await loadUsers()
-  } catch (err) {
-    alert(err.message)
-  }
+function removePin(user) {
+  askConfirm('Hapus PIN', `Hapus PIN ${user.full_name || user.username}?`, async () => {
+    try {
+      await fetchApi(`/api/users/${user.id}/pin`, { method: 'DELETE' })
+      await loadUsers()
+      toast.success('PIN dihapus')
+    } catch (err) {
+      toast.error(err.message || 'Gagal menghapus PIN')
+      throw err
+    }
+  })
 }
 
 onMounted(loadUsers)

@@ -109,6 +109,7 @@
             <!-- Actions -->
             <td v-if="showActions" class="px-4 py-2.5">
               <div class="flex items-center gap-1">
+                <slot name="row-actions" :row="row" />
                 <button
                   v-if="showEdit"
                   class="rounded p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"

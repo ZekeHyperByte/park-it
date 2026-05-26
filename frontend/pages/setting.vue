@@ -1,29 +1,22 @@
 <template>
   <div>
-    <div class="mb-4 flex items-start justify-between gap-3">
-      <div>
-        <h1 class="text-xl font-semibold text-foreground">Pengaturan</h1>
-        <p class="text-sm text-muted-foreground">Kelola konfigurasi sistem parkir.</p>
-      </div>
-      <NuxtLink
-        v-if="authStore.isAdmin"
-        to="/setup?force=1"
-        class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
-      >
-        🔧 Jalankan Setup Wizard
-      </NuxtLink>
-    </div>
+    <PageHeader title="Pengaturan" subtitle="Kelola konfigurasi sistem parkir.">
+      <template #action>
+        <NuxtLink
+          v-if="authStore.isAdmin"
+          to="/setup?force=1"
+          class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          Jalankan Setup Wizard
+        </NuxtLink>
+      </template>
+    </PageHeader>
 
-    <div class="mb-4 flex gap-1 border-b border-border">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        :class="['px-4 py-2 text-sm font-medium transition-colors -mb-px', activeTab === tab.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground']"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
+    <TabStrip v-model="activeTab" :tabs="tabs" />
 
     <!-- Site Info -->
     <div v-if="activeTab === 'site-info'" class="max-w-xl space-y-4">
@@ -146,9 +139,11 @@
       </div>
 
       <!-- Gate Lane Config Modal -->
-      <div v-if="gateLaneModalVisible" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div class="w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-xl space-y-4">
-          <h3 class="font-semibold text-foreground">Konfigurasi Lajur — {{ editingGate?.name }}</h3>
+      <Dialog :open="gateLaneModalVisible" @update:open="(v) => { if (!v) gateLaneModalVisible = false }">
+        <DialogContent class="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Konfigurasi Lajur — {{ editingGate?.name }}</DialogTitle>
+          </DialogHeader>
 
           <div class="space-y-2">
             <label class="text-sm font-medium text-foreground">Jenis Lajur</label>
@@ -172,14 +167,14 @@
             </select>
           </div>
 
-          <div class="flex justify-end gap-2 pt-2">
+          <DialogFooter>
             <Button variant="outline" @click="gateLaneModalVisible = false">Batal</Button>
             <Button :disabled="submitting" @click="saveGateLaneConfig">
               {{ submitting ? 'Menyimpan...' : 'Simpan' }}
             </Button>
-          </div>
-        </div>
-      </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
 
     <!-- Modals -->
@@ -194,14 +189,15 @@
 import { toast } from 'vue-sonner'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '~/components/ui/dialog'
 
 definePageMeta({ middleware: 'auth' })
 
 const { fetchApi } = useApi()
 const authStore = useAuthStore()
-const vtCrud = useCrud('/api/vehicle-types')
-const shiftCrud = useCrud('/api/shifts')
-const areaCrud = useCrud('/api/areas')
+const vtCrud = useCrud('/api/vehicle-types', { label: 'Jenis Kendaraan' })
+const shiftCrud = useCrud('/api/shifts', { label: 'Shift' })
+const areaCrud = useCrud('/api/areas', { label: 'Area Parkir' })
 
 const tabs = [
   { key: 'site-info', label: 'Site Info' },
@@ -321,8 +317,9 @@ async function saveGateLaneConfig() {
     })
     gateLaneModalVisible.value = false
     await loadGates()
+    toast.success('Konfigurasi lajur tersimpan')
   } catch (e) {
-    console.error(e)
+    toast.error(`Gagal menyimpan konfigurasi lajur: ${e.message}`)
   } finally {
     submitting.value = false
   }
@@ -342,7 +339,14 @@ async function loadGates() {
 onMounted(() => { loadSiteConfig(); loadSettings(); loadVehicleTypes(); loadShifts(); loadAreas(); loadGates() })
 
 async function loadSiteConfig() { try { const { data } = await fetchApi('/api/site-config'); siteConfig.value = data } catch (e) { /* ok */ } }
-async function saveSiteConfig() { try { await fetchApi('/api/site-config', { method: 'PUT', body: JSON.stringify(siteConfig.value) }) } catch (e) { console.error(e) } }
+async function saveSiteConfig() {
+  try {
+    await fetchApi('/api/site-config', { method: 'PUT', body: JSON.stringify(siteConfig.value) })
+    toast.success('Info site tersimpan')
+  } catch (e) {
+    toast.error(`Gagal menyimpan info site: ${e.message}`)
+  }
+}
 // Snapshot of last-saved values so an invalid edit or failed save can revert.
 const _settingOriginals = {}
 async function loadSettings() {

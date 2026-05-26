@@ -1,7 +1,6 @@
 <template>
   <div>
-    <h1 class="text-xl font-semibold text-foreground">Laporan</h1>
-    <p class="mb-4 text-sm text-muted-foreground">Ringkasan transaksi dan settlement e-money.</p>
+    <PageHeader title="Laporan" subtitle="Ringkasan transaksi dan settlement e-money." />
 
     <!-- Date filter -->
     <div class="mb-4 rounded-lg border border-border bg-surface p-4">
@@ -19,17 +18,7 @@
       </div>
     </div>
 
-    <!-- Tabs -->
-    <div class="mb-4 flex gap-1 border-b border-border">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        :class="['px-4 py-2 text-sm font-medium transition-colors -mb-px', activeTab === tab.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground']"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
+    <TabStrip v-model="activeTab" :tabs="tabs" />
 
     <!-- Summary tab -->
     <div v-if="activeTab === 'summary'">
@@ -82,6 +71,7 @@
 </template>
 
 <script setup>
+import { toast } from 'vue-sonner'
 import { Button } from '~/components/ui/button'
 
 definePageMeta({ middleware: 'auth' })
@@ -122,7 +112,7 @@ async function loadReports() {
     emoneyReport.value = emoney
     shiftReport.value = shift
   } catch (err) {
-    console.error('Gagal memuat laporan:', err)
+    toast.error(`Gagal memuat laporan: ${err.message}`)
   } finally {
     loading.value = false
   }
@@ -136,13 +126,17 @@ function setLastMonth() { const now = new Date(); dateFrom.value = new Date(now.
 async function exportReport(format) {
   try {
     const url = `/api/reports/summary/export?format=${format}&date_from=${dateFrom.value}&date_to=${dateTo.value}`
-    const response = await fetchApi(url, { responseType: 'blob' })
-    const blob = new Blob([response.data])
+    const blob = await fetchApi(url, { responseType: 'blob' })
+    const objectUrl = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
+    link.href = objectUrl
     link.download = `EParking_Report_${dateFrom.value}_${dateTo.value}.${format}`
     link.click()
-  } catch (e) { console.error('Export failed:', e) }
+    URL.revokeObjectURL(objectUrl)
+    toast.success(`Laporan ${format.toUpperCase()} diunduh`)
+  } catch (e) {
+    toast.error(`Gagal export laporan: ${e.message}`)
+  }
 }
 </script>
 

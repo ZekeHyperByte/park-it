@@ -83,27 +83,48 @@ BOOTH_NAME=${BOOTH_NAME:-Booth 1}
 read -rp "Booth 1 code [BOOTH_01]: " BOOTH_CODE
 BOOTH_CODE=${BOOTH_CODE:-BOOTH_01}
 
-read -rp "Default gate for Booth 1 (e.g. GOUT01): " GATE_CODE
+read -rp "Default gate for Booth 1 (e.g. GOUT-01): " GATE_CODE
 if [[ -z "$GATE_CODE" ]]; then
     error "Default gate code is required"
     exit 1
 fi
 
-read -rp "E-Money reader serial device [/dev/ttyUSB0]: " EMONEY_DEV
-EMONEY_DEV=${EMONEY_DEV:-/dev/ttyUSB0}
+# ── Stable serial device detection ────────────────────────────────────────────
+# Pin /dev/parking-{emoney,printer,scanner,gate} symlinks by serial#/USB-port
+# instead of guessing /dev/ttyUSB0/1/2 (which renumber on reboot).
+step "Detecting serial devices"
+DETECT="/opt/parking-system-v2/scripts/detect-serial-devices.sh"
+if [[ -f "$DETECT" ]]; then
+    bash "$DETECT" || warn "Detection exited non-zero — falling back to manual paths where symlinks are missing."
+else
+    warn "detect-serial-devices.sh not found — using manual device paths."
+fi
 
+# resolve_dev <role> <label> <default-ttyUSB>: prefer stable symlink, else ask.
+resolve_dev() {
+    local role="$1" label="$2" fallback="$3" link="/dev/parking-$1"
+    # Status lines go to stderr; only the resolved path goes to stdout so
+    # command substitution captures the path alone.
+    if [[ -e "$link" ]]; then
+        ok "${label}: ${link} (stable symlink)" >&2
+        printf '%s' "$link"
+        return
+    fi
+    warn "${label}: no ${link} symlink — enter the device path manually." >&2
+    local ans
+    read -rp "    ${label} serial device [${fallback}]: " ans </dev/tty
+    printf '%s' "${ans:-$fallback}"
+}
+
+EMONEY_DEV=$(resolve_dev emoney "E-Money reader" /dev/ttyUSB0)
 read -rp "E-Money reader baudrate [38400]: " EMONEY_BAUD
 EMONEY_BAUD=${EMONEY_BAUD:-38400}
 
-read -rp "Receipt printer serial device [/dev/ttyUSB1]: " PRINTER_DEV
-PRINTER_DEV=${PRINTER_DEV:-/dev/ttyUSB1}
-
+PRINTER_DEV=$(resolve_dev printer "Receipt printer" /dev/ttyUSB1)
 read -rp "Receipt printer baudrate [9600]: " PRINTER_BAUD
 PRINTER_BAUD=${PRINTER_BAUD:-9600}
 
-read -rp "Barcode scanner serial device [/dev/ttyUSB2]: " SCANNER_DEV
-SCANNER_DEV=${SCANNER_DEV:-/dev/ttyUSB2}
-
+SCANNER_DEV=$(resolve_dev scanner "Barcode scanner" /dev/ttyUSB2)
 read -rp "Barcode scanner baudrate [9600]: " SCANNER_BAUD
 SCANNER_BAUD=${SCANNER_BAUD:-9600}
 
@@ -113,8 +134,7 @@ GATE_TYPE=${GATE_TYPE:-tcp}
 GATE_DEV=""
 GATE_BAUD=9600
 if [[ "$GATE_TYPE" == "serial" ]]; then
-    read -rp "Barrier gate serial device [/dev/ttyUSB3]: " GATE_DEV_INPUT
-    GATE_DEV=${GATE_DEV_INPUT:-/dev/ttyUSB3}
+    GATE_DEV=$(resolve_dev gate "Barrier gate" /dev/ttyUSB3)
     read -rp "Barrier gate baudrate [9600]: " GATE_BAUD_INPUT
     GATE_BAUD=${GATE_BAUD_INPUT:-9600}
 fi
@@ -329,7 +349,7 @@ info "Install notes: cat /etc/parking/install-notes.txt"
 echo ""
 warn "Next steps:"
 echo "  1. Log in as admin at http://${SERVER_IP}"
-echo "  2. Add gate records: GIN01, GIN02, GOUT01, GOUT02"
+echo "  2. Add gate records: GIN-01, GIN-02, GOUT-01, GOUT-02 (match the wizard's codes)"
 if [[ "$GATE_TYPE" == "serial" ]]; then
     echo "     ↳ For the RS232/USB gate (${GATE_CODE}): set protocol=serial, controller_device=${GATE_DEV}"
 else
@@ -346,4 +366,11 @@ else
     echo "       sudo /opt/parking-system-v2/scripts/enable-gate-daemons.sh --run"
 fi
 echo "  7. Open Parking POS shortcut on this PC to test Booth 1"
+echo ""
+
+# ── Post-install diagnostic ───────────────────────────────────────────────────
+step "Post-install — parking-doctor"
+info "Running field diagnostic (non-fatal)..."
+sudo -u parking "${PROJECT_ROOT}/.venv/bin/python" "${PROJECT_ROOT}/scripts/parking_doctor.py" \
+    || warn "parking-doctor reported issues — gates/POS get configured in the wizard (steps above)."
 echo ""

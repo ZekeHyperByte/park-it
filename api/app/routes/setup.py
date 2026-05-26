@@ -31,6 +31,8 @@ from api.app.schemas.setup import (
     CreateAdminRequest,
     DetectSerialCandidate,
     DetectSerialResponse,
+    EnrollRequest,
+    EnrollResponse,
     FinalizeResponse,
     PreflightCheckResult,
     PreflightResponse,
@@ -57,6 +59,7 @@ from api.app.services.setup import (
     get_session_by_token,
     has_any_admin,
     mark_setup_complete,
+    read_enroll_token,
     read_setup_token,
     run_script_json,
     save_session_step,
@@ -168,6 +171,52 @@ async def redeem_token(
     return SuccessResponse(
         message="Setup session active",
         data={"current_step": session.current_step},
+    )
+
+
+@router.post("/enroll", response_model=EnrollResponse)
+async def enroll_booth(
+    body: EnrollRequest,
+    request: Request,
+) -> EnrollResponse:
+    """Hand a booth PC the secrets it needs to join this server.
+
+    Un-authenticated but gated by the installer-minted enrollment token
+    (/etc/parking/enroll-token). Unlike the setup token, this one is reusable
+    within its 24h window so every booth brought online during the install can
+    enroll with the same token. Replaces the old hand-copied INTERNAL_API_KEY.
+    """
+    disk_token = read_enroll_token()
+    if not disk_token:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Enrollment token not present — regenerate with scripts/regen-enroll-token.sh.",
+        )
+    if not constant_time_eq(disk_token, body.token):
+        client = request.client.host if request.client else "unknown"
+        logger.warning("enroll_token_mismatch", source_ip=client)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid enrollment token",
+        )
+
+    settings = get_settings()
+    if not settings.internal_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Server has no INTERNAL_API_KEY configured — cannot enroll booths.",
+        )
+
+    client = request.client.host if request.client else "unknown"
+    logger.info("booth_enrolled", source_ip=client)
+    # The server's own .env has REDIS_HOST=localhost, useless to a remote booth.
+    # Hand back the address the booth used to reach us instead.
+    server_host = request.url.hostname or settings.redis_host
+    return EnrollResponse(
+        api_base_url=f"http://{server_host}:8000",
+        internal_api_key=settings.internal_api_key,
+        redis_host=server_host,
+        redis_port=settings.redis_port,
     )
 
 

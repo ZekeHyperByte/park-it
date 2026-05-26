@@ -119,7 +119,7 @@ Log in to the server admin page and add a POS record:
 | Name | `Booth 2` |
 | Code | `BOOTH_02` |
 | IP Address | `192.168.1.101` (this PC's IP) |
-| Gate Default | `GOUT02` |
+| Gate Default | `GOUT-02` |
 
 Then edit the corresponding gate and set its **POS** field to `BOOTH_02`.
 

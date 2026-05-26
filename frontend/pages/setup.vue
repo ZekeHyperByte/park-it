@@ -85,8 +85,9 @@
       </div>
     </section>
 
-    <!-- Step: Site info -->
-    <section v-else-if="step === 'site'" class="space-y-5">
+    <!-- Step: Config (site + tariff + areas merged into one step) -->
+    <div v-else-if="step === 'config'" class="space-y-10">
+    <section class="space-y-5">
       <header class="space-y-1">
         <h2 class="text-xl font-bold text-foreground">Informasi lokasi</h2>
         <p class="text-sm text-muted-foreground">Muncul di struk dan laporan.</p>
@@ -133,8 +134,8 @@
       </div>
     </section>
 
-    <!-- Step: Tariff (presets + table) -->
-    <section v-else-if="step === 'tariff'" class="space-y-5">
+    <!-- Tariff (presets + table) -->
+    <section class="space-y-5">
       <header class="space-y-1">
         <h2 class="text-xl font-bold text-foreground">Jenis kendaraan & tarif</h2>
         <p class="text-sm text-muted-foreground">
@@ -189,8 +190,8 @@
       </div>
     </section>
 
-    <!-- Step: Areas -->
-    <section v-else-if="step === 'areas'" class="space-y-5">
+    <!-- Areas -->
+    <section class="space-y-5">
       <header class="space-y-1">
         <h2 class="text-xl font-bold text-foreground">Area parkir & kapasitas</h2>
         <p class="text-sm text-muted-foreground">
@@ -223,6 +224,7 @@
       <Button variant="outline" @click="addArea">+ Tambah area</Button>
       <p v-if="errors.areas" class="text-sm text-destructive">{{ errors.areas }}</p>
     </section>
+    </div>
 
     <!-- Step: Topology -->
     <section v-else-if="step === 'topology'" class="space-y-5">
@@ -355,36 +357,10 @@
 
         <section class="space-y-2">
           <h3 class="text-sm font-semibold text-foreground">Perangkat tambahan</h3>
-          <PeripheralAccordion
-            title="Pencetak struk"
-            :enabled="!!activeGate.peripherals.printer.enabled"
-            @update:enabled="(v) => togglePeripheral('printer', v)"
-          >
-            <DeviceProbeRow
-              type="serial"
-              role="printer"
-              :device="activeGate.peripherals.printer.device || ''"
-              :baudrate="activeGate.peripherals.printer.baudrate || 9600"
-              @update:device="(v) => activeGate.peripherals.printer.device = v"
-              @update:baudrate="(v) => activeGate.peripherals.printer.baudrate = v"
-            />
-          </PeripheralAccordion>
-
-          <PeripheralAccordion
-            title="Pemindai e-money (PASSTI)"
-            :enabled="!!activeGate.peripherals.emoney.enabled"
-            @update:enabled="(v) => togglePeripheral('emoney', v)"
-          >
-            <DeviceProbeRow
-              type="serial"
-              role="emoney"
-              :device="activeGate.peripherals.emoney.device || ''"
-              :baudrate="activeGate.peripherals.emoney.baudrate || 9600"
-              @update:device="(v) => activeGate.peripherals.emoney.device = v"
-              @update:baudrate="(v) => activeGate.peripherals.emoney.baudrate = v"
-            />
-          </PeripheralAccordion>
-
+          <p class="text-xs text-muted-foreground">
+            Perangkat booth (e-money, printer struk, scanner) diatur di booth PC
+            saat instalasi, bukan di sini.
+          </p>
           <PeripheralAccordion
             title="RFID member"
             :enabled="!!activeGate.peripherals.rfid.enabled"
@@ -397,19 +373,6 @@
           >
             <WizardField label="RTSP URL">
               <Input v-model="activeGate.peripherals.camera.url" placeholder="rtsp://user:pass@host/stream1" />
-            </WizardField>
-          </PeripheralAccordion>
-
-          <PeripheralAccordion
-            title="UHF reader (member auto-exit)"
-            :enabled="!!activeGate.peripherals.uhf_reader.enabled"
-            @update:enabled="(v) => togglePeripheral('uhf_reader', v)"
-          >
-            <WizardField label="Host">
-              <Input v-model="activeGate.peripherals.uhf_reader.host" placeholder="192.168.1.50" />
-            </WizardField>
-            <WizardField label="Port">
-              <Input v-model.number="activeGate.peripherals.uhf_reader.port" type="number" placeholder="6000" />
             </WizardField>
           </PeripheralAccordion>
         </section>
@@ -433,7 +396,7 @@
         <li>✓ {{ form.areas.length }} area parkir</li>
       </ul>
       <p class="text-xs text-muted-foreground">
-        Booth POS dikonfigurasi dari menu Pengaturan setelah wizard selesai.
+        Booth POS dan perubahan perangkat lain diatur di halaman Perangkat setelah wizard selesai.
       </p>
 
       <section class="space-y-2">
@@ -527,9 +490,7 @@ const today = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: '
 const steps = [
   { key: 'welcome', label: 'Mulai' },
   { key: 'admin', label: 'Admin' },
-  { key: 'site', label: 'Lokasi' },
-  { key: 'tariff', label: 'Tarif' },
-  { key: 'areas', label: 'Area' },
+  { key: 'config', label: 'Konfigurasi' },
   { key: 'topology', label: 'Topologi' },
   { key: 'gates', label: 'Gate' },
   { key: 'finalize', label: 'Selesai' },
@@ -592,13 +553,14 @@ function applyTopologyPreset(opt) {
   }
 }
 
+// Only gate-attached peripherals belong here. Booth devices (e-money reader,
+// receipt printer, scanner) live in booth.json on the booth PC, configured by
+// the installer — not per gate. rfid is read by gate_in; camera by the gate
+// model. printer/emoney/uhf were set-but-never-read, so they're gone.
 function blankPeripherals() {
   return {
-    printer: { enabled: false, device: '', baudrate: 9600 },
-    emoney: { enabled: false, device: '', baudrate: 9600 },
     rfid: { enabled: false },
     camera: { enabled: false, url: '' },
-    uhf_reader: { enabled: false, host: '', port: 6000 },
   }
 }
 
@@ -611,18 +573,24 @@ async function loadGatesFromBackend() {
   try {
     const res = await fetchApi('/api/gates')
     const rows = Array.isArray(res) ? res : (res?.items || [])
-    gates.value = rows.map((g) => ({
-      id: g.id,
-      name: g.name,
-      code: g.code,
-      direction: g.direction,
-      protocol: g.protocol || 'compass',
-      controller_host: g.controller_host || '',
-      controller_port: g.controller_port || 0,
-      controller_device: g.controller_device || '',
-      controller_baudrate: g.controller_baudrate || 9600,
-      peripherals: hydratePeripherals(g.hardware_config),
-    }))
+    gates.value = rows.map((g, idx) => {
+      const isTcp = (g.protocol || 'compass') !== 'serial'
+      return {
+        id: g.id,
+        name: g.name,
+        code: g.code,
+        direction: g.direction,
+        protocol: g.protocol || 'compass',
+        // Prefill an incrementing controller IP for fresh TCP gates (.100,
+        // .101, .102…) so the tech mostly hits Enter instead of typing each
+        // one. A saved value always wins; this only fills blanks.
+        controller_host: g.controller_host || (isTcp ? `192.168.1.${100 + idx}` : ''),
+        controller_port: g.controller_port || (isTcp ? 5000 : 0),
+        controller_device: g.controller_device || '',
+        controller_baudrate: g.controller_baudrate || 9600,
+        peripherals: hydratePeripherals(g.hardware_config),
+      }
+    })
     if (gateTab.value >= gates.value.length) gateTab.value = 0
   } catch (err) {
     console.warn('load_gates_failed', err)
@@ -632,7 +600,7 @@ async function loadGatesFromBackend() {
 function hydratePeripherals(hardware_config) {
   const out = blankPeripherals()
   const hc = hardware_config || {}
-  for (const k of ['printer', 'emoney', 'rfid', 'camera', 'uhf_reader']) {
+  for (const k of ['rfid', 'camera']) {
     if (hc[k]) Object.assign(out[k], hc[k])
   }
   return out
@@ -651,11 +619,15 @@ const canAdvance = computed(() => {
       form.admin.password && form.admin.password === form.admin.confirm
     )
   }
-  if (step.value === 'site') return !!form.site.name
+  if (step.value === 'config') {
+    return (
+      !!form.site.name &&
+      form.tariff.items.length > 0 &&
+      form.areas.every((a) => a.name && a.code && a.capacity >= 0)
+    )
+  }
   if (step.value === 'topology') return (form.topology.in_count + form.topology.out_count) > 0
   if (step.value === 'gates') return gates.value.length > 0
-  if (step.value === 'tariff') return form.tariff.items.length > 0
-  if (step.value === 'areas') return form.areas.every((a) => a.name && a.code && a.capacity >= 0)
   return true
 })
 
@@ -791,26 +763,17 @@ async function saveCurrentStep() {
     } finally {
       busy.value = false
     }
-  } else if (step.value === 'site') {
-    try {
-      busy.value = true
-      await fetchApi('/api/site-config', {
-        method: 'PUT',
-        body: JSON.stringify(form.site),
-      })
-    } catch (err) {
-      errors.generic = `Gagal simpan lokasi: ${err.message}`
-      return false
-    } finally {
-      busy.value = false
-    }
-  } else if (step.value === 'tariff') {
+  } else if (step.value === 'config') {
     if (!form.tariff.items.length) {
       errors.tariff = 'Tambahkan minimal satu jenis kendaraan.'
       return false
     }
     try {
       busy.value = true
+      await fetchApi('/api/site-config', {
+        method: 'PUT',
+        body: JSON.stringify(form.site),
+      })
       for (const item of form.tariff.items) {
         await fetchApi('/api/vehicle-types', {
           method: 'POST',
@@ -829,9 +792,18 @@ async function saveCurrentStep() {
           if (err.status !== 409) throw err
         })
       }
+      for (const area of form.areas) {
+        await fetchApi('/api/areas', {
+          method: 'POST',
+          body: JSON.stringify(area),
+        }).catch((err) => {
+          if (err.status !== 409) throw err
+        })
+      }
       errors.tariff = ''
+      errors.areas = ''
     } catch (err) {
-      errors.tariff = err.message
+      errors.generic = `Gagal simpan konfigurasi: ${err.message}`
       return false
     } finally {
       busy.value = false
@@ -881,24 +853,6 @@ async function saveCurrentStep() {
     } finally {
       busy.value = false
     }
-  } else if (step.value === 'areas') {
-    try {
-      busy.value = true
-      for (const area of form.areas) {
-        await fetchApi('/api/areas', {
-          method: 'POST',
-          body: JSON.stringify(area),
-        }).catch((err) => {
-          if (err.status !== 409) throw err
-        })
-      }
-      errors.areas = ''
-    } catch (err) {
-      errors.areas = err.message
-      return false
-    } finally {
-      busy.value = false
-    }
   }
   await persistStep(step.value, snapshotForStep(step.value))
   return true
@@ -909,11 +863,15 @@ function snapshotForStep(stepKey) {
     const { password, confirm, ...safe } = form.admin
     return safe
   }
-  if (stepKey === 'site') return { ...form.site }
+  if (stepKey === 'config') {
+    return {
+      site: { ...form.site },
+      tariff: { preset: form.tariff.preset, items: form.tariff.items },
+      areas: form.areas,
+    }
+  }
   if (stepKey === 'topology') return { ...form.topology }
   if (stepKey === 'gates') return { gates: gates.value }
-  if (stepKey === 'tariff') return { preset: form.tariff.preset, items: form.tariff.items }
-  if (stepKey === 'areas') return { areas: form.areas }
   return {}
 }
 

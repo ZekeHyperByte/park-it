@@ -205,13 +205,6 @@ class CameraConfig(PeripheralConfig):
     camera_id: int | None = None
 
 
-class UhfReaderConfig(PeripheralConfig):
-    """UHF RFID reader for gate-out."""
-
-    host: str | None = None
-    port: int | None = None
-
-
 class OmnikeyReaderConfig(PeripheralConfig):
     """Omnikey 5427 CK HID keyboard reader at booth."""
 
@@ -244,7 +237,6 @@ class HardwareConfig(BaseModel):
     camera: CameraConfig = Field(default_factory=CameraConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
     led: PeripheralConfig = Field(default_factory=PeripheralConfig)
-    uhf_reader: UhfReaderConfig = Field(default_factory=UhfReaderConfig)
     omnikey_reader: OmnikeyReaderConfig = Field(default_factory=OmnikeyReaderConfig)
     receipt_printer: PrinterConfig = Field(default_factory=PrinterConfig)
 

@@ -42,6 +42,16 @@ export const useApi = () => {
 
     const response = await fetch(url, merged)
 
+    // Binary downloads (CSV/Excel/PDF exports) bypass JSON parsing.
+    if (options.responseType === 'blob') {
+      if (!response.ok) {
+        const error = new Error(`HTTP ${response.status}`)
+        error.status = response.status
+        throw error
+      }
+      return await response.blob()
+    }
+
     // Attempt to parse JSON regardless of status for structured errors
     let data = null
     const contentType = response.headers.get('content-type')

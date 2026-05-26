@@ -95,17 +95,17 @@ Open `http://<server-ip>` and log in as admin.
 
 | Gate | Direction | Controller Host | POS |
 |------|-----------|-----------------|-----|
-| Gate Masuk 1 (`GIN01`) | IN | `192.168.1.101` | — |
-| Gate Masuk 2 (`GIN02`) | IN | `192.168.1.102` | — |
-| Gate Keluar 1 (`GOUT01`) | OUT | `192.168.1.201` | Booth 1 |
-| Gate Keluar 2 (`GOUT02`) | OUT | `192.168.1.202` | Booth 2 |
+| Gate Masuk 1 (`GIN-01`) | IN | `192.168.1.101` | — |
+| Gate Masuk 2 (`GIN-02`) | IN | `192.168.1.102` | — |
+| Gate Keluar 1 (`GOUT-01`) | OUT | `192.168.1.201` | Booth 1 |
+| Gate Keluar 2 (`GOUT-02`) | OUT | `192.168.1.202` | Booth 2 |
 
 **POS tab:**
 
 | Booth | Code | IP Address | Default Gate |
 |-------|------|------------|--------------|
-| Booth 1 | `BOOTH_01` | `192.168.1.100` | `GOUT01` |
-| Booth 2 | `BOOTH_02` | `192.168.1.101` | `GOUT02` |
+| Booth 1 | `BOOTH_01` | `192.168.1.100` | `GOUT-01` |
+| Booth 2 | `BOOTH_02` | `192.168.1.101` | `GOUT-02` |
 
 ### 3. Start Gate Daemons (After Configuring Gates in Web UI)
 
@@ -139,19 +139,19 @@ When prompted:
 - Server IP: `192.168.1.100`
 - Booth name: `Booth 2`
 - Booth code: `BOOTH_02`
-- Default gate: `GOUT02`
+- Default gate: `GOUT-02`
 
 ### 5. Test End-to-End
 
 **On Server PC (Booth 1):**
 1. Double-click **Parking POS** shortcut
 2. Log in as operator
-3. Gate dropdown should auto-hide and show `GOUT01`
+3. Gate dropdown should auto-hide and show `GOUT-01`
 
 **On Booth PC 2:**
 1. Double-click **Parking POS** shortcut
 2. Log in as operator
-3. Gate dropdown should auto-hide and show `GOUT02`
+3. Gate dropdown should auto-hide and show `GOUT-02`
 
 **Test flows:**
 - Drive through Gate In 1 → ticket printed → drive to Gate Out 1 → pay cash → gate opens

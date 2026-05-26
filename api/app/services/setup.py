@@ -63,6 +63,40 @@ def read_setup_token() -> str | None:
     return token or None
 
 
+def read_enroll_token() -> str | None:
+    """Read installer-generated booth enrollment token from disk.
+
+    Same shape as read_setup_token but reusable: a single token enrolls every
+    booth brought online during the install window. Returns None if absent,
+    unreadable, empty, or older than SETUP_TOKEN_MAX_AGE_SECONDS (stale tokens
+    are unlinked so they don't linger). Not deleted on redeem.
+    """
+    path = Path(get_settings().enroll_token_path)
+    if not path.exists():
+        return None
+    try:
+        stat = path.stat()
+    except OSError as exc:
+        logger.warning("enroll_token_stat_failed", error=str(exc))
+        return None
+
+    age = time.time() - stat.st_mtime
+    if age > SETUP_TOKEN_MAX_AGE_SECONDS:
+        logger.warning("enroll_token_expired", age_seconds=int(age))
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return None
+
+    try:
+        token = path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        logger.warning("enroll_token_unreadable", error=str(exc))
+        return None
+    return token or None
+
+
 def delete_setup_token() -> None:
     """Delete the on-disk token after successful redeem."""
     path = Path(get_settings().setup_token_path)

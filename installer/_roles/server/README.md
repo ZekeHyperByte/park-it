@@ -95,7 +95,7 @@ Log in to the web UI at `http://<server-ip>`:
 | Field | Gate In 1 | Gate In 2 | Gate Out 1 | Gate Out 2 |
 |-------|-----------|-----------|------------|------------|
 | Name | Gate Masuk 1 | Gate Masuk 2 | Gate Keluar 1 | Gate Keluar 2 |
-| Code | `GIN01` | `GIN02` | `GOUT01` | `GOUT02` |
+| Code | `GIN-01` | `GIN-02` | `GOUT-01` | `GOUT-02` |
 | Direction | `IN` | `IN` | `OUT` | `OUT` |
 | Controller Host | `192.168.1.101` | `192.168.1.102` | `192.168.1.201` | `192.168.1.202` |
 | Controller Port | `5000` | `5000` | `5000` | `5000` |
@@ -108,7 +108,7 @@ Log in to the web UI at `http://<server-ip>`:
 | Name | Booth 1 | Booth 2 |
 | Code | `BOOTH_01` | `BOOTH_02` |
 | IP Address | `192.168.1.100` | `192.168.1.101` |
-| Gate Default | `GOUT01` | `GOUT02` |
+| Gate Default | `GOUT-01` | `GOUT-02` |
 
 6. Link gates to booths by editing each gate and setting its **POS** field.
 

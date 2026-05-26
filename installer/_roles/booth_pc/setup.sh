@@ -21,7 +21,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="/opt/parking-system-v2"
-REPO_URL="https://github.com/your-org/parking-system-v2.git"
+# Default to the origin of this checkout so the tech never types the URL.
+REPO_URL="$(git -C "$SCRIPT_DIR" remote get-url origin 2>/dev/null || echo "https://github.com/your-org/parking-system-v2.git")"
 
 # Colors
 RED='\033[0;31m'
@@ -172,14 +173,34 @@ phase_configure() {
         exit 1
     fi
 
-    # Must match the server's INTERNAL_API_KEY (server/.env). Without it the
-    # booth bridge gets 401 from the API.
-    read -rsp "Server INTERNAL_API_KEY (from server's .env): " INTERNAL_API_KEY
-    echo
-    if [[ -z "$INTERNAL_API_KEY" ]]; then
-        error "INTERNAL_API_KEY is required — copy it from the server's ${PROJECT_ROOT}/.env"
+    # Enroll over the network: the server prints an enrollment token at the end
+    # of its install. We redeem it for the INTERNAL_API_KEY + Redis address
+    # instead of hand-copying the key (typos there = silent 401 at runtime).
+    read -rp "Server enrollment token (printed by the server installer): " ENROLL_TOKEN
+    if [[ -z "$ENROLL_TOKEN" ]]; then
+        error "Enrollment token is required — get it from the server install summary or run scripts/regen-enroll-token.sh on the server."
         exit 1
     fi
+
+    ENROLL_URL="http://${SERVER_IP}:8000/api/setup/enroll"
+    info "Enrolling with ${ENROLL_URL} ..."
+    ENROLL_JSON=$(curl -fsS -X POST "$ENROLL_URL" \
+        -H "Content-Type: application/json" \
+        -d "{\"token\":\"${ENROLL_TOKEN}\"}" 2>/dev/null) || {
+        error "Enrollment failed — server unreachable or token invalid (HTTP error from ${ENROLL_URL})."
+        error "Check the server IP, that parking-api is up, and the token is current (24h)."
+        exit 1
+    }
+
+    # Parse the JSON response (no jq dependency).
+    INTERNAL_API_KEY=$(python3 -c 'import sys,json; print(json.load(sys.stdin)["internal_api_key"])' <<<"$ENROLL_JSON" 2>/dev/null || true)
+    REDIS_HOST_FROM_ENROLL=$(python3 -c 'import sys,json; print(json.load(sys.stdin).get("redis_host",""))' <<<"$ENROLL_JSON" 2>/dev/null || true)
+    API_BASE_URL=$(python3 -c 'import sys,json; print(json.load(sys.stdin).get("api_base_url",""))' <<<"$ENROLL_JSON" 2>/dev/null || true)
+    if [[ -z "$INTERNAL_API_KEY" ]]; then
+        error "Enrollment response had no internal_api_key. Raw response: ${ENROLL_JSON}"
+        exit 1
+    fi
+    ok "Enrolled — received API key + Redis address from server"
 
     read -rp "Booth name (e.g. Booth 2): " BOOTH_NAME
     BOOTH_NAME=${BOOTH_NAME:-Booth}
@@ -196,18 +217,45 @@ phase_configure() {
     read -rp "Default gate code for this booth (e.g. GOUT-02): " GATE_CODE
     GATE_CODE=${GATE_CODE:-}
 
-    read -rp "E-Money reader serial device [/dev/ttyUSB0]: " EMONEY_DEV
-    EMONEY_DEV=${EMONEY_DEV:-/dev/ttyUSB0}
+    # ── Stable serial device detection ────────────────────────────────────────
+    # Instead of guessing /dev/ttyUSB0/1/2 (which renumber on reboot/replug),
+    # run the detector: it shows each USB device by chipset, the tech confirms
+    # roles, and it writes /dev/parking-{emoney,printer,scanner,gate} symlinks
+    # pinned by serial#/USB-port. We then reference those stable names.
+    step "Configure 1b/4 — Serial Device Detection"
+    DETECT="$PROJECT_ROOT/scripts/detect-serial-devices.sh"
+    if [[ -x "$DETECT" ]] || [[ -f "$DETECT" ]]; then
+        bash "$DETECT" || warn "Detection exited non-zero — falling back to manual paths where symlinks are missing."
+    else
+        warn "detect-serial-devices.sh not found — using manual device paths."
+    fi
+
+    # resolve_dev <role> <prompt-label> <default-ttyUSB>
+    # Prefer the stable symlink the detector created; only ask if it's absent.
+    resolve_dev() {
+        local role="$1" label="$2" fallback="$3" link="/dev/parking-$1"
+        # Status lines go to stderr; only the resolved path goes to stdout so
+        # command substitution captures the path alone.
+        if [[ -e "$link" ]]; then
+            ok "${label}: ${link} (stable symlink)" >&2
+            printf '%s' "$link"
+            return
+        fi
+        warn "${label}: no ${link} symlink — enter the device path manually." >&2
+        local ans
+        read -rp "    ${label} serial device [${fallback}]: " ans </dev/tty
+        printf '%s' "${ans:-$fallback}"
+    }
+
+    EMONEY_DEV=$(resolve_dev emoney "E-Money reader" /dev/ttyUSB0)
     read -rp "E-Money reader baudrate [38400]: " EMONEY_BAUD
     EMONEY_BAUD=${EMONEY_BAUD:-38400}
 
-    read -rp "Receipt printer serial device [/dev/ttyUSB1]: " PRINTER_DEV
-    PRINTER_DEV=${PRINTER_DEV:-/dev/ttyUSB1}
+    PRINTER_DEV=$(resolve_dev printer "Receipt printer" /dev/ttyUSB1)
     read -rp "Receipt printer baudrate [9600]: " PRINTER_BAUD
     PRINTER_BAUD=${PRINTER_BAUD:-9600}
 
-    read -rp "Barcode scanner serial device [/dev/ttyUSB2]: " SCANNER_DEV
-    SCANNER_DEV=${SCANNER_DEV:-/dev/ttyUSB2}
+    SCANNER_DEV=$(resolve_dev scanner "Barcode scanner" /dev/ttyUSB2)
     read -rp "Barcode scanner baudrate [9600]: " SCANNER_BAUD
     SCANNER_BAUD=${SCANNER_BAUD:-9600}
 
@@ -218,7 +266,7 @@ phase_configure() {
     HAS_SERIAL_GATE=${HAS_SERIAL_GATE:-n}
 
     SERIAL_GATE_CODE=""
-    GATE_DEV="/dev/ttyUSB3"
+    GATE_DEV="/dev/parking-gate"
     GATE_BAUD=9600
     if [[ "$HAS_SERIAL_GATE" =~ ^[Yy]$ ]]; then
         read -rp "Gate code in DB (e.g. GOUT-02 — must match gate configured with protocol=serial): " SERIAL_GATE_CODE
@@ -226,8 +274,7 @@ phase_configure() {
             error "Gate code is required for RS232/USB gate"
             exit 1
         fi
-        read -rp "Barrier gate serial device [/dev/ttyUSB3]: " GATE_DEV_INPUT
-        GATE_DEV=${GATE_DEV_INPUT:-/dev/ttyUSB3}
+        GATE_DEV=$(resolve_dev gate "Barrier gate" /dev/ttyUSB3)
         read -rp "Barrier gate baudrate [9600]: " GATE_BAUD_INPUT
         GATE_BAUD=${GATE_BAUD_INPUT:-9600}
     fi
@@ -270,10 +317,12 @@ EOF
     ok "Booth config written to /etc/parking/booth.json"
 
     # booth_bridge gate_opener + omnikey_poller reach the server's Redis.
+    # Prefer the Redis address the server told us during enrollment.
+    REDIS_HOST_EFFECTIVE=${REDIS_HOST_FROM_ENROLL:-$SERVER_IP}
     ENV_FILE="$PROJECT_ROOT/.env"
     if [[ ! -f "$ENV_FILE" ]]; then
         cat > "$ENV_FILE" <<EOF
-REDIS_HOST=${SERVER_IP}
+REDIS_HOST=${REDIS_HOST_EFFECTIVE}
 REDIS_PORT=6379
 APP_ENV=production
 INTERNAL_API_KEY=${INTERNAL_API_KEY}
@@ -281,10 +330,13 @@ EOF
         chown parking:parking "$ENV_FILE"
     else
         grep -q "^REDIS_HOST=" "$ENV_FILE" \
-            && sed -i "s|^REDIS_HOST=.*|REDIS_HOST=${SERVER_IP}|" "$ENV_FILE" \
-            || echo "REDIS_HOST=${SERVER_IP}" >> "$ENV_FILE"
+            && sed -i "s|^REDIS_HOST=.*|REDIS_HOST=${REDIS_HOST_EFFECTIVE}|" "$ENV_FILE" \
+            || echo "REDIS_HOST=${REDIS_HOST_EFFECTIVE}" >> "$ENV_FILE"
+        grep -q "^INTERNAL_API_KEY=" "$ENV_FILE" \
+            && sed -i "s|^INTERNAL_API_KEY=.*|INTERNAL_API_KEY=${INTERNAL_API_KEY}|" "$ENV_FILE" \
+            || echo "INTERNAL_API_KEY=${INTERNAL_API_KEY}" >> "$ENV_FILE"
     fi
-    ok "REDIS_HOST set to ${SERVER_IP} in ${ENV_FILE}"
+    ok "REDIS_HOST set to ${REDIS_HOST_EFFECTIVE} in ${ENV_FILE}"
 
     NOTES_FILE="/etc/parking/install-notes.txt"
     cat > "$NOTES_FILE" <<EOF
@@ -424,7 +476,7 @@ EOF
     echo ""
     warn "Next steps:"
     echo "  1. Verify booth bridge: sudo journalctl -u $(basename "$SERVICE_FILE") -f"
-    echo "  2. Verify serial devices: ls -la /dev/ttyUSB*"
+    echo "  2. Verify serial devices: ls -la /dev/parking-*"
     if [[ "$HAS_SERIAL_GATE" =~ ^[Yy]$ && -n "$SERIAL_GATE_CODE" ]]; then
         echo "  3. Verify exit relay via booth-bridge: sudo journalctl -u $(basename "$SERVICE_FILE") -f"
         echo "     ↳ Gate must be configured in DB with protocol=serial, controller_device=${GATE_DEV}"
@@ -436,6 +488,13 @@ EOF
     echo "       Name: ${BOOTH_NAME} | Code: ${BOOTH_CODE} | IP: ${BOOTH_IP} | Default Gate: ${GATE_CODE}"
     echo "  5. Open Chrome shortcut — POS should auto-detect this booth"
     echo "  6. Test e-money reader tap and receipt printer"
+    echo ""
+
+    # ── Post-install diagnostic ────────────────────────────────────────────────
+    step "Post-install — parking-doctor (booth checks)"
+    info "Verifying serial symlinks + server reachability (non-fatal)..."
+    sudo -u parking "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/scripts/parking_doctor.py" --booth \
+        || warn "parking-doctor flagged issues above — fix before handing the booth over."
     echo ""
 }
 

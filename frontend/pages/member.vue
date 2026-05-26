@@ -1,18 +1,8 @@
 <template>
   <div>
-    <h1 class="text-xl font-semibold text-foreground">Member</h1>
-    <p class="mb-4 text-sm text-muted-foreground">Manajemen member RFID dan grup member.</p>
+    <PageHeader title="Member" subtitle="Manajemen member RFID dan grup member." />
 
-    <div class="mb-4 flex gap-1 border-b border-border">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        :class="['px-4 py-2 text-sm font-medium transition-colors -mb-px', activeTab === tab.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground']"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
+    <TabStrip v-model="activeTab" :tabs="tabs" />
 
     <CrudTab v-show="activeTab === 'members'" :page="memberPage" />
     <CrudTab v-show="activeTab === 'groups'" :page="groupPage" />

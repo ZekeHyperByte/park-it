@@ -76,9 +76,22 @@ def probe_tcp(host: str, port: int, timeout: float = 3.0) -> dict[str, Any]:
     except socket.gaierror as exc:
         return _result(False, error=f"dns lookup failed: {exc}")
     except socket.timeout:
-        return _result(False, error=f"connection timed out after {timeout:.1f}s")
+        return _result(
+            False,
+            error=(
+                f"connection timed out after {timeout:.1f}s — controller unreachable. "
+                "Check it is powered and cabled, and set to this static IP (not the "
+                "factory default). Two controllers sharing one IP also time out."
+            ),
+        )
     except ConnectionRefusedError:
-        return _result(False, error="connection refused (service not listening)")
+        return _result(
+            False,
+            error=(
+                "connection refused (service not listening) — wrong port, or another "
+                "device owns this IP. Verify the controller's IP/port on its label."
+            ),
+        )
     except OSError as exc:
         return _result(False, error=str(exc))
 
