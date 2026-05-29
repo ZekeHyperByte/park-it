@@ -15,7 +15,6 @@ class MemberBase(BaseModel):
     address: str | None = Field(None, max_length=255)
     plate_number: str | None = Field(None, max_length=20)
     vehicle_type_id: int | None = None
-    member_group_id: int | None = None
     is_active: bool = True
     valid_from: date | None = None
     valid_until: date | None = None
@@ -38,7 +37,6 @@ class MemberUpdate(BaseModel):
     address: str | None = Field(None, max_length=255)
     plate_number: str | None = Field(None, max_length=20)
     vehicle_type_id: int | None = None
-    member_group_id: int | None = None
     is_active: bool | None = None
     valid_from: date | None = None
     valid_until: date | None = None
@@ -52,7 +50,6 @@ class MemberResponse(MemberBase):
 
     id: int
     vehicle_type_name: str | None = None
-    member_group_name: str | None = None
     last_entry_at: str | None = None
 
     @classmethod
@@ -61,7 +58,6 @@ class MemberResponse(MemberBase):
             **{k: getattr(obj, k) for k in MemberBase.model_fields},
             "id": obj.id,
             "vehicle_type_name": obj.vehicle_type.name if obj.vehicle_type else None,
-            "member_group_name": obj.member_group.name if obj.member_group else None,
             "last_entry_at": obj.last_entry_at.isoformat() if obj.last_entry_at else None,
         }
         return cls(**data)

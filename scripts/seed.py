@@ -18,7 +18,6 @@ from sqlalchemy import select
 from api.app.models.area_parkir import AreaParkir
 from api.app.models.gate import Gate
 from api.app.models.member import Member
-from api.app.models.member_group import MemberGroup
 from api.app.models.shift import Shift
 from api.app.models.user import User
 from api.app.models.vehicle_type import VehicleType
@@ -141,17 +140,6 @@ async def seed() -> None:
         await session.flush()
         print(f"  Created shifts: Pagi, Sore, Malam")
 
-        # Member group
-        group_reguler = MemberGroup(
-            name="Reguler",
-            code="REG",
-            description="Member reguler bulanan",
-            is_active=True,
-        )
-        session.add(group_reguler)
-        await session.flush()
-        print(f"  Created member group: {group_reguler.name}")
-
         # Member
         member = Member(
             card_number="W12345678",
@@ -160,7 +148,6 @@ async def seed() -> None:
             email="budi@example.com",
             plate_number="B1234ABC",
             vehicle_type_id=motor.id,
-            member_group_id=group_reguler.id,
             is_active=True,
             valid_from=date.today() - timedelta(days=30),
             valid_until=date.today() + timedelta(days=335),

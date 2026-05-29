@@ -14,7 +14,6 @@ from api.app.models.gate import Gate
 from api.app.models.health_check import HealthCheck
 from api.app.models.manual_open_log import ManualOpenLog
 from api.app.models.member import Member
-from api.app.models.member_group import MemberGroup
 from api.app.models.member_renewal import MemberRenewal
 from api.app.models.operator_alert import OperatorAlert
 from api.app.models.parking_transaction import ParkingTransaction
@@ -43,7 +42,6 @@ __all__ = [
     "HealthCheck",
     "ManualOpenLog",
     "Member",
-    "MemberGroup",
     "MemberRenewal",
     "OperatorAlert",
     "ParkingTransaction",

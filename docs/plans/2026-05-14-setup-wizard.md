@@ -1,8 +1,34 @@
 # Setup Wizard & Dashboard UX Redesign
 
-> **Date:** 2026-05-14
-> **Status:** Design / Plan-only
+> **Date:** 2026-05-14 · **Updated:** 2026-05-28
+> **Status:** Implemented (P1–P3). P4 dashboard redesign deferred.
 > **Goal:** Field technician installs E-Parking v2 in under 30 minutes with zero terminal use after `sudo ./setup.sh` completes.
+
+---
+
+## 0. As-Built Notes (2026-05-28)
+
+The wizard shipped. The design below is preserved as the original intent; these
+points record where the implementation diverged:
+
+1. **Wizard is 6 steps, not 8.** Order: `welcome → admin → config → topology →
+   gates → finalize` (`frontend/pages/setup.vue`). Site Info + Tariffs + Areas
+   were merged into a single **config** step. Go-Live = **finalize**.
+2. **No Booth-PC step.** Booth devices (e-money reader, receipt printer, scanner)
+   are configured in `booth.json` on the booth PC by its own installer, not in
+   the wizard. Booths join the server via the **enrollment token** flow
+   (`POST /api/setup/enroll`), not a wizard screen.
+3. **Per-gate peripherals trimmed to `rfid` + `camera`.** The design's
+   printer/emoney/uhf rows were set-but-never-read, so they were dropped. rfid is
+   read by `gate_in`; camera by the Gate model.
+4. **Two install tokens, not one.** Besides the one-time `setup-token`, the
+   server installer mints a reusable (24h) `enroll-token` so every booth brought
+   online can fetch `INTERNAL_API_KEY` + Redis address without hand-copying.
+5. **Gate codes** are `GIN-NN` / `GOUT-NN` (e.g. `GIN-01`), not the
+   `GATE-IN-01` / `GATE-OUT-01` shown in mockups.
+6. **Extra endpoints** beyond the Section 6 table: `POST /api/setup/enroll`,
+   `POST /api/setup/logout`, `GET /api/setup/session`, `POST /api/setup/test-gate`
+   (end-to-end open/close ACK test).
 
 ---
 
@@ -38,27 +64,34 @@ Current setup pain points:
 ## 4. Install Flow (Hybrid)
 
 ```
-[1] Tech runs: sudo bash installer/server/setup.sh
-    Shell does: deps + DB + Redis + nginx + systemd units (disabled) +
-                sudoers drop + setup token generation
+[1] Tech runs: sudo ./installer/setup.sh   (dispatcher → _roles/<role>/setup.sh)
+    Server role does: deps + DB + Redis + nginx + systemd units (started) +
+                sudoers drop + setup-token + enroll-token generation
     Shell ends with: "Open http://<ip>/setup?token=<X> to finish configuration"
-    Auto-launches Chrome at /setup?token=<X> if DISPLAY is set.
+    Auto-launches browser at /setup?token=<X> if DISPLAY/WAYLAND_DISPLAY set.
+    Runs scripts/parking_doctor.py as a final diagnostic.
 
 [2] Browser → /setup
     Wizard redeems token, runs, writes config to DB via API.
 
-[3] Wizard final step: "Enable Gates" → API calls enable-gate-daemons.sh
-    via sudoers rule.
+[3] Wizard finalize step: "Aktifkan Gate & Selesai" → API calls
+    enable-gate-daemons.sh --run --json [--include-local-serial] via sudoers.
 
-[4] Wizard sets setup_complete=true. /setup remains available to admin
-    role for re-run (no auto-redirect).
+[4] Wizard sets setup_complete=true, deletes session + token + cookie,
+    redirects to /. /setup remains reachable via /setup?force=1 for admins
+    (no auto-redirect).
 ```
 
 DB additions: row in `settings` table — `key=setup_complete, value=false`. Middleware: if `setup_complete=false` and route is not `/setup` or `/api/setup/*`, redirect to `/setup`.
 
 ---
 
-## 5. Wizard — 8 Steps
+## 5. Wizard — Steps
+
+> **As-built:** shipped as 6 steps (`welcome, admin, config, topology, gates,
+> finalize`). The 8-step breakdown below is the original design — Site/Tariff/
+> Areas were merged into one **config** step and the Booth-PC step was dropped
+> (see Section 0). Step bodies remain accurate per-screen.
 
 ### Step 0 — Token redeem + Welcome
 
@@ -305,15 +338,20 @@ New router `api/app/routes/setup.py`:
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| GET | `/api/setup/state` | Public (during setup) | Returns `{setup_complete, current_step, topology}` |
+| GET | `/api/setup/state` | Public | Returns `{setup_complete, current_step, topology, has_admin, has_session}` |
 | POST | `/api/setup/redeem-token` | Token in body | Validates `/etc/parking/setup-token`, issues setup session cookie |
-| POST | `/api/setup/create-admin` | Setup session | Creates first admin user |
+| POST | `/api/setup/enroll` | Enroll token in body | Hands a booth PC `INTERNAL_API_KEY` + Redis address (reusable 24h) |
+| POST | `/api/setup/logout` | Public | Clears setup session cookie |
+| POST | `/api/setup/create-admin` | Setup session | Creates first admin user, issues real JWT cookies |
 | GET | `/api/setup/preflight` | Admin or setup | Runs preflight_check.py logic, returns list |
+| POST | `/api/setup/state` | Setup session | Persists a step's data for resume |
+| GET | `/api/setup/session` | Setup session | Returns `{current_step, data}` for resume |
 | POST | `/api/setup/detect-serial` | Admin or setup | Runs detect-serial-devices.sh in JSON mode |
 | POST | `/api/setup/test-device` | Admin or setup | Probes serial/TCP/ping device, returns latency |
+| POST | `/api/setup/test-gate` | Admin or setup | End-to-end open/close test, waits for daemon ACK |
 | POST | `/api/setup/write-udev` | Admin or setup | Writes udev symlink rule atomically |
-| POST | `/api/setup/topology` | Admin or setup | Bulk-creates gates from preset |
-| POST | `/api/setup/finalize` | Admin or setup | Enables daemons, flips setup_complete flag |
+| POST | `/api/setup/topology` | Admin or setup | Bulk-creates `GIN-NN`/`GOUT-NN` gates from preset |
+| POST | `/api/setup/finalize` | Admin or setup | Enables daemons, flips setup_complete, deletes session/token |
 
 Existing CRUD routes (`/api/gates`, `/api/printers`, `/api/emoney-readers`, etc.) reused for per-record saves during the wizard.
 

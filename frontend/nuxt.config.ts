@@ -17,8 +17,9 @@ export default defineNuxtConfig({
     },
   },
 
-  // CSS — Tailwind v4
+  // CSS — self-hosted fonts (offline-safe) + Tailwind v4
   css: [
+    '~/assets/css/fonts.css',
     '~/assets/css/tailwind.css',
   ],
 
@@ -49,6 +50,10 @@ export default defineNuxtConfig({
   // Nitro / server
   nitro: {
     preset: 'node-server',
+    // Pre-compress static assets at build time (gzip + brotli). Nitro serves the
+    // precompressed variant when the client sends Accept-Encoding. Pure transfer
+    // win — no runtime/behavior change. Harmless if nginx already compresses.
+    compressPublicAssets: { gzip: true, brotli: true },
   },
 
   // App
@@ -61,9 +66,8 @@ export default defineNuxtConfig({
       ],
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
-        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Caveat:wght@500;600;700&family=Patrick+Hand&family=Kalam:wght@400;700&display=swap' },
+        // Fonts are self-hosted via @fontsource (see assets/css/fonts.css) —
+        // no external CDN so the app renders fully offline / on isolated LAN.
       ],
     },
   },

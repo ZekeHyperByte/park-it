@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.main import app
 from api.app.models.member import Member
-from api.app.models.member_group import MemberGroup
 from api.app.models.vehicle_type import VehicleType
 from api.database import get_db
 
@@ -44,19 +43,9 @@ async def sample_vehicle_type(db_session: AsyncSession) -> VehicleType:
 
 
 @pytest_asyncio.fixture
-async def sample_member_group(db_session: AsyncSession) -> MemberGroup:
-    group = MemberGroup(name="Regular", code="REG")
-    db_session.add(group)
-    await db_session.commit()
-    await db_session.refresh(group)
-    return group
-
-
-@pytest_asyncio.fixture
 async def sample_member(
     db_session: AsyncSession,
     sample_vehicle_type: VehicleType,
-    sample_member_group: MemberGroup,
 ) -> Member:
     member = Member(
         card_number="1234567890",
@@ -64,7 +53,6 @@ async def sample_member(
         phone="08123456789",
         plate_number="B1234ABC",
         vehicle_type_id=sample_vehicle_type.id,
-        member_group_id=sample_member_group.id,
         valid_from=date(2026, 1, 1),
         valid_until=date(2026, 12, 31),
     )
@@ -105,7 +93,6 @@ class TestCreateMember:
         self,
         client: AsyncClient,
         sample_vehicle_type: VehicleType,
-        sample_member_group: MemberGroup,
     ):
         response = await client.post("/api/members", json={
             "card_number": "0987654321",
@@ -113,7 +100,6 @@ class TestCreateMember:
             "phone": "08987654321",
             "plate_number": "B5678DEF",
             "vehicle_type_id": sample_vehicle_type.id,
-            "member_group_id": sample_member_group.id,
             "valid_from": "2026-01-01",
             "valid_until": "2026-12-31",
         })
@@ -122,7 +108,6 @@ class TestCreateMember:
         assert data["name"] == "Jane Doe"
         assert data["card_number"] == "0987654321"
         assert data["vehicle_type_name"] == "Motor"
-        assert data["member_group_name"] == "Regular"
 
     async def test_create_validation_error(self, client: AsyncClient):
         response = await client.post("/api/members", json={"name": ""})

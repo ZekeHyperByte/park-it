@@ -30,9 +30,6 @@ class Member(Base, IntPKMixin, TimestampMixin):
     )
 
     # Membership
-    member_group_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("member_groups.id"), nullable=True
-    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     valid_from: Mapped[date | None] = mapped_column(Date, nullable=True)
     valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -46,9 +43,6 @@ class Member(Base, IntPKMixin, TimestampMixin):
     # Relationships
     vehicle_type: Mapped["VehicleType | None"] = relationship(
         "VehicleType", lazy="selectin"
-    )
-    member_group: Mapped["MemberGroup | None"] = relationship(
-        "MemberGroup", lazy="selectin"
     )
 
     def __repr__(self) -> str:

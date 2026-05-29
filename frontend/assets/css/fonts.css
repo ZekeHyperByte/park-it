@@ -1,0 +1,28 @@
+/*
+ * Self-hosted fonts (latin subset only) — bundled via @fontsource.
+ * Replaces the render-blocking Google Fonts CDN <link> so the app loads
+ * fully on offline / LAN-only booth PCs. Each import ships font-display: swap.
+ * Weights are subset to what the UI actually uses (see audit in commit msg).
+ */
+
+/* Inter — body/sans. font-light(300) font-normal(400) font-medium(500)
+   font-semibold(600) font-bold(700) font-black(900). 800 unused -> omitted. */
+@import '@fontsource/inter/latin-300.css';
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-500.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource/inter/latin-700.css';
+@import '@fontsource/inter/latin-900.css';
+
+/* JetBrains Mono — font-mono */
+@import '@fontsource/jetbrains-mono/latin-400.css';
+@import '@fontsource/jetbrains-mono/latin-500.css';
+@import '@fontsource/jetbrains-mono/latin-600.css';
+
+/* Sketch theme (POS dialogs): Caveat / Patrick Hand / Kalam */
+@import '@fontsource/caveat/latin-500.css';
+@import '@fontsource/caveat/latin-600.css';
+@import '@fontsource/caveat/latin-700.css';
+@import '@fontsource/patrick-hand/latin-400.css';
+@import '@fontsource/kalam/latin-400.css';
+@import '@fontsource/kalam/latin-700.css';

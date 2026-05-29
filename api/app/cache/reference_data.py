@@ -11,7 +11,6 @@ CACHE_KEYS = {
     "vehicle_types": "cache:vehicle_types",
     "members": "cache:members",
     "settings": "cache:settings",
-    "member_groups": "cache:member_groups",
     "shifts": "cache:shifts",
     "areas": "cache:areas",
     "emoney_readers": "cache:emoney_readers",
@@ -70,15 +69,6 @@ async def get_cached_settings() -> list[dict] | None:
 
 async def invalidate_settings() -> None:
     await _invalidate(CACHE_KEYS["settings"])
-
-
-# Member Groups
-async def get_cached_member_groups() -> list[dict] | None:
-    return await _get_cached(CACHE_KEYS["member_groups"])
-
-
-async def invalidate_member_groups() -> None:
-    await _invalidate(CACHE_KEYS["member_groups"])
 
 
 # Shifts

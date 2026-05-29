@@ -94,7 +94,6 @@ def create_app() -> FastAPI:
         gates_unified,
         health,
         manual_open_logs,
-        member_groups,
         members,
         payments,
         pos,
@@ -129,7 +128,6 @@ def create_app() -> FastAPI:
     app.include_router(areas.router, prefix="/api")
     app.include_router(emoney_readers.router, prefix="/api")
     app.include_router(members.router, prefix="/api")
-    app.include_router(member_groups.router, prefix="/api")
     app.include_router(transactions.router, prefix="/api")
     app.include_router(manual_open_logs.router, prefix="/api")
     app.include_router(abandoned_vehicles.router, prefix="/api")
