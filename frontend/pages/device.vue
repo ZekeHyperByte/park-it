@@ -2,22 +2,8 @@
   <div>
     <PageHeader
       title="Perangkat"
-      subtitle="Ubah atau tambah gate, booth POS, kamera, printer, e-money reader satuan. Untuk konfigurasi awal, gunakan Setup Wizard."
-    >
-      <template #action>
-        <NuxtLink
-          v-if="authStore.isAdmin"
-          to="/setup?force=1"
-          class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
-        >
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-          Jalankan Setup Wizard
-        </NuxtLink>
-      </template>
-    </PageHeader>
+      subtitle="Ubah atau tambah gate, booth POS, kamera, printer, e-money reader satuan. Untuk perangkat serial baru, gunakan tab Alat Serial."
+    />
 
     <TabStrip v-model="activeTab" :tabs="tabs" />
 
@@ -87,6 +73,13 @@
           >
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 9.9-1" /></svg>
           </button>
+          <button
+            class="rounded p-1.5 text-muted-foreground transition-colors hover:bg-warning/10 hover:text-warning"
+            title="Uji buka/tutup (end-to-end)"
+            @click="openGateTest(row)"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
+          </button>
         </template>
       </DataTable>
     </div>
@@ -111,6 +104,65 @@
       <DataTable :data="emoneyReaders" :columns="emoneyReaderColumns" :loading="loadingEmoneyReaders" @add="openEmoneyReaderModal()" @edit="openEmoneyReaderModal" @delete="confirmDeleteEmoneyReader" />
     </div>
 
+    <!-- Serial Tools: detect ports + pin a stable /dev/parking-<role> udev symlink. -->
+    <!-- Closes the post-setup gap where remapping a swapped USB device was wizard-only. -->
+    <div v-if="activeTab === 'serial-tools'" class="max-w-2xl space-y-5">
+      <div class="space-y-4 rounded-lg border border-border bg-surface p-5">
+        <div class="space-y-1">
+          <h3 class="text-sm font-semibold text-foreground">Deteksi &amp; Pasang Perangkat Serial</h3>
+          <p class="text-xs text-muted-foreground">
+            Gunakan saat mengganti atau memasang ulang perangkat USB/serial. Pilih peran, deteksi port, uji,
+            lalu pasang sebagai <span class="font-mono">/dev/parking-&lt;peran&gt;</span> agar nama perangkat tetap walau dicabut-pasang.
+            Setelah terpasang, salin path tersebut ke field <em>Device</em> pada gate/printer/e-money terkait.
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-foreground">Peran perangkat</label>
+          <select
+            v-model="serialRole"
+            class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm sm:w-72"
+          >
+            <option v-for="r in serialRoles" :key="r.value" :value="r.value">{{ r.label }}</option>
+          </select>
+        </div>
+
+        <DeviceProbeRow
+          :key="serialRole"
+          type="serial"
+          :role="serialRole"
+          :device="serialDevice"
+          :baudrate="serialBaudrate"
+          @update:device="(v) => (serialDevice = v)"
+          @update:baudrate="(v) => (serialBaudrate = v)"
+          @write-udev="onUdevWritten"
+        />
+
+        <p v-if="lastSymlink" class="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">
+          Terpasang: <span class="font-mono">{{ lastSymlink }}</span> — salin path ini ke field Device perangkat terkait.
+        </p>
+      </div>
+    </div>
+
+    <!-- End-to-end gate open/close test (software → daemon → controller ACK). -->
+    <Dialog :open="gateTestVisible" @update:open="(v) => { if (!v) gateTestVisible = false }">
+      <DialogContent class="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Uji buka/tutup — {{ gateTestTarget?.name }}</DialogTitle>
+        </DialogHeader>
+        <p class="text-xs text-muted-foreground">
+          Perintah buka dikirim ke daemon via Redis lalu menunggu ACK dari controller.
+          Konfirmasi seluruh jalur software → hardware bekerja.
+        </p>
+        <GateTestButton
+          v-if="gateTestTarget"
+          :key="gateTestTarget.id"
+          :gate-id="gateTestTarget.id"
+          :gate-code="gateTestTarget.code"
+        />
+      </DialogContent>
+    </Dialog>
+
     <!-- Modals (keep Element Plus based CrudModal) -->
     <CrudModal v-model="gateModalVisible" :title="gateEditing ? 'Edit Gate' : 'Tambah Gate'" :fields="gateFields" :initial-data="gateForm" :submitting="submitting" @submit="saveGate" />
     <CrudModal v-model="posModalVisible" :title="posEditing ? 'Edit Booth POS' : 'Tambah Booth POS'" :fields="posFields" :initial-data="posForm" :submitting="submitting" @submit="savePos" />
@@ -124,6 +176,9 @@
 <script setup>
 import GateStatusCard from '~/components/dashboard/GateStatusCard.vue'
 import StatusPill from '~/components/setup/StatusPill.vue'
+import DeviceProbeRow from '~/components/setup/DeviceProbeRow.vue'
+import GateTestButton from '~/components/setup/GateTestButton.vue'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '~/components/ui/dialog'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -141,12 +196,33 @@ const tabs = [
   { key: 'cameras', label: 'Kamera' },
   { key: 'printers', label: 'Printer' },
   { key: 'emoney-readers', label: 'E-Money Reader' },
+  { key: 'serial-tools', label: 'Alat Serial' },
 ]
 
 const activeTab = ref('overview')
 const submitting = ref(false)
 const testingGateId = ref(null)
-const authStore = useAuthStore()
+
+// Serial Tools: detect ports + pin a stable /dev/parking-<role> symlink. Roles
+// match scripts/detect-serial-devices.sh (ROLE_NAMES).
+const serialRoles = [
+  { value: 'gate', label: 'Controller Gate (RS232/USB)' },
+  { value: 'rfid', label: 'RFID Reader' },
+  { value: 'emoney', label: 'E-Money Reader (PASSTI)' },
+  { value: 'printer', label: 'Printer Struk Termal' },
+  { value: 'scanner', label: 'Barcode Scanner' },
+]
+const serialRole = ref('gate')
+const serialDevice = ref('')
+const serialBaudrate = ref(9600)
+const lastSymlink = ref('')
+function onUdevWritten(symlink) { lastSymlink.value = symlink }
+watch(serialRole, () => { lastSymlink.value = ''; serialDevice.value = ''; serialBaudrate.value = 9600 })
+
+// End-to-end gate open/close test (distinct from the connection probe in testGate).
+const gateTestVisible = ref(false)
+const gateTestTarget = ref(null)
+function openGateTest(gate) { gateTestTarget.value = gate; gateTestVisible.value = true }
 
 async function testGate(gate) {
   testingGateId.value = gate.id

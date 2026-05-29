@@ -507,6 +507,7 @@ const state = reactive({
   topology: 'unknown',
   setup_complete: false,
   has_admin: false,
+  has_session: false,
 })
 
 const sessionActive = ref(false)
@@ -637,6 +638,7 @@ async function refreshState() {
     state.topology = s.topology
     state.setup_complete = s.setup_complete
     state.has_admin = s.has_admin
+    state.has_session = s.has_session
     sessionActive.value = s.has_session || (!!authStore.user && authStore.user.role === 'admin')
   } catch (err) {
     console.warn('setup_state_failed', err)
@@ -968,7 +970,12 @@ watch(
 
 onMounted(async () => {
   await refreshState()
-  if (state.setup_complete && route.query.force !== '1' && (!authStore.user || authStore.user.role !== 'admin')) {
+  // Post-setup the wizard is locked. Steady-state config lives in Device + Settings.
+  // The ONLY re-entry is an installer action: regen-setup-token.sh (or field-reconfig.sh)
+  // mints a fresh disk token, opened as /setup?token=…, which TokenGate redeems into a
+  // session. No live session AND no token presented ⇒ bounce. Admins cannot re-run the
+  // wizard merely by navigating here — they must hold the disk token.
+  if (state.setup_complete && !state.has_session && !route.query.token) {
     router.replace('/')
     return
   }

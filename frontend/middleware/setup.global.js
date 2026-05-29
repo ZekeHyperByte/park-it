@@ -2,8 +2,9 @@
  * Setup-complete middleware (global).
  *
  * Until the setup wizard has run, every route except /setup* redirects to /setup.
- * Once `setup_complete=true`, the wizard remains reachable via
- * `/setup?force=1` for admins but no longer auto-redirects.
+ * Once `setup_complete=true`, the wizard is locked: visiting /setup self-redirects
+ * to / (see setup.vue onMounted). Steady-state config lives in Device + Settings;
+ * re-provisioning is an installer action (re-run setup.sh, which resets the flag).
  */
 
 let cachedComplete = null
