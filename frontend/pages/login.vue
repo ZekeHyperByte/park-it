@@ -12,10 +12,7 @@
       <!-- Header -->
       <div class="mb-8 text-center">
         <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-primary/30 bg-primary/10 text-primary">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <rect x="3" y="3" width="18" height="18" rx="4" />
-            <path d="M8 12h8M12 8v8" />
-          </svg>
+          <BrandIcon class="h-7 w-7" />
         </div>
         <h1 class="text-2xl font-bold text-foreground">E-Parking v2</h1>
         <p class="text-sm text-muted-foreground">Sistem Manajemen Parkir</p>

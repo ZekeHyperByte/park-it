@@ -6,10 +6,7 @@
         <header class="flex h-14 items-center justify-between border-b border-border px-6">
           <div class="flex items-center gap-3">
             <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="4" />
-                <path d="M8 12h8M12 8v8" />
-              </svg>
+              <BrandIcon class="h-5 w-5" />
             </div>
             <div>
               <h1 class="text-sm font-semibold text-foreground">E-Parking Setup</h1>

@@ -12,8 +12,8 @@
     "hash": "898960b393d648d5d440e7e24c8b531e"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/main.py": {
-    "mtime": 1779480840.254445,
-    "hash": "f7d85af57a72c2a986d32ac587ab32d5"
+    "mtime": 1780091179.1927629,
+    "hash": "c532ba044939d74a1ffa99e354092450"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/health.py": {
     "mtime": 1777173276.2182372,
@@ -39,14 +39,6 @@
     "mtime": 1777137907.1214871,
     "hash": "8e282f0c7e0539255eba45a971a8f96e"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/member_groups.py": {
-    "mtime": 1777137924.61062,
-    "hash": "ffea6ca2683f45e495cb253de7bf1d53"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/reports.py": {
-    "mtime": 1777222729.605145,
-    "hash": "8b5d2c876ab2056977a6630fd885c4fb"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/audit_logs.py": {
     "mtime": 1777175489.3768113,
     "hash": "4535d6ae5fd3f98215b8c439cc143104"
@@ -58,10 +50,6 @@
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/auth.py": {
     "mtime": 1778225501.762711,
     "hash": "02fa243e75f8e9b39b3361500022c603"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/transactions.py": {
-    "mtime": 1778226132.6819444,
-    "hash": "57105a0794a300e582abbf1eea30d638"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/snapshots.py": {
     "mtime": 1778331166.0297263,
@@ -91,14 +79,6 @@
     "mtime": 1779285075.8543534,
     "hash": "3031e7ee6b1165eb8d19b0248b54b50c"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/setup.py": {
-    "mtime": 1779286116.1445222,
-    "hash": "90019506ebae004913e75ee9c242253e"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/gates_unified.py": {
-    "mtime": 1779312906.486866,
-    "hash": "97f19c5e27d88f1c85d4e91831f1fd16"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/settings.py": {
     "mtime": 1779312919.1919851,
     "hash": "e675c0d0f47c4ce9dda62977e670247a"
@@ -106,14 +86,6 @@
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/vehicle_types.py": {
     "mtime": 1779312929.8280842,
     "hash": "a2985fc23fb3bc4ea31a946dde3d0b11"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/pos.py": {
-    "mtime": 1779312949.1732643,
-    "hash": "1ed665ca456b368d8ce1e41ef4b2b330"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/payments.py": {
-    "mtime": 1779436321.7127495,
-    "hash": "d68f8e28668e8a190a5063cb4018d85d"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/shift_assignments.py": {
     "mtime": 1779480801.38798,
@@ -126,6 +98,30 @@
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/users.py": {
     "mtime": 1779481236.6619682,
     "hash": "7233d188c8d42445ba7448acf460f0b7"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/payments.py": {
+    "mtime": 1779557660.3709917,
+    "hash": "e111172aed15b4839eb4d5ccee81e01a"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/setup.py": {
+    "mtime": 1779739078.8169239,
+    "hash": "57f3a5220721d53f17d9d33b97f1f29e"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/pos.py": {
+    "mtime": 1780043462.316383,
+    "hash": "c3300243523dba721316e47000f776a6"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/gates_unified.py": {
+    "mtime": 1780088063.3417726,
+    "hash": "52ddc143c569e65dec7da4806892eb81"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/transactions.py": {
+    "mtime": 1780089687.8277516,
+    "hash": "a9be2d9d369b5ee1b73cfe8ee0e18f69"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/routes/reports.py": {
+    "mtime": 1780090211.748981,
+    "hash": "95f6ff1995bc2986a5674a3e87b51854"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/services/__init__.py": {
     "mtime": 1777105205.7696347,
@@ -155,22 +151,6 @@
     "mtime": 1777222736.0253165,
     "hash": "05bf3d88245fae4cb17cd288f66ee8b9"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/services/event_consumer.py": {
-    "mtime": 1779302856.796036,
-    "hash": "fb33bbfa215373bc38bca60fe7dbb2ab"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/services/setup.py": {
-    "mtime": 1779285075.8553534,
-    "hash": "cba8f7328439713bd800606eda3c9db4"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/services/payment.py": {
-    "mtime": 1779436176.168808,
-    "hash": "767cf5cf662dd54e06fdaf62f29e932b"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/services/transaction.py": {
-    "mtime": 1779436182.65385,
-    "hash": "cadd98cff31f15c9d20cb4f0a390ac24"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/services/rate_limit_booth.py": {
     "mtime": 1779436298.5636003,
     "hash": "a255cb88e38a8793af39f753f7efcc87"
@@ -179,6 +159,26 @@
     "mtime": 1779480785.1837845,
     "hash": "6a29a03017c995151a167e0ed5536589"
   },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/services/transaction.py": {
+    "mtime": 1779525440.1385186,
+    "hash": "091dee81c86ce5febe26f5102c57b430"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/services/payment.py": {
+    "mtime": 1779562764.3008254,
+    "hash": "dec84ee0561ed7cd49c95f65a2fe143a"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/services/event_consumer_main.py": {
+    "mtime": 1779719722.236115,
+    "hash": "352424ef39f3b13525661821cc615e4c"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/services/event_consumer.py": {
+    "mtime": 1779732894.1632285,
+    "hash": "ffaaed6740176b9b8e3030bd2b4e6601"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/services/setup.py": {
+    "mtime": 1779739051.724278,
+    "hash": "4aa8ea62f8f408282e2c03250e5f5f16"
+  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/models/base.py": {
     "mtime": 1777097397.7378871,
     "hash": "471f3c59d8a6063a97e017086a5b1f84"
@@ -186,14 +186,6 @@
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/models/shift.py": {
     "mtime": 1777097424.157102,
     "hash": "5dc4714603ec9c6a278a8fdf1e784466"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/models/member_group.py": {
-    "mtime": 1777097427.9411323,
-    "hash": "18dbb3ef6f41e0c0791f5b44b4f05649"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/models/member.py": {
-    "mtime": 1777097442.2272449,
-    "hash": "8aef75278494ae9adb22329ca38880ba"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/models/member_renewal.py": {
     "mtime": 1777097449.1402988,
@@ -263,10 +255,6 @@
     "mtime": 1779302856.797036,
     "hash": "397d056428b016473c7993305a1ab9f2"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/models/pos.py": {
-    "mtime": 1779302856.7910361,
-    "hash": "14a597863f4b455bd61b8b4dc1b25c3b"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/models/printer.py": {
     "mtime": 1779302856.801036,
     "hash": "a695d7729bf7a20aa8cd72edc2741db0"
@@ -299,9 +287,17 @@
     "mtime": 1779480410.679936,
     "hash": "680d04652378eac68d9a9caeedf13d42"
   },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/models/pos.py": {
+    "mtime": 1780043462.316383,
+    "hash": "52fd033658db312ff9d7dfbfeff90302"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/models/member.py": {
+    "mtime": 1780091159.511575,
+    "hash": "7043df0eb16109ce99ae0946063889f1"
+  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/models/__init__.py": {
-    "mtime": 1779480423.9291213,
-    "hash": "c20f6588e92379709e43b40b5cbcd17c"
+    "mtime": 1780091165.1096284,
+    "hash": "8c0350a910f77e8e89a7f21617ab40ee"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/__init__.py": {
     "mtime": 1777105205.7656348,
@@ -331,14 +327,6 @@
     "mtime": 1777137763.0153933,
     "hash": "420002564be9d6da926175f4bdfc1d04"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/member.py": {
-    "mtime": 1777137887.1343355,
-    "hash": "6bfd01c8ac594f76d6ca1b546097378a"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/member_group.py": {
-    "mtime": 1777137892.0383728,
-    "hash": "ffef53c1b05a17cb872a4f1d326e136b"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/transaction.py": {
     "mtime": 1777138011.7582815,
     "hash": "3c113989dc19cc1c3699004d5b97bf30"
@@ -359,10 +347,6 @@
     "mtime": 1777222418.131568,
     "hash": "19de59bdb4f1393a29ffcc8129719a4b"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/pos.py": {
-    "mtime": 1777271438.2838821,
-    "hash": "a2a3834c4c6c115f51325ab2b8506661"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/camera.py": {
     "mtime": 1777242468.4280152,
     "hash": "ce123937884fe296ac2a19ca739edd50"
@@ -375,21 +359,9 @@
     "mtime": 1779285075.8543534,
     "hash": "dc233be11c7bcfec00c474e2e8db19c8"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/payment.py": {
-    "mtime": 1779285075.8543534,
-    "hash": "f1f0389a1dfefa2ad3fedffa8f17f92f"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/settlement.py": {
     "mtime": 1779302856.790036,
     "hash": "fcb66aa514d44a7761df77db85659473"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/setup.py": {
-    "mtime": 1779286077.8751006,
-    "hash": "35d94cc3a2ad008db4bf0f1dd519554e"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/gate.py": {
-    "mtime": 1779346774.6956933,
-    "hash": "61fc5b28ed33154f1aa311e4cb9f9e9a"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/shift_assignment.py": {
     "mtime": 1779480741.8132567,
@@ -402,6 +374,26 @@
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/user.py": {
     "mtime": 1779481898.4400492,
     "hash": "7991a4aaada3b74dfbb1ee394323ce21"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/payment.py": {
+    "mtime": 1779557591.3348587,
+    "hash": "bff32c2e7361d0f5a2a87b464ad80244"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/gate.py": {
+    "mtime": 1779749192.179264,
+    "hash": "a01e7ee80d22f2daa64af8420ada1c0d"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/setup.py": {
+    "mtime": 1779749219.6854694,
+    "hash": "74939d164c843556aa976e9c8d82987c"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/pos.py": {
+    "mtime": 1780043462.316383,
+    "hash": "7b69a9fb4ca15abcda7dfb6bae9eceec"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/schemas/member.py": {
+    "mtime": 1780091173.6687102,
+    "hash": "291ef6b2486f51d68a2391b0ae6c20c3"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/websocket/__init__.py": {
     "mtime": 1777105205.773635,
@@ -444,8 +436,8 @@
     "hash": "c424c8cc292c91fb15bc5e092f7f2d31"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/cache/reference_data.py": {
-    "mtime": 1779302856.792036,
-    "hash": "a35cded5a5f8415548015cec780e372d"
+    "mtime": 1780091186.0968287,
+    "hash": "fa08aa56ef22964ece3b8ae4883ed0a7"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/app/utils/__init__.py": {
     "mtime": 1777105205.7616348,
@@ -523,13 +515,17 @@
     "mtime": 1779480441.5873663,
     "hash": "669c03cc5274fa3fdae1a34d43ac19ec"
   },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/alembic/versions/c4d5e6f7a8b9_add_pos_heartbeat_fields.py": {
+    "mtime": 1780043280.2444854,
+    "hash": "365dd13b3bdcd6f8a58e5ae7c0fb9890"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/alembic/versions/g1h2i3j4k5l6_drop_member_groups.py": {
+    "mtime": 1780091235.9203033,
+    "hash": "f7423d6b9aa5af7cc7cda7a19c78e6dc"
+  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/__init__.py": {
     "mtime": 1777105205.7506347,
     "hash": "d41d8cd98f00b204e9800998ecf8427e"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_integration_redis_streams.py": {
-    "mtime": 1777144345.530255,
-    "hash": "abe213f22c21a87a2cb6ece969aa9c83"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_settlement_routes.py": {
     "mtime": 1777167624.6327155,
@@ -583,10 +579,6 @@
     "mtime": 1779302856.796036,
     "hash": "27f43261878dd6a942ed4d034e5df05c"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_event_consumer.py": {
-    "mtime": 1779285075.8563533,
-    "hash": "7a1feafc9e8f4d3f0cbc1477d402471e"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_jwt.py": {
     "mtime": 1779302856.797036,
     "hash": "4881f7096bbcacb4e885d9eb3ae62054"
@@ -595,25 +587,9 @@
     "mtime": 1779302856.797036,
     "hash": "00d8633f82f428f8fe65de1ae0d61389"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_member_group_routes.py": {
-    "mtime": 1779302856.798036,
-    "hash": "4e54d5898d0e3e6a1224d748765a4475"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_member_routes.py": {
-    "mtime": 1779302856.799036,
-    "hash": "a01ab51eeddcbde3af962437f97e2072"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_password.py": {
     "mtime": 1779302856.800036,
     "hash": "b6745b59850bc6010be202b42dee42f9"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_payment_routes.py": {
-    "mtime": 1779302856.802036,
-    "hash": "d1c967d0085587c78b11f090c6a8abef"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_payment_service.py": {
-    "mtime": 1779285075.8573534,
-    "hash": "17326416d8e27483c81fbf6d7735bd12"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_payments_booth_result.py": {
     "mtime": 1779285075.8573534,
@@ -651,17 +627,41 @@
     "mtime": 1779302856.807036,
     "hash": "9c70e68c7b43c0956068c60e6af5b99d"
   },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_payment_routes.py": {
+    "mtime": 1779557816.9885523,
+    "hash": "f0711ceb0bf13258c4049ece4e3644b6"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_payment_service.py": {
+    "mtime": 1779557875.8974824,
+    "hash": "89a48728e38ea212f618c7c89e76c76a"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_event_consumer.py": {
+    "mtime": 1779732909.8610091,
+    "hash": "c94efe453ea5b45b0a61df7e2c9c7a08"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_integration_redis_streams.py": {
+    "mtime": 1779732914.1442187,
+    "hash": "8893de8252d60a15274ee85215350cc8"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_pos_heartbeat_route.py": {
+    "mtime": 1780043520.471312,
+    "hash": "87d26ea60b11e5fcb6df6cd9a069a409"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/api/tests/test_member_routes.py": {
+    "mtime": 1780091205.0580096,
+    "hash": "b1a9315d4f816c97e78b1d5016e5ea3a"
+  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/vitest.config.js": {
     "mtime": 1777112318.0000947,
     "hash": "99721eaf533c5dc7d054582e7c35f6c5"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/nuxt.config.ts": {
-    "mtime": 1778225501.7647111,
-    "hash": "bb5418bd6c0ce5ef2afe73e6eaa7d34e"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/app.vue": {
     "mtime": 1779312975.0195034,
     "hash": "e9a7bbcfcd7f8b8b687031ffe4c11a96"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/nuxt.config.ts": {
+    "mtime": 1780093494.5085561,
+    "hash": "ff52a177a2c2d96b205c8255ffb90c09"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/pos-test.vue": {
     "mtime": 1778184775.773428,
@@ -671,73 +671,85 @@
     "mtime": 1778225501.765711,
     "hash": "c84b5d762f36f5e0630776002498bd67"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/notification.vue": {
-    "mtime": 1778225501.765711,
-    "hash": "c2c54f55b16a8942d99794e3a43493ec"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/report.vue": {
-    "mtime": 1778225501.766711,
-    "hash": "5028de3cb5f64b43bd37ffd4f361c146"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/member.vue": {
-    "mtime": 1778226412.0735393,
-    "hash": "15cf8a8b065962810cda7730ba8a9300"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/transaksi.vue": {
-    "mtime": 1778226429.423628,
-    "hash": "a79f8e8bb63a15aec0a5b23f584c9d4f"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/setting.vue": {
-    "mtime": 1778742833.5719962,
-    "hash": "b84c2c6d85618cc7a7624e450ee99d38"
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/setup.vue": {
+    "mtime": 1779816416.0663471,
+    "hash": "af0a652bc7fd59b9e8e0df1970f9cb29"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/index.vue": {
-    "mtime": 1778780029.057518,
-    "hash": "a919f6c4bbdc38deff4c2d13f1475d22"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/gates-status.vue": {
-    "mtime": 1778788200.1345775,
-    "hash": "09eda8fb0defffe6071f0da0b4bdd795"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/device.vue": {
-    "mtime": 1779299878.6666079,
-    "hash": "f6ad94265abbd95cc939923681c93738"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/login.vue": {
-    "mtime": 1779444090.6468847,
-    "hash": "996eeabc7d3efb697e0ec7f6efcbe036"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/setup.vue": {
-    "mtime": 1779444115.9331,
-    "hash": "50a48b475181fbded4c5b39e89e57d59"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/pos.vue": {
-    "mtime": 1779481404.268798,
-    "hash": "13b5b66701d38c4501c21c7e155446a9"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/shifts-schedule.vue": {
-    "mtime": 1779481651.4194446,
-    "hash": "e6bb5779fa0335f5ebfdd3a5716a2a59"
+    "mtime": 1779827372.6916757,
+    "hash": "a5f36cb54a36c013642ddcf1ce679edd"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/personnel.vue": {
-    "mtime": 1779481695.8309152,
-    "hash": "8749b15e03a595c61966c8cdafa88f25"
+    "mtime": 1779828721.0911827,
+    "hash": "d9efee797cc460ba29fd027e0a764800"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/setting.vue": {
+    "mtime": 1779828743.739362,
+    "hash": "d38b526b91dd891c937416f10a5803fc"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/shifts-schedule.vue": {
+    "mtime": 1779828778.0456345,
+    "hash": "7ab8dc347ff30d005667d41a33f7f785"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/device.vue": {
+    "mtime": 1779828900.0586143,
+    "hash": "e027ee2abb3478d8e62851c3c033840d"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/notification.vue": {
+    "mtime": 1779828948.85301,
+    "hash": "94f4497ec6c8a17b8e0f027263cefcb4"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/pos.vue": {
+    "mtime": 1780043462.317383,
+    "hash": "25634d5863e95d677fa0812ec7e2b2a3"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/gates-status.vue": {
+    "mtime": 1780087756.4503257,
+    "hash": "eaad2b4f4252573e1a197ee9fd7dc00c"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/member.vue": {
+    "mtime": 1780091227.4582229,
+    "hash": "d90d1cad51d00534134d30cb34f410f0"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/report.vue": {
+    "mtime": 1780092866.0189106,
+    "hash": "c08751eb9376247364d4b52318222c93"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/transaksi.vue": {
+    "mtime": 1780092907.9672837,
+    "hash": "ca74939e630e715246be501f9231c3f6"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/pages/login.vue": {
+    "mtime": 1780093476.1603901,
+    "hash": "d5d7589c52b66866b11b17e4e14975f8"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/ConfirmDialog.vue": {
     "mtime": 1778225501.763711,
     "hash": "a15938f8f9176b29f7afb749455b47e3"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/DataTable.vue": {
-    "mtime": 1778225501.7647111,
-    "hash": "fba25d652f595214479ee2971bc1d978"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/GateHeartbeatPanel.vue": {
-    "mtime": 1778788193.3845015,
-    "hash": "73ec88386129f0e26624e6c2e52c7ddd"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/CrudModal.vue": {
     "mtime": 1779315684.1628249,
     "hash": "9f1efbe38f2ea95aa6db3aa9db375cae"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/PageHeader.vue": {
+    "mtime": 1779822870.7877972,
+    "hash": "07f86a64c10ec0e66df24470597cd5e1"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/TabStrip.vue": {
+    "mtime": 1779822879.9798484,
+    "hash": "8ddc98dca651e1864d129091168279e2"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/DataTable.vue": {
+    "mtime": 1779828889.6185298,
+    "hash": "22bb95375e9cbdf6c1caa98518c46f00"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/GateHeartbeatPanel.vue": {
+    "mtime": 1780087750.0382648,
+    "hash": "bc4384fb21b542684a0792337124fd42"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/BrandIcon.vue": {
+    "mtime": 1780093465.7162955,
+    "hash": "a0ef398055e8c746dbf1e63545168877"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/EmoneyInlineStatus.vue": {
     "mtime": 1778169120.0573971,
@@ -755,45 +767,53 @@
     "mtime": 1778185375.4830625,
     "hash": "3ac5d95b307acdfe8b1f944c22f8c112"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/CashDialog.vue": {
-    "mtime": 1778779843.3522067,
-    "hash": "af46987dd8f5abb27b9a12e7f4d90a2f"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/QuickActionBar.vue": {
-    "mtime": 1778779853.676335,
-    "hash": "164bc6f9ffc6c1d247710202e94ace64"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/PosErrorView.vue": {
     "mtime": 1778779897.681883,
     "hash": "4f0d9e0c20d6f96aa79015d9d8d348dc"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/PosStatusBar.vue": {
-    "mtime": 1779310396.1059997,
-    "hash": "dfe0ef0a98a51c960b5c8866dfa52f3a"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/PhotoComparison.vue": {
     "mtime": 1779313511.1612234,
     "hash": "ce6dd094f1f20b930a8e75521363e05c"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/PosUnifiedView.vue": {
-    "mtime": 1779313525.4023445,
-    "hash": "9b5550e278dd1b11555f67183ad91b2c"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/PaymentButton.vue": {
     "mtime": 1779313527.476362,
     "hash": "a85d4e3547ecb0a9e7224e940707eeae"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/WorkerCheckInDialog.vue": {
-    "mtime": 1779481281.9004657,
-    "hash": "d7c2671538b5295d8f789580f0462c31"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/WorkerHandoverDialog.vue": {
-    "mtime": 1779481325.7099447,
-    "hash": "712c250d95c6f4405794f6620ab54d2f"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/WorkerBadge.vue": {
     "mtime": 1779481336.739065,
     "hash": "3646c93a3b767a36204b2814c0445d5b"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/CameraColumn.vue": {
+    "mtime": 1779523277.423865,
+    "hash": "672dd32082bccfca328f2a7abca3ea29"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/PosStatusBar.vue": {
+    "mtime": 1779543531.0300648,
+    "hash": "55ba92ec0af356cb7e77bb3990b00855"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/CashDialog.vue": {
+    "mtime": 1779547086.997959,
+    "hash": "5e3615f27912218eab7378a6a6e2452e"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/WorkerCheckInDialog.vue": {
+    "mtime": 1779547119.2024293,
+    "hash": "7ba2d47d332091ad8315f5b492417fa8"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/WorkerHandoverDialog.vue": {
+    "mtime": 1779547179.8472893,
+    "hash": "53de91f94e4ce568200f307c90bd4843"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/PosIdleAmbient.vue": {
+    "mtime": 1779701078.1492603,
+    "hash": "cdf0d15e0fee4f9c8773e2f39fc7e33e"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/PosUnifiedView.vue": {
+    "mtime": 1779702162.512321,
+    "hash": "e30cbfe6f16ebaded083848726c4fb43"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/pos/QuickActionBar.vue": {
+    "mtime": 1779702184.0334983,
+    "hash": "00102238d59812bd71f5823adcac4b79"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/ui/button/Button.vue": {
     "mtime": 1778147137.2347975,
@@ -867,10 +887,6 @@
     "mtime": 1778742078.4092188,
     "hash": "3f1759ca112d230b0f78a7474d4aa1fe"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/setup/SetupShell.vue": {
-    "mtime": 1778742095.3873644,
-    "hash": "54add14a50b3968aca10e5ed56a174d8"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/setup/PreflightList.vue": {
     "mtime": 1778742102.0694213,
     "hash": "1b9a05894bc04a86a8899c86d4216129"
@@ -899,6 +915,10 @@
     "mtime": 1779286156.210964,
     "hash": "181475c6c26902e4382e805e233fdfd5"
   },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/components/setup/SetupShell.vue": {
+    "mtime": 1780093481.1674354,
+    "hash": "9bd925ddbed4402f1530410d00f125c5"
+  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/stores/website.js": {
     "mtime": 1778093022.565209,
     "hash": "6bc838ea93c2475514582bfcf435ff95"
@@ -907,25 +927,17 @@
     "mtime": 1778167409.5196657,
     "hash": "9ba113796742de811cfe3e9fc4331ea3"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/stores/gate.js": {
-    "mtime": 1779313467.721853,
-    "hash": "e811b940d27cb0d2e37bfdc51ab1ed0c"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/stores/auth.js": {
-    "mtime": 1779446275.1054816,
-    "hash": "b72343e78fdcb9d57becbbc045153546"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/stores/worker-session.js": {
     "mtime": 1779481254.8501685,
     "hash": "f03c9897c91e601aaadd8654c7dfb456"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/composables/useApi.js": {
-    "mtime": 1777111563.7346337,
-    "hash": "0a3bf8139ef74af2f22cb79e35956bd5"
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/stores/gate.js": {
+    "mtime": 1779557747.9847095,
+    "hash": "d69e8464fe4ef9cf3af48ad69ed24592"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/composables/useHardwareStatus.js": {
-    "mtime": 1778093022.565209,
-    "hash": "7ba4653606252120315ef1d95c3a8353"
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/stores/auth.js": {
+    "mtime": 1779829669.6440125,
+    "hash": "95e02f1c22b27d59ee18d16fe2bb1c6c"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/composables/useSound.js": {
     "mtime": 1778093022.565209,
@@ -934,10 +946,6 @@
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/composables/useFormatters.js": {
     "mtime": 1778127008.917078,
     "hash": "4b7b9ca10c900a5bbeec11ad841debd8"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/composables/useKeyboard.js": {
-    "mtime": 1778127021.510199,
-    "hash": "3577c9089982a13f8bb2b8f87066d30f"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/composables/useCrud.js": {
     "mtime": 1778226305.493862,
@@ -951,6 +959,18 @@
     "mtime": 1778742054.66203,
     "hash": "c864c08f397d111daf4a46fd2bd69ab3"
   },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/composables/useHardwareStatus.js": {
+    "mtime": 1779542930.0080223,
+    "hash": "20e788ec4af56deb9ae3a9d440f7cd93"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/composables/useKeyboard.js": {
+    "mtime": 1779563599.483723,
+    "hash": "f6bae506244e53bb034aac9013fcc823"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/composables/useApi.js": {
+    "mtime": 1779823674.0014148,
+    "hash": "d2fed3e09ee1792cb5c8eeaf25d2ec84"
+  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/plugins/toast.client.js": {
     "mtime": 1778226231.9671674,
     "hash": "b2810ae46d19c8aa3fc8eda9e1bdcb36"
@@ -960,12 +980,12 @@
     "hash": "730161f01d019fdcb58625bf9ec4590f"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/layouts/kiosk.vue": {
-    "mtime": 1778168980.3386505,
-    "hash": "1b2a84c8525535a4d25adad2062e745e"
+    "mtime": 1779537388.12412,
+    "hash": "8535a04c2168162632221cf348b12736"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/layouts/default.vue": {
-    "mtime": 1779481713.5961032,
-    "hash": "84b3bcbc2ac0ec9ac031dca2342dfbed"
+    "mtime": 1780093471.0463438,
+    "hash": "c9d1707e0218703ad0ed90f75c708489"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/middleware/setup.global.js": {
     "mtime": 1779285075.8593533,
@@ -1008,40 +1028,36 @@
     "hash": "5b7eec72a87cca4af9794e5f2aa320b0"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/daemons/cli.py": {
-    "mtime": 1779302856.8120358,
-    "hash": "b99ffbdb9626337db8bccc66f07c3bcd"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/daemons/gate_in.py": {
-    "mtime": 1779438769.383399,
-    "hash": "3586f62319da5850dbefa42132f15177"
+    "mtime": 1779732969.7598145,
+    "hash": "ae23d3ec54f4e2bf458170304089c5ce"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/daemons/base.py": {
-    "mtime": 1779438899.7413623,
-    "hash": "d93d9142ab7b49372722f17994e6cade"
+    "mtime": 1780081017.1107788,
+    "hash": "bea7ac1ed9211d42b883512cca9310e6"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/daemons/gate_in.py": {
+    "mtime": 1780083380.1729329,
+    "hash": "8779efe7aefaf5556101666ffefe17c3"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/daemons/tests/__init__.py": {
     "mtime": 1777113768.217477,
     "hash": "131887138c8794f746fd6fee96db1c18"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/daemons/tests/test_gate_in_audio.py": {
-    "mtime": 1778079939.1402657,
-    "hash": "01b654be6cbe39e9b52d38064a7ad2c0"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/daemons/tests/conftest.py": {
-    "mtime": 1779302856.8160357,
-    "hash": "1e3ebaf09e7e861dda5e55b09bf231b7"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/daemons/tests/test_base.py": {
-    "mtime": 1779285075.8583534,
-    "hash": "a1330a3be5e3b6508ba09322840ee08f"
+    "mtime": 1779732937.0703166,
+    "hash": "16d86f2402d065c5fd3d38912544a57c"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/daemons/tests/test_gate_in.py": {
-    "mtime": 1779302856.814036,
-    "hash": "b9736c9f4fba1680b115c692c83073b8"
+    "mtime": 1779732954.7541366,
+    "hash": "8b13a9ef21794677978a694ba885f828"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/daemons/tests/test_gate_out_deduct.py": {
-    "mtime": 1779302856.810036,
-    "hash": "416ba3501cb87ad1a332abe1f222741b"
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/daemons/tests/test_base.py": {
+    "mtime": 1779732958.715317,
+    "hash": "f58a25e5cde7ac28cde093f65c6df337"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/daemons/tests/test_gate_in_audio.py": {
+    "mtime": 1780083395.2341783,
+    "hash": "af756fc5949ee731b3deaebe583fc09b"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/protocols/factory.py": {
     "mtime": 1777123638.1915965,
@@ -1056,8 +1072,8 @@
     "hash": "8e4baaa9dcf3f33048e3f3efff066f09"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/protocols/compass/protocol.py": {
-    "mtime": 1779348123.2511718,
-    "hash": "15698a224f95772fdc8f064ce59d9034"
+    "mtime": 1780081017.111779,
+    "hash": "d8814f60d35bb988f6095bc4873c6fc7"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/protocols/enet/parser.py": {
     "mtime": 1779302856.809036,
@@ -1131,13 +1147,13 @@
     "mtime": 1779302856.802036,
     "hash": "8671d70db5ce3147f62d4b5aba95706d"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/workers/critical/print_worker.py": {
-    "mtime": 1779436385.9511623,
-    "hash": "f4b048e33ae69f839606584f74172d38"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/workers/critical/snapshot_worker.py": {
     "mtime": 1779436408.1463046,
     "hash": "a96300e058f00325de7a355fef762dab"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/workers/critical/print_worker.py": {
+    "mtime": 1779566109.125931,
+    "hash": "f7dd505a898bd9aa7bcd980f66b30e31"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/workers/background/__init__.py": {
     "mtime": 1777105205.785635,
@@ -1195,13 +1211,13 @@
     "mtime": 1778784261.2406812,
     "hash": "d0e6e9cb2d7cf9c36af22806f39c402e"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/shared/config.py": {
-    "mtime": 1779285075.8623533,
-    "hash": "3e02b7a8897cc28d8d16b893d6349dfd"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/shared/events.py": {
-    "mtime": 1779287914.624532,
-    "hash": "5c94658248793ce0c8cd5e386df570b4"
+    "mtime": 1779732990.6977346,
+    "hash": "38446dbaafcf8f826242ab9fa73556ce"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/shared/config.py": {
+    "mtime": 1779739033.6958368,
+    "hash": "5efd53bd5e0b27757d3dea3065d018ee"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docker/postgres-init.sql": {
     "mtime": 1777097083.4777133,
@@ -1210,10 +1226,6 @@
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/scripts/__init__.py": {
     "mtime": 1777097855.666984,
     "hash": "cb4d3c2723af093facdd9c606c37d29f"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/scripts/preflight_check.py": {
-    "mtime": 1777180429.6202083,
-    "hash": "a641352ab62c28c7e58caade9d64ed88"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/scripts/check_deployment.py": {
     "mtime": 1779302856.8080359,
@@ -1231,10 +1243,6 @@
     "mtime": 1779285075.8623533,
     "hash": "726d4cee2658d11f051976f1cbb1317e"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/scripts/test_device.py": {
-    "mtime": 1779285075.8623533,
-    "hash": "cb89d1668c2bf10e813739197118f3d4"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/scripts/tray-indicator.py": {
     "mtime": 1779302856.809036,
     "hash": "fa8b92a365debd350c6916d075b59757"
@@ -1243,13 +1251,25 @@
     "mtime": 1779302856.8120358,
     "hash": "99f40fb7a1de5c19ae044cc3d0a1ca58"
   },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/scripts/probe_audio_tracks.py": {
+    "mtime": 1779601182.155698,
+    "hash": "39f3271abf8a1a3c5ce4377bbfed48aa"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/scripts/preflight_check.py": {
+    "mtime": 1779712312.8628461,
+    "hash": "a6c3330db6fc2312975f1c4cab30a0ad"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/scripts/test_device.py": {
+    "mtime": 1779816421.8364024,
+    "hash": "627484440c9c1c1dfc7411f777af897f"
+  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/scripts/parking_doctor.py": {
-    "mtime": 1779287139.5138733,
-    "hash": "90b2d0f195739da19049145abc7ce048"
+    "mtime": 1780044098.8476088,
+    "hash": "a144b3d3a67433ef1b0391e31271b67f"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/scripts/seed.py": {
-    "mtime": 1779315403.0937848,
-    "hash": "4409c8441ece6e52decac4544a31443e"
+    "mtime": 1780091214.1560962,
+    "hash": "57f2062fa640badbd0e676a7cc8a3273"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/scripts/hardware/config_validator.py": {
     "mtime": 1779285075.8613534,
@@ -1315,10 +1335,6 @@
     "mtime": 1779302856.796036,
     "hash": "c344e9f8f22b3ae944183afe2b66701e"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/tests/e2e/test_emoney_entry.py": {
-    "mtime": 1779302856.798036,
-    "hash": "729b66efe2a3e75a952724e49e896f93"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/tests/e2e/test_full_system.py": {
     "mtime": 1779285075.8633535,
     "hash": "6fbbfd5de1bbd1cfdc2f1bef5e4b2981"
@@ -1359,29 +1375,33 @@
     "mtime": 1777242862.4787755,
     "hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/serial_manager.py": {
-    "mtime": 1779302856.8080359,
-    "hash": "9ee76c149cd048846dcdb6b59ca8c0e1"
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/health_server.py": {
+    "mtime": 1780043173.7568002,
+    "hash": "63470b19a1f73248303b01fb47b28096"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/api_client.py": {
-    "mtime": 1779295049.0595093,
-    "hash": "9d7a0a5739352c5b5b503110d6b77e36"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/gate_opener.py": {
-    "mtime": 1779295082.673739,
-    "hash": "5833539437477e2ddbde8ee662ff41d5"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/websocket_server.py": {
-    "mtime": 1779302856.8120358,
-    "hash": "c25f58b8ca3f5d7645c5b7600a98c28b"
+    "mtime": 1780043462.316383,
+    "hash": "e7fbf6e5bef789b0f6e4b474362f2df8"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/omnikey_poller.py": {
-    "mtime": 1779320490.3964062,
-    "hash": "e4777fd2d0905d4e3aeb13ff55c470a3"
+    "mtime": 1780043780.3844795,
+    "hash": "c54169209597bbc00341809b5ac4e060"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/serial_manager.py": {
+    "mtime": 1780043801.432818,
+    "hash": "9cb9556708d91356c84e8f7173b40739"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/websocket_server.py": {
+    "mtime": 1780043848.3535726,
+    "hash": "3115d7585278cf35782710d32e93a9b2"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/gate_opener.py": {
+    "mtime": 1780043903.601462,
+    "hash": "04fc3828512729e5f6bfc9ee9d51a988"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/main.py": {
-    "mtime": 1779438817.024752,
-    "hash": "b13853d258a3190be20217fdcafe182e"
+    "mtime": 1780044041.5986855,
+    "hash": "5fc1b3b0a687a41d7ff53523e38649b3"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/tests/__init__.py": {
     "mtime": 1777445997.753192,
@@ -1391,13 +1411,21 @@
     "mtime": 1779285075.8583534,
     "hash": "9893e67694b7d80eb0ecd8c4e99f8b2b"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/README.md": {
-    "mtime": 1777274988.6305285,
-    "hash": "8eafdb5fde06fe4c92c298c72d2b26e7"
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/tests/test_api_client_retry.py": {
+    "mtime": 1780042138.8024366,
+    "hash": "ffde24561906be8ebbc763ed7d165754"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/AGENTS.md": {
-    "mtime": 1778603059.4479105,
-    "hash": "768452ee20d92b06646c3bacc03172a0"
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/tests/test_serial_manager_locking.py": {
+    "mtime": 1780042162.0027409,
+    "hash": "3c1322a589931f4e55ee18579614df82"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/tests/test_health_server.py": {
+    "mtime": 1780043207.8853393,
+    "hash": "2016715834664278af2a64c74f34c190"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/booth_bridge/tests/test_gate_opener_decode.py": {
+    "mtime": 1780043917.5456865,
+    "hash": "eb1a6ddbe63ebfc4bb44df0155d55da1"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docker-compose.yml": {
     "mtime": 1778225501.763711,
@@ -1414,6 +1442,18 @@
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/CLAUDE.md": {
     "mtime": 1779473728.0079935,
     "hash": "e7c089a57f5d0d51b54ce0246c5f49bc"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docker-compose.monitoring.yml": {
+    "mtime": 1779576461.6375408,
+    "hash": "b47b7db0b46de8c5517f36ffb85e361c"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/README.md": {
+    "mtime": 1779718254.2296178,
+    "hash": "2533100c21f8268c7b904aad5e46963a"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/AGENTS.md": {
+    "mtime": 1779718265.7647328,
+    "hash": "99cd8e5beceda6a5d0566b895750830f"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/EParking_v2_Development_Plan.md": {
     "mtime": 1777123953.479925,
@@ -1435,10 +1475,6 @@
     "mtime": 1777166495.0798945,
     "hash": "b1846c4853369c16aced61cb9a1ec36b"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/OPERATIONS_RUNBOOK.md": {
-    "mtime": 1777274868.6124878,
-    "hash": "71a21444cee8d1b6859ac6283c4a5507"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/SECURITY_REVIEW.md": {
     "mtime": 1777180340.1931086,
     "hash": "f04a38a194fd9415635dcdec3ca342b3"
@@ -1455,10 +1491,6 @@
     "mtime": 1777180604.5134592,
     "hash": "a72f57cc6e02bca7634128b06c275574"
   },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/GO_LIVE_CHECKLIST.md": {
-    "mtime": 1777274851.7284887,
-    "hash": "9a84338de69ee99c0a9c836219712e6f"
-  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/GATE_FLOW_SPEC.md": {
     "mtime": 1777197956.1692653,
     "hash": "86df6cb45f1194d38cd2e4b4f9029b1e"
@@ -1466,14 +1498,6 @@
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/SMART_FEATURES.md": {
     "mtime": 1777213483.9473462,
     "hash": "4e3a42db5912683a1a2c3dd9889b6cbf"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/DEV_TOOLS_AND_REPORTING_GUIDE.md": {
-    "mtime": 1777224090.289769,
-    "hash": "493c202bb5f852d2412028c94a543e67"
-  },
-  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/BOOTH_DEPLOYMENT.md": {
-    "mtime": 1777274816.3294969,
-    "hash": "e52bf7e6b898401e81921273c4be705f"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/DEVELOPMENT_TESTING_GUIDE.md": {
     "mtime": 1777275092.1136212,
@@ -1503,9 +1527,33 @@
     "mtime": 1778192793.5913472,
     "hash": "21acea09099254cfecce6fd04a8f61e3"
   },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/POS_OPERATOR_REDESIGN_BRIEF.md": {
+    "mtime": 1779529131.574908,
+    "hash": "1f1864074d6b315844e4d9d1d0ed9d09"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/PRODUCTION_AUDIT_2026-05.md": {
+    "mtime": 1779562243.2357492,
+    "hash": "c96841886226246f661375ffed928ea6"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/DEV_TOOLS_AND_REPORTING_GUIDE.md": {
+    "mtime": 1779715763.3334165,
+    "hash": "c4920b5b4b741ab1f6a0551a22e54934"
+  },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/FIELD_TECH_GUIDE.md": {
-    "mtime": 1779287157.3070714,
-    "hash": "64b77675bfea2ee5673e48c035c38037"
+    "mtime": 1779717972.8358834,
+    "hash": "32df62b54131831fc05896d6ee4e29cd"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/GO_LIVE_CHECKLIST.md": {
+    "mtime": 1779718183.7679198,
+    "hash": "8294efe055b1ad1ad874270905f95b79"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/OPERATIONS_RUNBOOK.md": {
+    "mtime": 1779718276.395839,
+    "hash": "acd2010f02f986fae7d8bef900e5aee2"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/COMBO_DEMO_REHEARSAL.md": {
+    "mtime": 1779742900.8024724,
+    "hash": "040d64cea103ac2b6f005d7f104bb78c"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/plans/2026-04-26-dev-tools-deployment-reporting-design.md": {
     "mtime": 1777221909.0713367,
@@ -1532,8 +1580,8 @@
     "hash": "b529349284597b897448ed39024cb361"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/plans/2026-05-14-setup-wizard.md": {
-    "mtime": 1778741274.94586,
-    "hash": "ff5e48392ecf3bd326a558617ddcad93"
+    "mtime": 1780081017.111779,
+    "hash": "50e283cbdd95d2934169e35e575b043b"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/docs/hardware-tests/2026-04-25-hardware-integration-report.md": {
     "mtime": 1777133335.8209658,
@@ -1556,16 +1604,32 @@
     "hash": "6599c21d6242806857c57ac53ae940df"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/installer/_roles/server/README.md": {
-    "mtime": 1777289515.173411,
-    "hash": "08457f917750f6422745dc3b425b1148"
+    "mtime": 1779743182.0509086,
+    "hash": "edf6f87e10ed3aaef60620c33dbf31ee"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/installer/_roles/booth_pc/README.md": {
-    "mtime": 1777289568.7808228,
-    "hash": "41b66871df14094831f75d37687429d3"
+    "mtime": 1779743182.052658,
+    "hash": "9a9fb34362f477a9632178f832abbe66"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/installer/_roles/combo/README.md": {
-    "mtime": 1777289541.5106127,
-    "hash": "fd97bde8f7cb8b3823bb978aaf5cc040"
+    "mtime": 1779743182.0547945,
+    "hash": "05a3ee9c1de9e5594a6c4bb7b9a98c0c"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/redesign-frontend/01 _ IDLE _ ambient clock.html": {
+    "mtime": 1779535202.7372975,
+    "hash": "44cc09a519a1d438feb4861d3963baf9"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/monitoring/prometheus.yml": {
+    "mtime": 1779576428.788304,
+    "hash": "2ac4f415c61b3f12f6aa59596ccfcc58"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/monitoring/alerts.yml": {
+    "mtime": 1779576445.155422,
+    "hash": "cfca280ca6d7c293bfe67c33721c8936"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/public/favicon.svg": {
+    "mtime": 1780093490.7795222,
+    "hash": "c1ad7aabc734bc62dd7e9b982c69d7e0"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/assets/icons/eparking-start.svg": {
     "mtime": 1777222305.6302977,
@@ -1574,6 +1638,10 @@
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/assets/icons/eparking-stop.svg": {
     "mtime": 1777222309.823467,
     "hash": "7508180c9b4b55234446a9e7a348d31d"
+  },
+  "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/assets/icons/Park-It.svg": {
+    "mtime": 1780093284.0441134,
+    "hash": "c1ad7aabc734bc62dd7e9b982c69d7e0"
   },
   "/home/qiu/Work/MitraTeknik/Park-It/parking-system-v2/frontend/public/audio/012_waktu_habis.mp3": {
     "mtime": 1777110147.8283348,

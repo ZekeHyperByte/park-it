@@ -42,15 +42,25 @@
 
     <!-- Shift tab -->
     <div v-if="activeTab === 'shift'">
-      <div v-if="shiftReport" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div v-for="item in shiftReport.items" :key="`${item.shift_id}-${item.date}`" class="rounded-lg border border-border bg-surface p-4 text-center">
-          <div class="text-sm text-muted-foreground">{{ item.shift_name }} - {{ item.date }}</div>
-          <div class="text-lg font-semibold text-foreground">{{ item.total_transactions.toLocaleString() }} transaksi</div>
-          <div class="text-lg font-bold text-foreground">Rp {{ item.total_revenue.toLocaleString() }}</div>
-          <div class="text-xs text-muted-foreground">Operator: {{ item.operator_name || '-' }}</div>
+      <!-- Summary strip -->
+      <div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div class="rounded-lg border border-border bg-surface p-3">
+          <p class="text-xs text-muted-foreground">Total Transaksi</p>
+          <p class="text-lg font-semibold text-foreground">{{ (shiftReport?.total_transactions ?? 0).toLocaleString('id-ID') }}</p>
+        </div>
+        <div class="rounded-lg border border-border bg-surface p-3">
+          <p class="text-xs text-muted-foreground">Total Pendapatan</p>
+          <p class="text-lg font-semibold text-foreground">Rp {{ (shiftReport?.total_revenue ?? 0).toLocaleString('id-ID') }}</p>
         </div>
       </div>
-      <div v-else class="py-12 text-center text-muted-foreground">Pilih rentang tanggal untuk melihat laporan</div>
+      <DataTable
+        :data="shiftReport?.items ?? []"
+        :columns="shiftReportColumns"
+        :loading="loading"
+        :show-add="false"
+        :show-edit="false"
+        :show-delete="false"
+      />
     </div>
 
     <!-- E-Money tab -->
@@ -95,6 +105,19 @@ const dateTo = ref(today.toISOString().split('T')[0])
 const summaryReport = ref(null)
 const emoneyReport = ref(null)
 const shiftReport = ref(null)
+
+const rupiah = (v) => `Rp ${(v ?? 0).toLocaleString('id-ID')}`
+const shiftReportColumns = [
+  { prop: 'date', label: 'Tanggal', width: 120, sortable: true, formatter: (v) => v ? new Date(v).toLocaleDateString('id-ID') : '-' },
+  { prop: 'shift_name', label: 'Shift', width: 120 },
+  { prop: 'operator_name', label: 'Operator', width: 150, formatter: (v) => v || '-' },
+  { prop: 'total_transactions', label: 'Transaksi', width: 100, sortable: true },
+  { prop: 'cash_revenue', label: 'Tunai', width: 130, formatter: rupiah },
+  { prop: 'emoney_revenue', label: 'E-Money', width: 130, formatter: rupiah },
+  { prop: 'rfid_revenue', label: 'Member', width: 130, formatter: rupiah },
+  { prop: 'total_revenue', label: 'Total', width: 140, sortable: true, formatter: rupiah },
+  { prop: 'average_fee', label: 'Rata-rata', width: 120, formatter: rupiah },
+]
 
 onMounted(() => { loadReports() })
 

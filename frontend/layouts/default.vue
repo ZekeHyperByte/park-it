@@ -14,10 +14,7 @@
         @click="collapsed = !collapsed"
       >
         <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <rect x="3" y="3" width="18" height="18" rx="4" />
-            <path d="M8 12h8M12 8v8" />
-          </svg>
+          <BrandIcon class="h-[18px] w-[18px]" />
         </div>
         <Transition name="fade-text">
           <span v-show="!collapsed" class="text-sm font-bold">E-Parking</span>
