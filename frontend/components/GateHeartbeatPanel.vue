@@ -32,7 +32,20 @@
           <span :class="['text-lg leading-none', dotColor(g)]">●</span>
         </header>
 
-        <dl class="mt-2 space-y-1 text-xs">
+        <!-- OUT gates are driven by booth_bridge (no daemon / Compass
+             controller), so we report online/offline only. -->
+        <dl v-if="g.direction === 'OUT'" class="mt-2 space-y-1 text-xs">
+          <div class="flex justify-between">
+            <dt class="text-muted-foreground">Booth</dt>
+            <dd class="font-medium text-foreground">{{ g.online ? 'Online' : 'Offline' }}</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-muted-foreground">Last seen</dt>
+            <dd class="font-mono text-foreground">{{ lastSeenLabel(g) }}</dd>
+          </div>
+        </dl>
+
+        <dl v-else class="mt-2 space-y-1 text-xs">
           <div class="flex justify-between">
             <dt class="text-muted-foreground">Daemon</dt>
             <dd class="font-medium text-foreground">{{ g.online ? 'Online' : 'Offline' }}</dd>
@@ -89,13 +102,15 @@ async function refresh() {
 
 function cardBorder(g) {
   if (!g.online) return 'border-destructive/40'
-  if (!g.controller_ok) return 'border-warning/40'
+  // OUT gates have no controller health signal — online/offline only.
+  if (g.direction !== 'OUT' && !g.controller_ok) return 'border-warning/40'
   return 'border-success/40'
 }
 
 function dotColor(g) {
   if (!g.online) return 'text-destructive'
-  if (!g.controller_ok) return 'text-warning'
+  // OUT gates have no controller health signal — online/offline only.
+  if (g.direction !== 'OUT' && !g.controller_ok) return 'text-warning'
   return 'text-success'
 }
 

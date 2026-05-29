@@ -1,6 +1,7 @@
 """Transaction list routes (operator/admin)."""
 
-from datetime import date
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -12,6 +13,7 @@ from api.app.models.parking_transaction import ParkingTransaction
 from api.app.schemas.transaction import TransactionListItem
 from api.app.utils.pagination import PaginationParams, paginated_list
 from api.database import get_db
+from shared.config import get_settings
 from shared.logging import get_logger
 
 logger = get_logger("transaction_routes")
@@ -58,11 +60,21 @@ async def list_transactions(
     if payment_method:
         stmt = stmt.where(ParkingTransaction.payment_method == payment_method.upper())
 
+    # `entry_time` is timestamptz (stored UTC). The picker sends bare local
+    # dates, so build tz-aware bounds in the facility's operational timezone
+    # (Asia/Jakarta) rather than letting Postgres cast a bare date at the DB
+    # session timezone — otherwise day boundaries land on UTC midnight and
+    # edge-of-day rows leak across days.
+    tz = ZoneInfo(get_settings().app_timezone)
     if date_from:
-        stmt = stmt.where(ParkingTransaction.entry_time >= date_from)
+        start = datetime.combine(date_from, time.min, tzinfo=tz)
+        stmt = stmt.where(ParkingTransaction.entry_time >= start)
 
     if date_to:
-        stmt = stmt.where(ParkingTransaction.entry_time < date_to)
+        # Inclusive of the whole `date_to` day: upper bound is the start of the
+        # next day in local time, so "s/d 2026-05-30" includes all of May 30.
+        end = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=tz)
+        stmt = stmt.where(ParkingTransaction.entry_time < end)
 
     result = await paginated_list(
         db, stmt, skip=pagination.skip, limit=pagination.limit

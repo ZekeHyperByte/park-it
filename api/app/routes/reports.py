@@ -215,7 +215,9 @@ async def get_shift_report(
         User, User.id == ParkingTransaction.operator_id
     ).where(
         func.date(ParkingTransaction.entry_time) >= date_from,
-        func.date(ParkingTransaction.entry_time) < date_to,
+        # Inclusive of date_to: this compares calendar dates (func.date), so
+        # <= keeps the whole selected end day instead of dropping it.
+        func.date(ParkingTransaction.entry_time) <= date_to,
     ).group_by(
         Shift.id, Shift.name, func.date(ParkingTransaction.entry_time),
         ParkingTransaction.operator_id, User.full_name,

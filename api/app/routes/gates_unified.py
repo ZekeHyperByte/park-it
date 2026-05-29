@@ -1,5 +1,7 @@
 """Unified gate management routes."""
 
+from datetime import UTC
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -186,20 +188,51 @@ async def close_gate(
 async def gates_heartbeat_status(db: AsyncSession = Depends(get_db)) -> dict:
     """Return liveness map for all active gates.
 
-    Reads short-TTL `gate:heartbeat:{code}` keys from Redis. A gate that has
-    not heartbeat'd within 60s is reported as `online: false`.
+    Two liveness sources, branched by direction:
+
+    - **IN gates** run an autonomous `gate_in` daemon that writes short-TTL
+      `gate:heartbeat:{code}` keys to Redis (state machine + controller health).
+      Missing key (TTL >60s) → `online: false`.
+    - **OUT gates** have no daemon — they are driven by booth_bridge, whose
+      liveness lands in `Pos.last_seen_at` (POSTed to /api/pos/heartbeat every
+      15s). We resolve the booth via `Gate.pos` and treat last_seen within 60s
+      as online. OUT gates have no state machine / Compass controller, so
+      `state` and `controller_ok` are left null (frontend renders online/offline
+      only for these).
     """
     import json as _json
+    from datetime import datetime
 
     from sqlalchemy import select
+
     from shared.redis import redis_client
+
+    out_stale_seconds = 60
 
     await redis_client.connect()
     result = await db.execute(select(Gate).where(Gate.is_active == True))  # noqa: E712
     gates = list(result.scalars().all())
 
+    now = datetime.now(UTC)
     out: list[dict] = []
     for g in gates:
+        if g.direction == "OUT":
+            pos = g.pos
+            last_seen = pos.last_seen_at if pos else None
+            online = bool(
+                last_seen
+                and (now - last_seen).total_seconds() <= out_stale_seconds
+            )
+            out.append({
+                "code": g.code,
+                "direction": g.direction,
+                "online": online,
+                "state": None,
+                "controller_ok": None,
+                "last_seen": last_seen.isoformat() if last_seen else None,
+            })
+            continue
+
         raw = await redis_client.client.get(f"gate:heartbeat:{g.code}")
         if raw:
             try:

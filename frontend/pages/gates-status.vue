@@ -2,7 +2,7 @@
   <div>
     <PageHeader
       title="Monitoring Gerbang"
-      subtitle="Status daemon real-time. Indikator hijau = daemon online & controller responsif. Kuning = controller bermasalah. Merah = daemon mati / tidak melapor > 60 detik."
+      subtitle="Status real-time. Gerbang masuk (daemon): hijau = online & controller responsif, kuning = controller bermasalah, merah = mati / tidak melapor > 60 detik. Gerbang keluar (booth): hijau = booth online, merah = booth tidak melapor > 60 detik."
     />
 
     <GateHeartbeatPanel />

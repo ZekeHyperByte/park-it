@@ -66,6 +66,45 @@
         :show-delete="false"
       />
     </div>
+
+    <!-- Shift report tab -->
+    <div v-if="activeTab === 'shift-report'">
+      <div class="mb-4 flex items-center gap-3">
+        <input
+          v-model="shiftFrom"
+          type="date"
+          class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"
+        />
+        <span class="text-muted-foreground">s/d</span>
+        <input
+          v-model="shiftTo"
+          type="date"
+          class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"
+        />
+        <Button size="sm" @click="loadShiftReport">Filter</Button>
+      </div>
+
+      <!-- Summary strip -->
+      <div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div class="rounded-lg border border-border bg-surface p-3">
+          <p class="text-xs text-muted-foreground">Total Transaksi</p>
+          <p class="text-lg font-semibold text-foreground">{{ shiftTotals.transactions.toLocaleString('id-ID') }}</p>
+        </div>
+        <div class="rounded-lg border border-border bg-surface p-3">
+          <p class="text-xs text-muted-foreground">Total Pendapatan</p>
+          <p class="text-lg font-semibold text-foreground">Rp {{ shiftTotals.revenue.toLocaleString('id-ID') }}</p>
+        </div>
+      </div>
+
+      <DataTable
+        :data="shiftReports"
+        :columns="shiftReportColumns"
+        :loading="loadingShiftReport"
+        :show-add="false"
+        :show-edit="false"
+        :show-delete="false"
+      />
+    </div>
   </div>
 </template>
 
@@ -100,22 +139,37 @@ const tabs = [
   { key: 'transactions', label: 'Transaksi Parkir' },
   { key: 'manual-opens', label: 'Buka Manual' },
   { key: 'abandoned', label: 'Kendaraan Ditinggal' },
+  { key: 'shift-report', label: 'Laporan Shift' },
 ]
 
 const activeTab = ref('transactions')
 const loadingTransactions = ref(false)
 const loadingManualOpens = ref(false)
 const loadingAbandoned = ref(false)
+const loadingShiftReport = ref(false)
 
 const dateFrom = ref('')
 const dateTo = ref('')
 const statusFilter = ref('')
 
-// Set default date range
-const today = new Date()
-const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
-dateFrom.value = firstDay.toISOString().split('T')[0]
-dateTo.value = today.toISOString().split('T')[0]
+// Local YYYY-MM-DD. NEVER use toISOString() here: it converts to UTC, so in
+// positive-offset zones (e.g. WIB UTC+7) midnight-local rolls back a day and
+// the picker shows the previous day (the "stuck on April" bug).
+function localDate(d = new Date()) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+// Default range = today only (00:00 → end of today). Recomputed every page
+// load, so it always tracks the current date.
+dateFrom.value = localDate()
+dateTo.value = localDate()
+
+// Shift report has its own date range (independent of the transactions filter).
+const shiftFrom = ref(localDate())
+const shiftTo = ref(localDate())
 
 const transactions = ref([])
 const transactionTotal = ref(0)
@@ -123,10 +177,7 @@ const transactionPage = ref(1)
 const transactionPageSize = ref(20)
 const transactionColumns = [
   { prop: 'barcode', label: 'Barcode', width: 140, sortable: true },
-  { prop: 'plate_number', label: 'Plat', width: 120, sortable: true },
   { prop: 'vehicle_type_name', label: 'Jenis', width: 100 },
-  { prop: 'gate_in_name', label: 'Gate Masuk', width: 130 },
-  { prop: 'gate_out_name', label: 'Gate Keluar', width: 130 },
   { prop: 'entry_time', label: 'Masuk', width: 160, formatter: (v) => v ? new Date(v).toLocaleString('id-ID') : '-' },
   { prop: 'exit_time', label: 'Keluar', width: 160, formatter: (v) => v ? new Date(v).toLocaleString('id-ID') : '-' },
   { prop: 'duration_minutes', label: 'Durasi (menit)', width: 120 },
@@ -151,8 +202,24 @@ const abandonedColumns = [
   { prop: 'notes', label: 'Catatan' },
 ]
 
+const rupiah = (v) => `Rp ${(v ?? 0).toLocaleString('id-ID')}`
+
+const shiftReports = ref([])
+const shiftTotals = ref({ transactions: 0, revenue: 0 })
+const shiftReportColumns = [
+  { prop: 'date', label: 'Tanggal', width: 120, sortable: true, formatter: (v) => v ? new Date(v).toLocaleDateString('id-ID') : '-' },
+  { prop: 'shift_name', label: 'Shift', width: 120 },
+  { prop: 'operator_name', label: 'Operator', width: 150, formatter: (v) => v || '-' },
+  { prop: 'total_transactions', label: 'Transaksi', width: 100, sortable: true },
+  { prop: 'cash_revenue', label: 'Tunai', width: 130, formatter: rupiah },
+  { prop: 'emoney_revenue', label: 'E-Money', width: 130, formatter: rupiah },
+  { prop: 'rfid_revenue', label: 'Member', width: 130, formatter: rupiah },
+  { prop: 'total_revenue', label: 'Total', width: 140, sortable: true, formatter: rupiah },
+  { prop: 'average_fee', label: 'Rata-rata', width: 120, formatter: rupiah },
+]
+
 // Lazy-load tabs: fetch only on first activation, cache thereafter.
-const _loaded = reactive({ transactions: false, 'manual-opens': false, abandoned: false })
+const _loaded = reactive({ transactions: false, 'manual-opens': false, abandoned: false, 'shift-report': false })
 
 watch(
   activeTab,
@@ -161,6 +228,7 @@ watch(
     if (tab === 'transactions') loadTransactions()
     else if (tab === 'manual-opens') loadManualOpens()
     else if (tab === 'abandoned') loadAbandoned()
+    else if (tab === 'shift-report') loadShiftReport()
     _loaded[tab] = true
   },
   { immediate: true },
@@ -232,6 +300,29 @@ async function loadAbandoned() {
     toast.error(`Gagal memuat kendaraan ditinggal: ${err.message}`)
   } finally {
     loadingAbandoned.value = false
+  }
+}
+
+// Shift report is admin-only on the backend (require_admin); a non-admin
+// operator viewing this tab gets a 403, surfaced as a clear toast.
+async function loadShiftReport() {
+  loadingShiftReport.value = true
+  try {
+    const qs = new URLSearchParams()
+    if (shiftFrom.value) qs.append('date_from', shiftFrom.value)
+    if (shiftTo.value) qs.append('date_to', shiftTo.value)
+    // Backend returns {items, total_revenue, total_transactions} —
+    // see api/app/routes/reports.py::get_shift_report.
+    const result = await fetchApi(`/api/reports/shift?${qs.toString()}`)
+    shiftReports.value = result.items ?? []
+    shiftTotals.value = {
+      transactions: result.total_transactions ?? 0,
+      revenue: result.total_revenue ?? 0,
+    }
+  } catch (err) {
+    toast.error(`Gagal memuat laporan shift: ${err.message}`)
+  } finally {
+    loadingShiftReport.value = false
   }
 }
 </script>
