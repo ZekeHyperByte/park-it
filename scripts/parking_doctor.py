@@ -24,7 +24,7 @@ import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -298,6 +298,72 @@ async def check_printers(report: Report) -> None:
         report.add(c)
 
 
+async def check_booths(report: Report) -> None:
+    """Server-side liveness check on every active booth.
+
+    booth_bridge POSTs ``/api/pos/heartbeat`` every 15s; we compare
+    ``pos.last_seen_at`` to wall-clock now() to surface dead booths before
+    the field operator calls in. Thresholds (60s WARN, 5m FAIL) align with
+    the admin UI badge so the two surfaces stay consistent.
+    """
+    try:
+        booths = await load_rows(
+            "SELECT id, code, name, ip_address, is_active, last_seen_at, last_status "
+            "FROM pos WHERE is_active = true ORDER BY code"
+        )
+    except Exception as e:
+        c = Check("Booth list", "Booths")
+        c.status = "WARN"
+        c.message = f"DB query failed: {e}"[:120]
+        c.fix = "Run `alembic upgrade head` — last_seen_at/last_status may not be in the schema yet."
+        report.add(c)
+        return
+    if not booths:
+        c = Check("No active booths", "Booths")
+        c.status = "SKIP"
+        c.message = "no rows in pos table — server-only install?"
+        report.add(c)
+        return
+
+    now = datetime.now(timezone.utc)
+    for b in booths:
+        c = Check(f"booth {b['code']}", "Booths")
+        last = b["last_seen_at"]
+        ip = b["ip_address"] or "no IP"
+        if last is None:
+            c.status = "FAIL"
+            c.message = f"never checked in ({ip})"
+            c.fix = (
+                f"On the booth: sudo systemctl status parking-booth-bridge; "
+                f"sudo journalctl -u parking-booth-bridge -n 50. "
+                f"Verify /etc/parking/booth.json has code=\"{b['code']}\"."
+            )
+        else:
+            # last is a timezone-aware datetime from PostgreSQL.
+            age_s = (now - last).total_seconds()
+            status_blob = b.get("last_status") or {}
+            rfid = status_blob.get("rfid_connected")
+            gate = status_blob.get("gate_connected")
+            ver = status_blob.get("bridge_version", "?")
+            c.message = (
+                f"seen {age_s:.0f}s ago ({ip}) "
+                f"rfid={rfid} gate={gate} ver={ver}"
+            )
+            if age_s >= 300:
+                c.status = "FAIL"
+                c.fix = (
+                    f"Booth {b['code']} has not checked in for {age_s:.0f}s. "
+                    f"On that booth PC: sudo systemctl restart parking-booth-bridge."
+                )
+            elif age_s >= 60:
+                c.status = "WARN"
+                c.fix = (
+                    f"Heartbeat is late ({age_s:.0f}s). "
+                    f"Check network path booth→server, and journalctl on the booth."
+                )
+        report.add(c)
+
+
 async def check_acquirers(report: Report) -> None:
     """Settlement SFTP reachability for any configured acquirer."""
     try:
@@ -553,6 +619,7 @@ async def run(only: str | None) -> Report:
     if only is None:
         await check_cameras(report)
         await check_printers(report)
+        await check_booths(report)
         await check_acquirers(report)
     return report
 

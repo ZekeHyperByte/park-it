@@ -25,7 +25,14 @@ except ImportError:
 
 
 class WebSocketServer:
-    """WebSocket server exposing serial peripherals to POS frontend."""
+    """WebSocket server exposing serial peripherals to POS frontend.
+
+    Bound to ``localhost`` only — never expose this on a routable address;
+    the protocol owns the booth's relays and printers without per-message
+    auth. Connection count is capped at ``max_clients`` so a runaway browser
+    tab or leaked Chrome session can't exhaust file descriptors and lock
+    out the real POS UI.
+    """
 
     def __init__(
         self,
@@ -33,11 +40,13 @@ class WebSocketServer:
         port: int = 5678,
         api_config: dict | None = None,
         gate_opener=None,
+        max_clients: int = 8,
     ) -> None:
         self.serial_manager = serial_manager
         self.port = port
         self._api_config = api_config
         self.gate_opener = gate_opener
+        self.max_clients = max_clients
         self._server = None
         self._clients: set = set()
         self._bg_tasks: set = set()
@@ -153,8 +162,28 @@ class WebSocketServer:
 
     async def _handle_client(self, websocket, path=None):
         """Handle a client connection."""
+        if len(self._clients) >= self.max_clients:
+            # 1013 (Try Again Later) communicates capacity exhaustion more
+            # precisely than a generic 1011. The POS frontend's reconnect
+            # backoff treats either as recoverable.
+            logger.warning(
+                "ws_client_rejected_max_clients",
+                current=len(self._clients),
+                cap=self.max_clients,
+                client=getattr(websocket, "remote_address", None),
+            )
+            try:
+                await websocket.close(code=1013, reason="booth_bridge max_clients reached")
+            except Exception:
+                pass
+            return
+
         self._clients.add(websocket)
-        logger.info("client_connected", client=websocket.remote_address)
+        logger.info(
+            "client_connected",
+            client=websocket.remote_address,
+            total=len(self._clients),
+        )
 
         try:
             async for message in websocket:
@@ -168,7 +197,11 @@ class WebSocketServer:
             pass
         finally:
             self._clients.discard(websocket)
-            logger.info("client_disconnected", client=websocket.remote_address)
+            logger.info(
+                "client_disconnected",
+                client=websocket.remote_address,
+                total=len(self._clients),
+            )
 
     async def _process_message(self, message: str) -> dict:
         """Process a command from the POS frontend."""
@@ -177,29 +210,43 @@ class WebSocketServer:
         peripheral = cmd.get("peripheral")
 
         if action == "open_gate":
-            # Forward to serial gate controller
-            device = cmd.get("device", "/dev/ttyUSB0")
-            baudrate = cmd.get("baudrate", 9600)
-            open_cmd = cmd.get("open_command", "O1N").encode()
-            close_cmd = cmd.get("close_command", "O2N").encode()
-
-            import serial
-            ser = serial.Serial(device, baudrate, timeout=1)
-            try:
-                ser.write(open_cmd)
-                if close_cmd:
-                    import time
-                    time.sleep(1)
-                    ser.write(close_cmd)
-            finally:
-                ser.close()
-            return {"status": True, "message": "Gate opened"}
+            # Bridge owns the hardware path. Frontend may only request "open this
+            # booth's gate" — device path, baudrate and open/close hex live in
+            # gate.hardware_config (DB) + booth.json, never on the wire from POS.
+            # This closes the prior trust hole where any local WS client could
+            # drive arbitrary serial ports with arbitrary bytes.
+            if self.gate_opener is None:
+                logger.warning("open_gate_no_opener_configured")
+                return {
+                    "status": False,
+                    "error": "gate_opener not configured for this booth",
+                }
+            requested = cmd.get("gate_code")
+            if requested and requested != self.gate_opener.gate_id:
+                logger.warning(
+                    "open_gate_code_mismatch",
+                    requested=requested,
+                    bound=self.gate_opener.gate_id,
+                )
+                return {
+                    "status": False,
+                    "error": f"gate {requested} not bound to this booth",
+                }
+            opened = await self.gate_opener.open()
+            return {
+                "status": opened,
+                "message": "Gate opened" if opened else "Gate open failed",
+            }
 
         elif action == "emoney_check_balance":
-            # Forward to e-money reader
+            # Forward to e-money reader. The PASSTI transaction takes
+            # multi-second wall time; run it on a thread so heartbeat,
+            # other WS clients, and supervisor tasks keep advancing.
             from protocols.passti.commands import cmd_check_balance
             frame = cmd_check_balance(timeout_sec=10)
-            response = self.serial_manager.send("emoney_reader", frame)
+            response = await asyncio.to_thread(
+                self.serial_manager.send, "emoney_reader", frame
+            )
             return {"status": True, "data": response.hex()}
 
         elif action == "emoney_deduct":
@@ -211,7 +258,9 @@ class WebSocketServer:
             from protocols.passti.frame import parse_response
 
             frame = cmd_deduct(amount, timeout_sec=30)
-            raw_response = self.serial_manager.send("emoney_reader", frame)
+            raw_response = await asyncio.to_thread(
+                self.serial_manager.send, "emoney_reader", frame
+            )
 
             parsed = parse_response(raw_response)
             if "error" in parsed:
@@ -286,11 +335,16 @@ class WebSocketServer:
             return result_payload
 
         elif action == "print_receipt":
-            # Forward to receipt printer
+            # Receipt printers (ESC/POS) don't ACK — use write_only so we
+            # don't burn the 1s read timeout on every receipt. Still runs in
+            # a worker thread because pyserial's write can briefly block on
+            # USB-CDC flush.
             data = cmd.get("data", b"")
             if isinstance(data, str):
                 data = data.encode()
-            self.serial_manager.send("receipt_printer", data)
+            await asyncio.to_thread(
+                self.serial_manager.write_only, "receipt_printer", data
+            )
             return {"status": True, "message": "Printed"}
 
         elif action == "running_text":

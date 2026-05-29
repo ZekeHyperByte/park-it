@@ -47,6 +47,11 @@ class OmnikeyPoller:
         dedupe_cooldown_s: float = 3.0,
         flush_idle_ms: int = 200,
         min_card_len: int = 6,
+        # Below this length the buffer is treated as stray keystrokes and
+        # silently dropped (no toast). Between this and ``min_card_len`` we
+        # *do* emit an invalid-card event so the operator gets feedback when
+        # a real but malformed read happens (worn card, reader glitch).
+        min_invalid_feedback_len: int = 3,
     ) -> None:
         self.gate_id = gate_id
         self.gate_db_id = gate_db_id
@@ -58,6 +63,7 @@ class OmnikeyPoller:
         self.dedupe_cooldown_s = dedupe_cooldown_s
         self.flush_idle_s = flush_idle_ms / 1000.0
         self.min_card_len = min_card_len
+        self.min_invalid_feedback_len = min_invalid_feedback_len
         self._task: asyncio.Task | None = None
         self._running = False
         self._last_card: str | None = None
@@ -111,22 +117,72 @@ class OmnikeyPoller:
 
         loop = asyncio.get_event_loop()
 
+        # Escalating backoff for the find/grab loop. Default 3s for the first
+        # few attempts so a hot-plug recovers fast; doubles up to 30s if the
+        # condition persists. Every ``_loud_every`` attempts the log level
+        # bumps to WARNING with attempt count + recommended remediation, so
+        # ops notices a stuck reader instead of seeing a single info line.
+        attempts = 0
+        backoff_s = 3.0
+        backoff_cap_s = 30.0
+        loud_every = 5
+
+        def _backoff_log(event: str, **fields) -> None:
+            level = "warning" if attempts and attempts % loud_every == 0 else "info"
+            getattr(logger, level)(
+                event,
+                attempts=attempts,
+                next_sleep_s=backoff_s,
+                **fields,
+            )
+
         while self._running:
             dev = await loop.run_in_executor(None, self._find_device)
             if dev is None:
-                logger.warning("omnikey_device_not_found", match=self.device_name_match)
+                attempts += 1
                 self.connected = False
-                await asyncio.sleep(3)
+                _backoff_log(
+                    "omnikey_device_not_found",
+                    match=self.device_name_match,
+                    hint=(
+                        "Reader unplugged or kernel hasn't enumerated it. "
+                        "Check `ls /dev/input/by-id/ | grep -i omnikey`."
+                    ) if attempts % loud_every == 0 else None,
+                )
+                await asyncio.sleep(backoff_s)
+                backoff_s = min(backoff_s * 2, backoff_cap_s)
                 continue
 
             try:
                 dev.grab()
             except Exception as e:
-                logger.error("omnikey_grab_failed", device=dev.path, error=str(e))
+                attempts += 1
                 self.connected = False
-                await asyncio.sleep(3)
+                _backoff_log(
+                    "omnikey_grab_failed",
+                    device=dev.path,
+                    error=str(e),
+                    hint=(
+                        "Another process holds the device exclusively. "
+                        "Check `sudo fuser /dev/input/eventXX` or stop "
+                        "evtest / a stray bridge."
+                    ) if attempts % loud_every == 0 else None,
+                )
+                await asyncio.sleep(backoff_s)
+                backoff_s = min(backoff_s * 2, backoff_cap_s)
                 continue
 
+            # Reset backoff after a successful grab — the device is healthy
+            # again. Any later disconnect re-enters the loop and starts over
+            # from 3s, so a brief hiccup doesn't carry penalty forward.
+            if attempts > 0:
+                logger.info(
+                    "omnikey_recovered_after_failures",
+                    attempts=attempts,
+                    device=dev.path,
+                )
+            attempts = 0
+            backoff_s = 3.0
             self.connected = True
             logger.info("omnikey_device_opened", device=dev.path, name=dev.name, gate_id=self.gate_id)
 
@@ -203,6 +259,33 @@ class OmnikeyPoller:
 
     async def _flush_buffer(self, buffer: list[str]) -> None:
         if len(buffer) < self.min_card_len:
+            # Emit a visible reject event for buffers long enough to look like
+            # a real (but malformed) card read — too few digits = stray
+            # keystrokes, drop silently. Operator gets a toast instead of
+            # wondering why the tap did nothing.
+            if len(buffer) >= self.min_invalid_feedback_len:
+                partial = "".join(buffer)
+                logger.warning(
+                    "omnikey_card_too_short",
+                    partial=partial,
+                    digits=len(buffer),
+                    min=self.min_card_len,
+                    gate_id=self.gate_id,
+                )
+                await self.broadcast(
+                    {
+                        "event": "member_card_scanned",
+                        "gate_id": self.gate_id,
+                        "card_number": partial,
+                        "success": False,
+                        "message": (
+                            f"Kartu tidak terbaca penuh ({len(buffer)} digit) — "
+                            "coba tap ulang."
+                        ),
+                        "reason": "card_too_short",
+                        "transaction_id": None,
+                    }
+                )
             return
         card_number = "".join(buffer)
         await self._handle_card(card_number)
@@ -229,6 +312,7 @@ class OmnikeyPoller:
                 "card_number": card_number,
                 "success": success,
                 "message": result.get("message", ""),
+                "reason": None if success else (result.get("reason") or "api_rejected"),
                 "transaction_id": result.get("transaction_id"),
             }
         )

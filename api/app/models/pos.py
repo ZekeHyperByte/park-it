@@ -1,6 +1,8 @@
 """POS (booth) model for exit gate operator stations."""
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, String
+from datetime import datetime
+
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -30,6 +32,13 @@ class Pos(Base, IntPKMixin, TimestampMixin):
     booth_peripherals: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Liveness — booth_bridge POSTs /api/pos/heartbeat every 15s. Admin UI
+    # treats now() - last_seen_at > 60s as stale, > 5m as offline.
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_status: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     # Relationships
     gates: Mapped[list["Gate"]] = relationship("Gate", back_populates="pos", foreign_keys="Gate.pos_id")

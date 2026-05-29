@@ -509,15 +509,14 @@ function cancelCorrection() {
 async function openGateAction() {
   if (!selectedGate.value) return
 
-  // Attended OUT gates: drive booth_bridge directly (no daemon at exit)
+  // Attended OUT gates: drive booth_bridge directly (no daemon at exit).
+  // Frontend only requests the open — hardware path + hex live in the
+  // bridge's pre-configured GateOpener (gate.hardware_config + booth.json),
+  // so a stale POS cache can't write to the wrong port.
   if (gateStore.boothConnected && boothWs) {
-    const hw = selectedGate.value.hardware_config || {}
     boothWs.send(JSON.stringify({
       action: 'open_gate',
-      device: selectedGate.value.controller_device || hw.device || '/dev/ttyUSB0',
-      baudrate: selectedGate.value.controller_baudrate || hw.baudrate || 9600,
-      open_command: hw.open_command || '',
-      close_command: hw.close_command || '',
+      gate_code: selectedGate.value.code,
     }))
     sound.gateOpen()
     toast.success('Palang pintu dibuka')

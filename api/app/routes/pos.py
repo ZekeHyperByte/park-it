@@ -1,17 +1,24 @@
 """POS (booth) management routes."""
 
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.app.middleware.api_key import require_api_key
 from api.app.middleware.auth import require_admin, require_auth
 from api.app.models.parking_transaction import ParkingTransaction
 from api.app.models.pos import Pos
 from api.app.models.shift import Shift
 from api.app.schemas.common import SuccessResponse
-from api.app.schemas.pos import PosCreate, PosResponse, PosUpdate
+from api.app.schemas.pos import (
+    BoothHeartbeat,
+    BoothHeartbeatResponse,
+    PosCreate,
+    PosResponse,
+    PosUpdate,
+)
 from api.database import get_db
 from shared.logging import get_logger
 
@@ -119,6 +126,44 @@ async def get_shift_summary(
         "cash_collected": int(cash_collected or 0),
         "transaction_count": int(transaction_count or 0),
     }
+
+
+@router.post("/heartbeat", response_model=BoothHeartbeatResponse)
+async def booth_heartbeat(
+    payload: BoothHeartbeat,
+    db: AsyncSession = Depends(get_db),
+    _: bool = Depends(require_api_key),
+) -> BoothHeartbeatResponse:
+    """Booth liveness check.
+
+    Authenticated by ``X-API-Key`` (the same INTERNAL_API_KEY the booth
+    received via the enrollment flow). booth_bridge POSTs every 15s; we
+    record ``last_seen_at`` and the self-reported status snapshot so admin
+    UI + parking-doctor can show which booths are alive without an operator
+    phone call.
+
+    A heartbeat for an unknown booth_code is rejected with 404 rather than
+    silently auto-creating a Pos row — the wizard owns booth registration.
+    """
+    result = await db.execute(select(Pos).where(Pos.code == payload.booth_code))
+    pos = result.scalar_one_or_none()
+    if pos is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown booth_code {payload.booth_code} — register it in the wizard first.",
+        )
+
+    now = datetime.now(timezone.utc)
+    pos.last_seen_at = now
+    pos.last_status = {
+        "rfid_connected": payload.rfid_connected,
+        "gate_connected": payload.gate_connected,
+        "ws_clients": payload.ws_clients,
+        "last_card_at": payload.last_card_at,
+        "bridge_version": payload.bridge_version,
+    }
+    await db.commit()
+    return BoothHeartbeatResponse(booth_code=pos.code, last_seen_at=now)
 
 
 @router.get("", response_model=list[PosResponse])
