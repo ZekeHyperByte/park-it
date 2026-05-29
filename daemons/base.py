@@ -163,6 +163,15 @@ class BaseDaemon(ABC):
         """
         pass
 
+    def _controller_ok(self) -> bool:
+        """Report controller link health for heartbeat/liveness.
+
+        Base default assumes healthy (no controller concept). Subclasses that
+        own a hardware link should override to reflect real connectivity so
+        monitoring can see a dead controller even while the daemon is alive.
+        """
+        return True
+
     def _spawn_tracked(self, coro: Any, name: str) -> asyncio.Task:
         """Create a background task that is tracked and exception-logged.
 
@@ -375,10 +384,11 @@ class BaseDaemon(ABC):
         """Publish heartbeat every 30 seconds with daemon state."""
         while self._running:
             try:
+                controller_ok = self._controller_ok()
                 event = HeartbeatEvent(
                     event_type="heartbeat",
                     gate_id=self.gate_id,
-                    controller_ok=True,  # Subclasses should override
+                    controller_ok=controller_ok,
                 )
                 await self.publish_event(event)
                 # Publish additional state info for monitoring
@@ -396,7 +406,7 @@ class BaseDaemon(ABC):
                     status_payload = json.dumps({
                         "gate_id": self.gate_id,
                         "state": self.state,
-                        "controller_ok": True,
+                        "controller_ok": controller_ok,
                         "ts": datetime.now(timezone.utc).isoformat(),
                     })
                     await self._redis.set(

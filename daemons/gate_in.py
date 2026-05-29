@@ -105,6 +105,14 @@ class GateInDaemon(BaseDaemon):
     def get_initial_state(self) -> str:
         return STATE_IDLE
 
+    def _controller_ok(self) -> bool:
+        """Heartbeat liveness — true only when the controller link is up.
+
+        Lets monitoring distinguish "daemon alive but gate hardware unreachable"
+        from a fully healthy gate.
+        """
+        return bool(self.controller and self.controller.is_connected())
+
     # ------------------------------------------------------------------
     # Controller connection
     # ------------------------------------------------------------------
@@ -144,12 +152,32 @@ class GateInDaemon(BaseDaemon):
     # Relay mode helpers
     # ------------------------------------------------------------------
 
-    async def _relay_open(self) -> None:
+    async def _relay_open(self) -> bool:
+        """Fire the open relay. Returns True only if the command reached the
+        controller (write succeeded), False if dropped/skipped."""
         relay_mode = self.config.get("relay_mode", "SINGLE")
         if relay_mode == "SINGLE":
-            await self._send_controller_command(cmd_trig1())
-        else:
-            await self._send_controller_command(cmd_open1())
+            return await self._send_controller_command(cmd_trig1())
+        return await self._send_controller_command(cmd_open1())
+
+    async def _relay_open_reliable(self) -> bool:
+        """Open the relay with bounded retry to ride out a brief controller
+        reconnect (the ~1s window after a TCP drop). The relay pulse is
+        idempotent, so retrying is safe — a repeated TRIG1/OPEN1 is harmless.
+
+        Returns True as soon as a write lands; False only if every attempt
+        failed (controller hard-down — operator intervention needed).
+        """
+        attempts = 5
+        for i in range(attempts):
+            if await self._relay_open():
+                return True
+            if i < attempts - 1:
+                logger.warning(
+                    "relay_open_retry", gate_id=self.gate_id, attempt=i + 1, of=attempts
+                )
+                await asyncio.sleep(0.8)
+        return False
 
     async def _relay_close(self) -> None:
         if self.config.get("relay_mode") in ("DUAL", "TRIPLE"):
@@ -222,6 +250,10 @@ class GateInDaemon(BaseDaemon):
                     await self._connect_controller()
                     if self.controller and self.controller.is_connected():
                         await self._setup_rss()
+                        # Fresh socket — clear the circuit breaker so commands flow
+                        # immediately instead of waiting out a stale cooldown.
+                        self._cb_fail_count = 0
+                        self._cb_open_until = 0.0
                         logger.info("rss_controller_reconnected", gate_id=self.gate_id)
                         reconnect_delay = 1.0
                     else:
@@ -407,6 +439,11 @@ class GateInDaemon(BaseDaemon):
         logger.info("gate_in_command", gate_id=self.gate_id, command_type=command_type)
         try:
             if command_type == "open_gate":
+                # Always ACK: a hard-down open is reported via the gate_open_failed
+                # event + log, not by NACK. The command is only valid while the
+                # vehicle waits (~seconds) — leaving it pending for later redelivery
+                # would ghost-open the gate for the wrong vehicle. The bool still
+                # gates the OPENING transition inside _cmd_open_gate.
                 await self._cmd_open_gate()
             elif command_type == "close_gate":
                 await self._relay_close()
@@ -427,6 +464,7 @@ class GateInDaemon(BaseDaemon):
                     command_data.get("gate_name", self.config.get("name", "")),
                 )
             elif command_type == "print_ticket_then_open":
+                # Same ACK-and-report contract as open_gate (see above).
                 await self._cmd_print_ticket_then_open(
                     command_data.get("barcode", ""),
                     command_data.get("gate_name", self.config.get("name", "")),
@@ -454,10 +492,19 @@ class GateInDaemon(BaseDaemon):
             logger.error("command_error", gate_id=self.gate_id, command_type=command_type, error=str(e))
             return False
 
-    async def _cmd_open_gate(self) -> None:
-        await self._relay_open()
+    async def _cmd_open_gate(self) -> bool:
+        """Open the gate. Returns False if the relay never fired (after inline
+        retry) so we never advance to OPENING on a failed open — the daemon must
+        not believe a closed barrier is open. The failure is reported via the
+        gate_open_failed event + log; the command is still ACKed (a stale open
+        must not be redelivered later)."""
+        if not await self._relay_open_reliable():
+            logger.error("gate_open_failed_hard", gate_id=self.gate_id)
+            await self.publish_event(BaseEvent(event_type="gate_open_failed", gate_id=self.gate_id))
+            return False
         await self._cmd_play_audio(9)  # terima_kasih
         await self._on_gate_opened()
+        return True
 
     async def _cmd_play_audio(self, track: int) -> None:
         track_map = self.hw.get("audio", {}).get("track_map", {})
@@ -488,8 +535,13 @@ class GateInDaemon(BaseDaemon):
         except Exception as e:
             logger.error("print_ticket_enqueue_failed", gate_id=self.gate_id, error=str(e))
 
-    async def _cmd_print_ticket_then_open(self, barcode: str, gate_name: str) -> None:
-        """Print-first cash entry flow. Gate ALWAYS opens — never trap a vehicle."""
+    async def _cmd_print_ticket_then_open(self, barcode: str, gate_name: str) -> bool:
+        """Print-first cash entry flow. Gate ALWAYS opens — never trap a vehicle.
+
+        Returns the open result (for internal state only — the command is always
+        ACKed). Print runs at most once per delivery (the command is not
+        redelivered) — no double-print risk.
+        """
         logger.info("print_ticket_then_open", gate_id=self.gate_id, barcode=barcode)
         audio_cfg = self.hw.get("audio", {})
 
@@ -497,8 +549,7 @@ class GateInDaemon(BaseDaemon):
             logger.info("cash_ticket_print_skipped_disabled", gate_id=self.gate_id, barcode=barcode)
             if audio_cfg.get("enabled", True):
                 await self._cmd_play_audio(audio_cfg.get("ticket_track", 2))
-            await self._cmd_open_gate()
-            return
+            return await self._cmd_open_gate()
 
         print_success = False
         try:
@@ -534,7 +585,7 @@ class GateInDaemon(BaseDaemon):
             if audio_cfg.get("enabled", True):
                 await self._cmd_play_audio(audio_cfg.get("ticket_track", 2))
 
-        await self._cmd_open_gate()
+        return await self._cmd_open_gate()
 
     async def _cmd_reject_card(self, line1: str, line2: str, audio_track: int, display_seconds: float) -> None:
         """Show rejection message then return to WAITING_INPUT — driver can retry immediately."""
@@ -588,9 +639,15 @@ class GateInDaemon(BaseDaemon):
         finally:
             ser.close()
 
-    async def _send_controller_command(self, command: bytes) -> None:
+    async def _send_controller_command(self, command: bytes) -> bool:
+        """Send a framed command to the controller.
+
+        Returns True if the write landed on the socket, False if the command was
+        dropped (controller down or circuit breaker open). Best-effort callers
+        ignore the result; the critical gate-open path uses it to retry/NACK.
+        """
         if not (self.controller and self.controller.is_connected()):
-            return
+            return False
 
         # Circuit breaker open? Fast-fail without grabbing the lock.
         loop = asyncio.get_event_loop()
@@ -601,7 +658,7 @@ class GateInDaemon(BaseDaemon):
                 gate_id=self.gate_id,
                 reopen_in_s=round(self._cb_open_until - now, 2),
             )
-            return
+            return False
 
         try:
             async with self._controller_lock:
@@ -610,6 +667,7 @@ class GateInDaemon(BaseDaemon):
             if self._cb_fail_count:
                 logger.info("controller_cb_reset", gate_id=self.gate_id)
             self._cb_fail_count = 0
+            return True
         except Exception as e:
             self._cb_fail_count += 1
             logger.error(
@@ -618,6 +676,12 @@ class GateInDaemon(BaseDaemon):
                 error=str(e),
                 fail_count=self._cb_fail_count,
             )
+            # A write failure means the socket is dead on the TX side. recv() may
+            # never see EOF if no data is pending, so the listener would keep the
+            # half-open socket. Tear it down here so is_connected() flips False and
+            # the RSS listener reconnects within one poll cycle.
+            if self.controller:
+                self.controller.close()
             if self._cb_fail_count >= self._cb_threshold:
                 self._cb_open_until = now + self._cb_cooldown_s
                 logger.warning(
@@ -625,3 +689,4 @@ class GateInDaemon(BaseDaemon):
                     gate_id=self.gate_id,
                     cooldown_s=self._cb_cooldown_s,
                 )
+            return False

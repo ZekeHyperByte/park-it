@@ -212,17 +212,29 @@ class CompassTransport:
 
         Used by RSS listener to receive pushed events without STAT polling.
         Reads are lock-free (TCP full-duplex); only writes need the caller's lock.
+
+        Returns ``b""`` on read timeout (still connected, no data). On EOF (peer
+        performed an orderly shutdown — recv returns 0 bytes) or a socket error
+        the connection is torn down so ``is_connected()`` reports False. Without
+        this the caller cannot distinguish "idle" from "dead" and would busy-spin
+        on a half-open socket forever instead of reconnecting.
         """
         if self._sock is None:
             return b""
         self._sock.settimeout(timeout)
         loop = asyncio.get_event_loop()
         try:
-            return await loop.run_in_executor(None, self._sock.recv, 1024)
+            data = await loop.run_in_executor(None, self._sock.recv, 1024)
         except socket.timeout:
             return b""
         except OSError:
+            self.close()
             return b""
+        if not data:
+            # Orderly peer shutdown (FIN) — 0 bytes on a blocking recv means EOF,
+            # not a timeout. Tear down so the listener reconnects.
+            self.close()
+        return data
 
     def is_connected(self) -> bool:
         """Check if socket is connected."""
@@ -284,6 +296,9 @@ class SerialTransport:
         try:
             return await loop.run_in_executor(None, self._ser.read, 1024)
         except Exception:
+            # Device unplugged / port error — tear down so is_connected() flips
+            # False and the listener reconnects instead of looping on a dead port.
+            self.close()
             return b""
 
     def is_connected(self) -> bool:
