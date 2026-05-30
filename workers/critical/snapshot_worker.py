@@ -26,6 +26,9 @@ async def take_snapshot(
     transaction_id: int | None = None,
     snapshot_type: str = "entry",
     camera_label: str | None = None,
+    camera_username: str | None = None,
+    camera_password: str | None = None,
+    camera_auth_type: str = "none",
 ) -> dict:
     """Download or capture camera snapshot, save locally, and record in DB.
 
@@ -60,7 +63,12 @@ async def take_snapshot(
         if is_rtsp:
             image_data = await _capture_rtsp(camera_url)
         else:
-            image_data = await _download_http(camera_url)
+            image_data = await _download_http(
+                camera_url,
+                username=camera_username,
+                password=camera_password,
+                auth_type=camera_auth_type,
+            )
 
     if image_data is None:
         from api.app.middleware.metrics import snapshot_jobs_total
@@ -178,11 +186,22 @@ async def _broadcast_exit_snapshot(gate_id: str, snapshot_id: int) -> None:
         logger.error("exit_snapshot_broadcast_failed", error=str(e), gate_id=gate_id)
 
 
-async def _download_http(camera_url: str) -> bytes | None:
-    """Download snapshot via HTTP."""
+async def _download_http(
+    camera_url: str,
+    username: str | None = None,
+    password: str | None = None,
+    auth_type: str = "none",
+) -> bytes | None:
+    """Download snapshot via HTTP with optional Basic or Digest auth."""
+    auth = None
+    if username and password:
+        if auth_type == "digest":
+            auth = httpx.DigestAuth(username, password)
+        else:
+            auth = httpx.BasicAuth(username, password)
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(camera_url)
+            response = await client.get(camera_url, auth=auth)
             response.raise_for_status()
             return response.content
     except Exception as e:

@@ -11,6 +11,7 @@ class CameraBase(BaseModel):
     snapshot_url: str | None = Field(None, max_length=500)
     username: str | None = Field(None, max_length=100)
     password: str | None = Field(None, max_length=255)
+    auth_type: str = Field(default="none", max_length=20)
     type: str = Field(default="rtsp", max_length=20)
     is_active: bool = True
 
@@ -29,6 +30,7 @@ class CameraUpdate(BaseModel):
     snapshot_url: str | None = Field(None, max_length=500)
     username: str | None = Field(None, max_length=100)
     password: str | None = Field(None, max_length=255)
+    auth_type: str | None = Field(None, max_length=20)
     type: str | None = Field(None, max_length=20)
     is_active: bool | None = None
 

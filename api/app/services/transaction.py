@@ -78,6 +78,9 @@ async def create_entry_transaction(
                             transaction_id=tx.id,
                             snapshot_type="entry",
                             camera_label=cam.get("label"),
+                            camera_username=cam.get("username"),
+                            camera_password=cam.get("password"),
+                            camera_auth_type=cam.get("auth_type", "none"),
                             _job_id=f"snapshot:entry:{tx.id}:{cam_key}",
                             _queue_name="arq:queue:snapshot",
                         )

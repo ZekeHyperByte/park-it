@@ -76,8 +76,18 @@ class Gate(Base, IntPKMixin, TimestampMixin):
         """Return active camera configs. Supports cameras[] array and legacy camera.url."""
         cameras = self.hardware_config.get("cameras", [])
         if cameras:
-            return [c for c in cameras if c.get("url") and c.get("enabled", True)]
+            return [
+                {
+                    "url": c["url"],
+                    "label": c.get("label"),
+                    "username": c.get("username"),
+                    "password": c.get("password"),
+                    "auth_type": c.get("auth_type", "none"),
+                }
+                for c in cameras
+                if c.get("url") and c.get("enabled", True)
+            ]
         cam = self.hardware_config.get("camera", {})
         if cam.get("enabled", False) and cam.get("url"):
-            return [{"url": cam["url"], "label": None}]
+            return [{"url": cam["url"], "label": None, "username": None, "password": None, "auth_type": "none"}]
         return []

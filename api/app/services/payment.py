@@ -112,6 +112,9 @@ async def _enqueue_exit_snapshot(db: AsyncSession, gate_id: str, transaction_id:
                 transaction_id=transaction_id,
                 snapshot_type="exit",
                 camera_label=cam.get("label"),
+                camera_username=cam.get("username"),
+                camera_password=cam.get("password"),
+                camera_auth_type=cam.get("auth_type", "none"),
                 _job_id=f"snapshot:exit:{transaction_id}:{cam_key}",
                 _queue_name="arq:queue:snapshot",
             )

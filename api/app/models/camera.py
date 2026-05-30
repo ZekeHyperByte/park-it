@@ -16,6 +16,7 @@ class Camera(Base, IntPKMixin, TimestampMixin):
     snapshot_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     username: Mapped[str | None] = mapped_column(String(100), nullable=True)
     password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    auth_type: Mapped[str] = mapped_column(String(20), default="none", nullable=False)
     type: Mapped[str | None] = mapped_column(String(20), default="rtsp", nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
