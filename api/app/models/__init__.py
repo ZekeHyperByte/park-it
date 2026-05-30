@@ -11,10 +11,8 @@ from api.app.models.emoney_reader import EmoneyReader
 from api.app.models.emoney_settlement import EmoneySettlement
 from api.app.models.emoney_transaction import EmoneyTransaction
 from api.app.models.gate import Gate
-from api.app.models.health_check import HealthCheck
 from api.app.models.manual_open_log import ManualOpenLog
 from api.app.models.member import Member
-from api.app.models.member_renewal import MemberRenewal
 from api.app.models.operator_alert import OperatorAlert
 from api.app.models.parking_transaction import ParkingTransaction
 from api.app.models.pos import Pos
@@ -24,7 +22,6 @@ from api.app.models.setup_session import SetupSession
 from api.app.models.shift import Shift
 from api.app.models.shift_assignment import ShiftAssignment
 from api.app.models.site_config import SiteConfig
-from api.app.models.shift_emoney_snapshot import ShiftEmoneySnapshot
 from api.app.models.snapshot import Snapshot
 from api.app.models.user import User
 from api.app.models.worker_session import WorkerSession
@@ -39,10 +36,8 @@ __all__ = [
     "EmoneySettlement",
     "EmoneyTransaction",
     "Gate",
-    "HealthCheck",
     "ManualOpenLog",
     "Member",
-    "MemberRenewal",
     "OperatorAlert",
     "ParkingTransaction",
     "Pos",
@@ -52,7 +47,6 @@ __all__ = [
     "Shift",
     "ShiftAssignment",
     "SiteConfig",
-    "ShiftEmoneySnapshot",
     "Snapshot",
     "User",
     "VehicleType",

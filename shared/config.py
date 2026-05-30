@@ -29,11 +29,6 @@ class Settings(BaseSettings):
     db_pool_size: int = Field(default=20, alias="DB_POOL_SIZE")
     db_max_overflow: int = Field(default=10, alias="DB_MAX_OVERFLOW")
 
-    # pgBouncer
-    pgbouncer_host: str = Field(default="localhost", alias="PGBOUNCER_HOST")
-    pgbouncer_port: int = Field(default=6432, alias="PGBOUNCER_PORT")
-    pgbouncer_pool_mode: str = Field(default="transaction", alias="PGBOUNCER_POOL_MODE")
-
     # Redis
     redis_host: str = Field(default="localhost", alias="REDIS_HOST")
     redis_port: int = Field(default=6379, alias="REDIS_PORT")
@@ -56,23 +51,7 @@ class Settings(BaseSettings):
     )
     internal_api_key: str | None = Field(default=None, alias="INTERNAL_API_KEY")
 
-    # Hardware defaults
-    default_emoney_minimum_balance: int = Field(
-        default=10000, alias="DEFAULT_EMONEY_MINIMUM_BALANCE"
-    )
-    default_payment_timeout_seconds: int = Field(
-        default=120, alias="DEFAULT_PAYMENT_TIMEOUT_SECONDS"
-    )
-    default_print_decision_timeout_seconds: int = Field(
-        default=10, alias="DEFAULT_PRINT_DECISION_TIMEOUT_SECONDS"
-    )
-    default_gate_close_duration_ms: int = Field(
-        default=5000, alias="DEFAULT_GATE_CLOSE_DURATION_MS"
-    )
-
     # Settlement
-    settlement_schedule: str = Field(default="0 2 * * *", alias="SETTLEMENT_SCHEDULE")
-    settlement_auto_upload: bool = Field(default=False, alias="SETTLEMENT_AUTO_UPLOAD")
     # Multibank settlement is in operational timezone (Asia/Jakarta).
     app_timezone: str = Field(default="Asia/Jakarta", alias="APP_TIMEZONE")
     # Settlement SFTP delivery (Multibank v1.3 §I)
@@ -174,14 +153,6 @@ class Settings(BaseSettings):
         return (
             f"postgresql+asyncpg://{self.db_user}:{self.db_password}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
-        )
-
-    @property
-    def pgbouncer_url(self) -> str:
-        """Build async PostgreSQL connection URL via pgBouncer."""
-        return (
-            f"postgresql+asyncpg://{self.db_user}:{self.db_password}"
-            f"@{self.pgbouncer_host}:{self.pgbouncer_port}/{self.db_name}"
         )
 
     @property
