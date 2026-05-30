@@ -46,10 +46,10 @@ class ParkingTransaction(Base, IntPKMixin, TimestampMixin):
 
     # Timestamps
     entry_time: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
+        DateTime(timezone=True), nullable=False, index=True
     )
     exit_time: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True), nullable=True, index=True
     )
 
     # Payment (v2 additions)
@@ -96,15 +96,15 @@ class ParkingTransaction(Base, IntPKMixin, TimestampMixin):
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_lost_ticket: Mapped[bool] = mapped_column(default=False, nullable=False)
 
-    # Relationships
+    # Relationships (use lazy="noload" to prevent N+1 on list endpoints)
     vehicle_type: Mapped["VehicleType | None"] = relationship(
-        "VehicleType", lazy="selectin"
+        "VehicleType", lazy="noload"
     )
-    gate_in: Mapped["Gate | None"] = relationship("Gate", foreign_keys=[gate_in_id], lazy="selectin")
-    gate_out: Mapped["Gate | None"] = relationship("Gate", foreign_keys=[gate_out_id], lazy="selectin")
-    member: Mapped["Member | None"] = relationship("Member", lazy="selectin")
-    shift: Mapped["Shift | None"] = relationship("Shift", lazy="selectin")
-    operator: Mapped["User | None"] = relationship("User", lazy="selectin")
+    gate_in: Mapped["Gate | None"] = relationship("Gate", foreign_keys=[gate_in_id], lazy="noload")
+    gate_out: Mapped["Gate | None"] = relationship("Gate", foreign_keys=[gate_out_id], lazy="noload")
+    member: Mapped["Member | None"] = relationship("Member", lazy="noload")
+    shift: Mapped["Shift | None"] = relationship("Shift", lazy="noload")
+    operator: Mapped["User | None"] = relationship("User", lazy="noload")
 
     # Partial unique index: prevent duplicate active card
     __table_args__ = (

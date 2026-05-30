@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.models.printer import Printer
+from api.database import get_db
 from shared.config import get_settings
 from shared.logging import get_logger
 
@@ -99,24 +100,13 @@ def _to_response(p: Printer) -> PrinterResponse:
 
 
 # ---------------------------------------------------------------------------
-# Dependency: get DB session
-# ---------------------------------------------------------------------------
-
-async def _get_db() -> AsyncSession:
-    from api.app.database import async_session_factory
-
-    async with async_session_factory() as session:
-        yield session
-
-
-# ---------------------------------------------------------------------------
 # CRUD Routes
 # ---------------------------------------------------------------------------
 
 @router.get("/", response_model=list[PrinterResponse])
 async def list_printers(
     gate_id: str | None = None,
-    db: AsyncSession = Depends(_get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """List all printers, optionally filtered by gate_id."""
     query = select(Printer).order_by(Printer.gate_id, Printer.name)
@@ -131,7 +121,7 @@ async def list_printers(
 @router.post("/", response_model=PrinterResponse, status_code=status.HTTP_201_CREATED)
 async def create_printer(
     req: PrinterCreateRequest,
-    db: AsyncSession = Depends(_get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create a new printer."""
     printer = Printer(
@@ -157,7 +147,7 @@ async def create_printer(
 @router.get("/{printer_id}", response_model=PrinterResponse)
 async def get_printer(
     printer_id: int,
-    db: AsyncSession = Depends(_get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get a single printer by ID."""
     result = await db.execute(select(Printer).where(Printer.id == printer_id))
@@ -171,7 +161,7 @@ async def get_printer(
 async def update_printer(
     printer_id: int,
     req: PrinterUpdateRequest,
-    db: AsyncSession = Depends(_get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Update printer configuration."""
     result = await db.execute(select(Printer).where(Printer.id == printer_id))
@@ -192,7 +182,7 @@ async def update_printer(
 @router.delete("/{printer_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_printer(
     printer_id: int,
-    db: AsyncSession = Depends(_get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Delete a printer."""
     result = await db.execute(select(Printer).where(Printer.id == printer_id))
@@ -214,7 +204,7 @@ async def delete_printer(
 async def refill_paper(
     printer_id: int,
     req: PaperRefillRequest,
-    db: AsyncSession = Depends(_get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Record a paper refill.  Resets paper_remaining to given count or capacity."""
     result = await db.execute(select(Printer).where(Printer.id == printer_id))
@@ -240,7 +230,7 @@ async def refill_paper(
 @router.post("/{printer_id}/decrement", response_model=PrinterResponse)
 async def decrement_paper(
     printer_id: int,
-    db: AsyncSession = Depends(_get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Decrement paper counter by 1.  Called by print_worker after successful print."""
     settings = get_settings()
@@ -272,7 +262,7 @@ async def decrement_paper(
 
 @router.get("/status/summary")
 async def printer_status_summary(
-    db: AsyncSession = Depends(_get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Dashboard summary of all printer paper statuses."""
     result = await db.execute(
