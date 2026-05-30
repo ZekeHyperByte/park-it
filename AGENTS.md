@@ -138,8 +138,7 @@ parking-system-v2/
 ├── daemons/                      # Gate controller daemons
 │   ├── cli.py                    # UNIFIED ENTRY POINT (queries DB, starts daemon)
 │   ├── base.py                   # Abstract base daemon (Redis Streams + Pub/Sub)
-│   ├── gate_in.py                # Entry gate state machine
-│   └── gate_out.py               # Exit gate state machine
+│   └── gate_in.py                # Entry gate state machine
 ├── booth_bridge/                 # Booth PC serial-to-WebSocket bridge
 │   ├── main.py                   # Entry point
 │   ├── serial_manager.py
@@ -280,7 +279,6 @@ python scripts/seed.py
 | `daemons/cli.py` | Daemon runner — reads gate config from DB |
 | `daemons/base.py` | BaseDaemon — Redis Streams consumer + Pub/Sub publisher + heartbeat state |
 | `daemons/gate_in.py` | Entry gate state machine — welcome audio/LED on vehicle detection |
-| `daemons/gate_out.py` | Exit gate state machine — receipt printing via ARQ worker |
 | `api/app/main.py` | FastAPI app factory — where routers are registered |
 | `frontend/nuxt.config.ts` | Frontend config — `apiBaseUrl`, modules |
 | `frontend/stores/gate.js` | POS transaction state — awaitingGateOpen, openGate() |

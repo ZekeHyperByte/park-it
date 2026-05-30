@@ -29,11 +29,8 @@
     "vue-sonner": "^2.0.9"
   },
   "devDependencies": {
-    "@fontsource/caveat": "^5.2.8",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
-    "@fontsource/kalam": "^5.2.8",
-    "@fontsource/patrick-hand": "^5.2.8",
     "@vitejs/plugin-vue": "^5.2.0",
     "jsdom": "^29.0.2",
     "patch-package": "^8.0.1",
