@@ -22,19 +22,19 @@
     </div>
 
     <!-- Table -->
-    <div class="overflow-x-auto rounded-lg border border-border">
+    <div class="overflow-x-auto border-2 border-foreground shadow-brutal">
       <table class="w-full text-sm">
         <thead>
-          <tr class="border-b border-border bg-muted/50">
+          <tr class="border-b-2 border-foreground bg-foreground text-background">
             <th
               v-for="col in columns"
               :key="col.prop"
-              class="px-4 py-3 text-left font-semibold text-muted-foreground"
+              class="px-4 py-3 text-left font-black uppercase tracking-wider"
               :style="col.width ? { width: col.width + 'px' } : {}"
             >
               <button
                 v-if="col.sortable"
-                class="flex items-center gap-1 hover:text-foreground"
+                class="flex items-center gap-1 hover:text-primary"
                 @click="toggleSort(col.prop)"
               >
                 {{ col.label }}
@@ -44,7 +44,7 @@
               </button>
               <span v-else>{{ col.label }}</span>
             </th>
-            <th v-if="showActions" class="w-24 px-4 py-3 text-left font-semibold text-muted-foreground">Aksi</th>
+            <th v-if="showActions" class="w-24 px-4 py-3 text-left font-black uppercase tracking-wider">Aksi</th>
           </tr>
         </thead>
         <tbody>
@@ -71,19 +71,19 @@
           <tr
             v-for="(row, idx) in displayedData"
             :key="idx"
-            class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+            class="border-b-2 border-foreground last:border-0 hover:bg-primary/20 transition-colors"
           >
             <td
               v-for="col in columns"
               :key="col.prop"
-              class="px-4 py-2.5 text-foreground"
+              class="px-4 py-3 font-medium text-foreground"
             >
               <!-- Boolean type -->
               <span
                 v-if="col.type === 'boolean'"
                 :class="[
-                  'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-                  row[col.prop] ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground',
+                  'inline-flex border-2 border-foreground px-2 py-0.5 text-xs font-bold uppercase shadow-brutal-sm',
+                  row[col.prop] ? 'bg-success text-white' : 'bg-muted text-muted-foreground',
                 ]"
               >
                 {{ row[col.prop] ? 'Ya' : 'Tidak' }}
@@ -92,7 +92,7 @@
               <!-- Enum type -->
               <span
                 v-else-if="col.type === 'enum'"
-                class="inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+                class="inline-flex border-2 border-foreground bg-primary px-2 py-0.5 text-xs font-bold uppercase shadow-brutal-sm"
               >
                 {{ row[col.prop] }}
               </span>
@@ -107,12 +107,12 @@
             </td>
 
             <!-- Actions -->
-            <td v-if="showActions" class="px-4 py-2.5">
+            <td v-if="showActions" class="px-4 py-3">
               <div class="flex items-center gap-1">
                 <slot name="row-actions" :row="row" />
                 <button
                   v-if="showEdit"
-                  class="rounded p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                  class="border-2 border-transparent p-1.5 text-muted-foreground transition-all hover:border-foreground hover:bg-primary hover:text-foreground hover:shadow-brutal-sm"
                   title="Edit"
                   @click="$emit('edit', row)"
                 >
@@ -123,7 +123,7 @@
                 </button>
                 <button
                   v-if="showDelete"
-                  class="rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  class="border-2 border-transparent p-1.5 text-muted-foreground transition-all hover:border-foreground hover:bg-destructive hover:text-white hover:shadow-brutal-sm"
                   title="Hapus"
                   @click="$emit('delete', row)"
                 >
@@ -146,7 +146,7 @@
       <div class="flex items-center gap-1">
         <select
           v-model="currentPageSize"
-          class="rounded border border-border bg-surface px-2 py-1 text-sm text-foreground"
+          class="border-2 border-foreground bg-surface px-2 py-1 text-sm font-medium text-foreground shadow-brutal-sm"
           @change="handleSizeChange"
         >
           <option v-for="s in pageSizes" :key="s" :value="s">{{ s }}</option>

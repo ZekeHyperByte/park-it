@@ -6,18 +6,18 @@
       </DialogHeader>
 
       <div class="space-y-4">
-        <div class="rounded-lg bg-surface p-3 text-center">
-          <div class="text-sm text-muted-foreground">
+        <div class="border-2 border-foreground bg-surface p-3 text-center shadow-brutal-sm">
+          <div class="text-sm font-medium text-muted-foreground">
             Scan kartu RFID member atau ketik nomor kartu secara manual
           </div>
         </div>
 
         <div class="space-y-2">
-          <label class="text-sm text-muted-foreground">Nomor Kartu RFID</label>
+          <label class="text-sm font-bold uppercase tracking-wide text-foreground">Nomor Kartu RFID</label>
           <Input
             ref="cardInput"
             v-model="cardNumber"
-            class="h-12 text-lg font-mono tracking-wider"
+            class="h-12 text-lg font-mono font-bold tracking-wider"
             placeholder="Scan atau ketik nomor kartu"
             @keydown.enter="onConfirm"
           />

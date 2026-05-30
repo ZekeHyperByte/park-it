@@ -3,7 +3,7 @@
     <PageHeader title="Laporan" subtitle="Ringkasan transaksi dan settlement e-money." />
 
     <!-- Date filter -->
-    <div class="mb-4 rounded-lg border border-border bg-surface p-4">
+    <div class="mb-4 border-2 border-foreground bg-surface p-4 shadow-brutal">
       <div class="mb-3 flex gap-2">
         <Button size="sm" variant="outline" @click="setToday">Hari Ini</Button>
         <Button size="sm" variant="outline" @click="setThisWeek">Minggu Ini</Button>
@@ -11,9 +11,9 @@
         <Button size="sm" variant="outline" @click="setLastMonth">Bulan Lalu</Button>
       </div>
       <div class="flex items-center gap-3">
-        <input v-model="dateFrom" type="date" class="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground" />
-        <span class="text-muted-foreground">s/d</span>
-        <input v-model="dateTo" type="date" class="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground" />
+        <input v-model="dateFrom" type="date" class="border-2 border-foreground bg-background px-3 py-2 text-sm font-medium text-foreground shadow-brutal-sm" />
+        <span class="font-bold text-foreground">s/d</span>
+        <input v-model="dateTo" type="date" class="border-2 border-foreground bg-background px-3 py-2 text-sm font-medium text-foreground shadow-brutal-sm" />
         <Button size="sm" :disabled="loading" @click="loadReports">Tampilkan</Button>
       </div>
     </div>
@@ -32,7 +32,7 @@
         <StatCard label="Transaksi Aktif" :value="summaryReport.active_transactions.toLocaleString()" />
         <StatCard label="Transaksi Selesai" :value="summaryReport.completed_transactions.toLocaleString()" />
       </div>
-      <div v-else class="py-12 text-center text-muted-foreground">Pilih rentang tanggal untuk melihat laporan</div>
+      <div v-else class="py-12 text-center font-medium text-muted-foreground">Pilih rentang tanggal untuk melihat laporan</div>
       <div class="flex gap-2">
         <Button size="sm" variant="outline" @click="exportReport('csv')">Export CSV</Button>
         <Button size="sm" variant="outline" @click="exportReport('xlsx')">Export Excel</Button>
@@ -44,13 +44,13 @@
     <div v-if="activeTab === 'shift'">
       <!-- Summary strip -->
       <div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div class="rounded-lg border border-border bg-surface p-3">
-          <p class="text-xs text-muted-foreground">Total Transaksi</p>
-          <p class="text-lg font-semibold text-foreground">{{ (shiftReport?.total_transactions ?? 0).toLocaleString('id-ID') }}</p>
+        <div class="border-2 border-foreground bg-surface p-3 shadow-brutal">
+          <p class="text-xs font-bold uppercase text-muted-foreground">Total Transaksi</p>
+          <p class="text-xl font-black text-foreground">{{ (shiftReport?.total_transactions ?? 0).toLocaleString('id-ID') }}</p>
         </div>
-        <div class="rounded-lg border border-border bg-surface p-3">
-          <p class="text-xs text-muted-foreground">Total Pendapatan</p>
-          <p class="text-lg font-semibold text-foreground">Rp {{ (shiftReport?.total_revenue ?? 0).toLocaleString('id-ID') }}</p>
+        <div class="border-2 border-foreground bg-surface p-3 shadow-brutal">
+          <p class="text-xs font-bold uppercase text-muted-foreground">Total Pendapatan</p>
+          <p class="text-xl font-black text-foreground">Rp {{ (shiftReport?.total_revenue ?? 0).toLocaleString('id-ID') }}</p>
         </div>
       </div>
       <DataTable
@@ -75,7 +75,7 @@
         <StatCard label="Belum Settlement" :value="emoneyReport.unsettled_count.toLocaleString()" />
         <StatCard label="Sudah Settlement" :value="emoneyReport.settled_count.toLocaleString()" />
       </div>
-      <div v-else class="py-12 text-center text-muted-foreground">Pilih rentang tanggal untuk melihat laporan</div>
+      <div v-else class="py-12 text-center font-medium text-muted-foreground">Pilih rentang tanggal untuk melihat laporan</div>
     </div>
   </div>
 </template>
@@ -164,7 +164,6 @@ async function exportReport(format) {
 </script>
 
 <script>
-// StatCard inline component
 const StatCard = {
   props: {
     label: String,
@@ -172,16 +171,16 @@ const StatCard = {
     variant: { type: String, default: '' },
   },
   template: `
-    <div class="rounded-lg border border-border bg-surface p-4 text-center">
-      <div class="mb-1 text-xs text-muted-foreground">{{ label }}</div>
-      <div :class="['text-xl font-bold font-mono', variantClass]">{{ value }}</div>
+    <div class="border-2 border-foreground bg-surface p-4 text-center shadow-brutal">
+      <div class="mb-1 text-xs font-bold uppercase text-muted-foreground">{{ label }}</div>
+      <div :class="['text-xl font-black font-mono', variantClass]">{{ value }}</div>
     </div>
   `,
   computed: {
     variantClass() {
-      if (this.variant === 'success') return 'text-green-500'
+      if (this.variant === 'success') return 'text-success'
       if (this.variant === 'destructive') return 'text-destructive'
-      if (this.variant === 'warning') return 'text-amber-500'
+      if (this.variant === 'warning') return 'text-warning'
       return 'text-foreground'
     },
   },

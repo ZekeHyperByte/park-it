@@ -1,67 +1,67 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center sketch-backdrop p-6" @keydown.esc="close" tabindex="-1">
-      <div class="sketch-box w-full max-w-3xl p-7">
+    <div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" @keydown.esc="close" tabindex="-1">
+      <div class="w-full max-w-3xl border-4 border-foreground bg-surface p-7 shadow-brutal-lg">
         <!-- Header -->
         <div class="flex items-baseline justify-between mb-1">
-          <div class="text-xs uppercase tracking-[0.2em] font-hand-tight text-sketch-muted">MODAL · BAYAR TUNAI</div>
-          <div class="text-xs font-hand-tight text-sketch-muted">F1 dari layar utama</div>
+          <div class="text-xs uppercase tracking-[0.2em] font-black text-muted-foreground">MODAL · BAYAR TUNAI</div>
+          <div class="text-xs font-bold text-muted-foreground">F1 dari layar utama</div>
         </div>
-        <h2 class="font-hand text-4xl mb-5 leading-none">Bayar Tunai</h2>
+        <h2 class="text-4xl font-black uppercase mb-5 leading-none text-foreground">Bayar Tunai</h2>
 
         <!-- Three tiles: Tagihan / Diterima / Kembali -->
         <div class="grid grid-cols-3 gap-4 mb-6">
-          <div class="sketch-tile p-4">
-            <div class="text-[11px] uppercase tracking-widest font-hand-tight text-sketch-muted mb-1">TAGIHAN</div>
-            <div class="font-hand text-3xl tabular-nums">{{ formatRp(tariff) }}</div>
+          <div class="border-2 border-foreground bg-background p-4 shadow-brutal">
+            <div class="text-[11px] uppercase tracking-widest font-black text-muted-foreground mb-1">Tagihan</div>
+            <div class="text-3xl font-black tabular-nums text-foreground">{{ formatRp(tariff) }}</div>
           </div>
-          <div class="sketch-tile is-active p-4">
-            <div class="text-[11px] uppercase tracking-widest font-hand-tight text-sketch-muted mb-1">DITERIMA</div>
+          <div class="border-2 border-foreground bg-primary p-4 shadow-brutal">
+            <div class="text-[11px] uppercase tracking-widest font-black text-foreground mb-1">Diterima</div>
             <input
               ref="amountInput"
               v-model.number="paidAmount"
               type="number"
               :min="0"
-              class="w-full bg-transparent outline-none font-hand text-3xl tabular-nums"
+              class="w-full bg-transparent outline-none text-3xl font-black tabular-nums text-foreground"
               placeholder="0"
               @keydown.enter.prevent="onConfirm"
               @keydown.esc.prevent="close"
             />
-            <div class="text-[11px] font-hand-tight text-sketch-muted mt-1">ketik nominal · enter untuk lanjut</div>
+            <div class="text-[11px] font-bold text-foreground/70 mt-1">ketik nominal · enter untuk lanjut</div>
           </div>
-          <div class="sketch-tile p-4" :class="{ 'opacity-50': paidAmount < tariff }">
-            <div class="text-[11px] uppercase tracking-widest font-hand-tight text-sketch-muted mb-1">KEMBALI</div>
-            <div class="font-hand text-3xl tabular-nums">{{ formatRp(Math.max(0, paidAmount - tariff)) }}</div>
+          <div class="border-2 border-foreground bg-background p-4 shadow-brutal" :class="{ 'opacity-50': paidAmount < tariff }">
+            <div class="text-[11px] uppercase tracking-widest font-black text-muted-foreground mb-1">Kembali</div>
+            <div class="text-3xl font-black tabular-nums text-foreground">{{ formatRp(Math.max(0, paidAmount - tariff)) }}</div>
           </div>
         </div>
 
         <!-- Denomination shortcuts -->
-        <div class="text-[11px] uppercase tracking-widest font-hand-tight text-sketch-muted mb-2">SHORTCUT NOMINAL</div>
+        <div class="text-[11px] uppercase tracking-widest font-black text-muted-foreground mb-2">Shortcut Nominal</div>
         <div class="grid grid-cols-7 gap-2 mb-6">
           <button
             v-for="(denom, idx) in denominations"
             :key="denom"
-            class="sketch-tile px-2 py-3 text-center"
-            :class="{ 'is-active': paidAmount === denom }"
+            class="border-2 border-foreground bg-background px-2 py-3 text-center shadow-brutal-sm transition-all duration-100 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none"
+            :class="{ 'bg-primary': paidAmount === denom }"
             @click="setDenom(denom)"
           >
-            <div class="font-hand text-xl leading-none">{{ shortLabel(denom) }}</div>
-            <div class="text-[10px] font-hand-tight text-sketch-muted">«{{ idx + 1 }}»</div>
+            <div class="text-xl font-black leading-none text-foreground">{{ shortLabel(denom) }}</div>
+            <div class="text-[10px] font-bold text-muted-foreground">«{{ idx + 1 }}»</div>
           </button>
         </div>
 
         <!-- Footer hint + actions -->
         <div class="flex items-center justify-between">
-          <div class="text-xs font-hand-body text-sketch-muted max-w-md">
+          <div class="text-xs font-medium text-muted-foreground max-w-md">
             <div>Konfirmasi 1/7 — bisa juga ketik angka langsung.</div>
-            <div class="mt-1 italic">setelah Enter, struk dicetak otomatis, layar pindah ke 'buka palang', tekan Space saat kembalian sudah diberikan.</div>
+            <div class="mt-1">setelah Enter, struk dicetak otomatis, layar pindah ke 'buka palang', tekan Space saat kembalian sudah diberikan.</div>
           </div>
           <div class="flex gap-2">
-            <button class="sketch-btn" @click="close">
-              <span class="sketch-chip mr-1 px-1.5 py-0">Esc</span> Batal
+            <button class="border-2 border-foreground bg-background px-4 py-2 text-sm font-bold uppercase text-foreground shadow-brutal-sm transition-all duration-100 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none" @click="close">
+              <span class="border-2 border-foreground bg-muted px-1.5 py-0 mr-1 text-xs font-black">Esc</span> Batal
             </button>
-            <button class="sketch-btn is-go" :disabled="paidAmount < tariff" @click="onConfirm">
-              <span class="sketch-chip mr-1 px-1.5 py-0">Enter</span> DITERIMA →
+            <button class="border-2 border-foreground bg-success px-4 py-2 text-sm font-bold uppercase text-white shadow-brutal-sm transition-all duration-100 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none disabled:opacity-40" :disabled="paidAmount < tariff" @click="onConfirm">
+              <span class="border-2 border-foreground bg-background px-1.5 py-0 mr-1 text-xs font-black text-foreground">Enter</span> DITERIMA →
             </button>
           </div>
         </div>
@@ -99,7 +99,6 @@ function onConfirm() {
   emit('update:open', false)
 }
 
-// Numeric 1..7 → denominations
 function onKey(e) {
   if (!props.open) return
   const idx = parseInt(e.key, 10)

@@ -1,8 +1,9 @@
 <template>
   <button
     :class="[
-      'w-full h-14 flex items-center justify-between px-5 rounded-xl font-bold text-white text-lg transition-all',
-      'hover:enabled:scale-[1.02] active:enabled:scale-[0.98]',
+      'w-full h-14 flex items-center justify-between px-5 border-2 border-foreground font-black uppercase text-lg text-white shadow-brutal transition-all duration-100',
+      'hover:enabled:translate-x-[2px] hover:enabled:translate-y-[2px] hover:enabled:shadow-none',
+      'active:enabled:translate-x-[4px] active:enabled:translate-y-[4px]',
       'disabled:opacity-30 disabled:cursor-not-allowed',
       buttonColorClass,
     ]"
@@ -10,14 +11,12 @@
     @click="$emit('click')"
   >
     <div class="flex items-center gap-3">
-      <!-- Icon -->
       <component :is="iconComponent" class="w-8 h-8" />
       <span>{{ label }}</span>
     </div>
-    <!-- Shortcut or spinner -->
-    <div class="text-sm opacity-70 font-normal">
+    <div class="text-sm opacity-70 font-bold">
       <div v-if="processing" class="flex items-center gap-2">
-        <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+        <span class="h-4 w-4 animate-spin border-2 border-white/20 border-t-white" />
       </div>
       <span v-else>{{ shortcut }}</span>
     </div>

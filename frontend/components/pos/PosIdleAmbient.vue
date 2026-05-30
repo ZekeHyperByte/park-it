@@ -3,15 +3,15 @@
     <!-- Left: ambient clock + waiting prompt -->
     <div class="relative flex flex-1 min-h-0 flex-col items-center justify-center">
       <div
-        class="flex h-72 w-72 items-center justify-center rounded-full border-2 border-dashed border-border/40"
+        class="flex h-72 w-72 items-center justify-center border-4 border-foreground bg-surface shadow-brutal-lg"
       >
         <div class="text-center">
           <div
-            class="font-serif text-7xl font-light leading-none tracking-tight tabular-nums text-foreground"
+            class="font-mono text-7xl font-black leading-none tracking-tight tabular-nums text-foreground"
           >
             {{ clockHHMM }}
           </div>
-          <div class="mt-3 text-xs uppercase tracking-[0.25em] text-muted-foreground">
+          <div class="mt-3 text-xs font-black uppercase tracking-[0.25em] text-muted-foreground">
             {{ dayDateLabel }}
           </div>
         </div>
@@ -23,7 +23,7 @@
           v-model="barcodeValue"
           data-barcode-input
           placeholder="Scan barcode atau ketik nomor plat..."
-          class="h-16 text-center font-mono text-2xl tracking-wider focus-visible:ring-0 focus-visible:ring-offset-0"
+          class="h-16 text-center font-mono text-2xl font-bold uppercase tracking-wider border-4 focus-visible:shadow-brutal-lg"
           @keydown.enter="onBarcodeSubmit"
         />
       </div>
@@ -51,7 +51,7 @@
           </span>
         </div>
         <div
-          class="w-full aspect-video overflow-hidden rounded-lg border border-border/30 bg-muted/10"
+          class="w-full aspect-video overflow-hidden border-2 border-foreground bg-muted/10"
         >
           <img
             v-if="lastEntry?.snapshotUrl"
@@ -64,22 +64,22 @@
             class="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground/20"
           >
             <Car class="h-8 w-8" />
-            <span class="text-[10px]">Belum ada masuk</span>
+            <span class="text-[10px] font-bold">Belum ada masuk</span>
           </div>
         </div>
         <div
           v-if="lastEntry?.plateNumber"
-          class="mt-2 flex items-center justify-between rounded-md border border-border/40 bg-surface/40 px-3 py-2"
+          class="mt-2 flex items-center justify-between border-2 border-foreground bg-surface px-3 py-2 shadow-brutal-sm"
         >
           <div>
-            <div class="font-mono text-sm font-bold tracking-wider text-foreground">
+            <div class="font-mono text-sm font-black tracking-wider text-foreground">
               {{ lastEntry.plateNumber }}
             </div>
-            <div class="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+            <div class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
               {{ lastEntry.subtitle || 'baru saja masuk' }}
             </div>
           </div>
-          <div v-if="lastEntry.ageLabel" class="text-[10px] tabular-nums text-muted-foreground/70">
+          <div v-if="lastEntry.ageLabel" class="text-[10px] font-bold tabular-nums text-muted-foreground">
             {{ lastEntry.ageLabel }}
           </div>
         </div>
@@ -108,7 +108,7 @@ const barcodeInput = ref(null)
 const barcodeValue = ref('')
 
 function onBarcodeSubmit() {
-  const v = barcodeValue.value.trim()
+  const v = barcodeValue.value.trim().toUpperCase()
   if (!v) return
   emit('barcode-lookup', v)
   barcodeValue.value = ''

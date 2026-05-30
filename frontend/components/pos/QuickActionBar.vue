@@ -2,14 +2,14 @@
   <div class="flex items-center justify-between w-full">
     <!-- Left: Keyboard shortcuts (always visible) -->
     <div class="flex items-center gap-4">
-      <span v-if="gateName || shiftName" class="text-base text-muted-foreground">
-        <span v-if="gateName" class="font-semibold text-foreground">{{ gateName }}</span>
-        <span v-if="gateName && shiftName" class="mx-2 text-border">|</span>
+      <span v-if="gateName || shiftName" class="text-base font-medium text-foreground">
+        <span v-if="gateName" class="font-black text-foreground">{{ gateName }}</span>
+        <span v-if="gateName && shiftName" class="mx-2 text-foreground/40">|</span>
         <span v-if="shiftName">{{ shiftName }}</span>
-        <span class="mx-2 text-border">|</span>
+        <span class="mx-2 text-foreground/40">|</span>
       </span>
       <span v-if="isMixedLane && activeVehicleTypeName" class="flex items-center gap-2 mr-2">
-        <span class="rounded bg-primary/10 px-3 py-1 text-base font-semibold text-primary">{{ activeVehicleTypeName }}</span>
+        <span class="border-2 border-foreground bg-primary px-3 py-1 text-base font-black uppercase text-foreground shadow-brutal-sm">{{ activeVehicleTypeName }}</span>
       </span>
       <div
         v-for="shortcut in shortcuts"
@@ -19,15 +19,15 @@
       >
         <kbd
           :class="[
-            'inline-flex h-9 min-w-[2.5rem] items-center justify-center rounded px-2 font-mono text-sm font-semibold',
+            'inline-flex h-9 min-w-[2.5rem] items-center justify-center border-2 px-2 font-mono text-sm font-bold',
             shortcut.active
-              ? 'bg-surface border border-border text-foreground'
-              : 'bg-surface/50 text-muted-foreground',
+              ? 'border-foreground bg-surface text-foreground shadow-brutal-sm'
+              : 'border-foreground/30 bg-surface/50 text-muted-foreground',
           ]"
         >
           {{ shortcut.key }}
         </kbd>
-        <span class="text-base text-muted-foreground">{{ shortcut.label }}</span>
+        <span class="text-base font-medium text-foreground">{{ shortcut.label }}</span>
       </div>
     </div>
 

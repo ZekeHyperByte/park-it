@@ -1,13 +1,13 @@
 <template>
-  <div class="mb-4 flex gap-1 border-b border-border">
+  <div class="mb-4 flex gap-1">
     <button
       v-for="tab in tabs"
       :key="tab.key"
       :class="[
-        'px-4 py-2 text-sm font-medium transition-colors -mb-px',
+        'border-2 border-foreground px-4 py-2 text-sm font-bold uppercase tracking-wide transition-all duration-100',
         modelValue === tab.key
-          ? 'border-b-2 border-primary text-primary'
-          : 'text-muted-foreground hover:text-foreground',
+          ? 'bg-primary text-foreground shadow-brutal'
+          : 'bg-background text-muted-foreground hover:bg-surface hover:text-foreground shadow-brutal-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none',
       ]"
       @click="$emit('update:modelValue', tab.key)"
     >

@@ -7,11 +7,11 @@
           :aria-current="idx === currentIndex ? 'step' : undefined"
           :disabled="!canNavigate(idx)"
           :class="[
-            'flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
-            idx < currentIndex && 'bg-success/90 text-white border-success focus-visible:ring-success',
-            idx === currentIndex && 'bg-primary text-primary-foreground border-primary ring-4 ring-primary/20',
-            idx > currentIndex && 'bg-muted text-muted-foreground border-border',
-            canNavigate(idx) ? 'cursor-pointer hover:opacity-90' : 'cursor-not-allowed opacity-70',
+            'flex h-8 w-8 items-center justify-center border-2 border-foreground text-xs font-black transition-all',
+            idx < currentIndex && 'bg-success text-white shadow-brutal-sm',
+            idx === currentIndex && 'bg-primary text-foreground shadow-brutal',
+            idx > currentIndex && 'bg-muted text-muted-foreground',
+            canNavigate(idx) ? 'cursor-pointer hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none' : 'cursor-not-allowed opacity-70',
           ]"
           @click="onClick(idx)"
         >
@@ -23,7 +23,7 @@
         <span
           :class="[
             'hidden text-xs sm:block',
-            idx === currentIndex ? 'font-medium text-foreground' : 'text-muted-foreground',
+            idx === currentIndex ? 'font-bold text-foreground' : 'font-medium text-muted-foreground',
           ]"
         >
           {{ step.label }}
@@ -32,8 +32,8 @@
       <div
         v-if="idx < steps.length - 1"
         :class="[
-          'mt-[-12px] h-px flex-1 min-w-4 max-w-12',
-          idx < currentIndex ? 'bg-success/60' : 'bg-border',
+          'mt-[-12px] h-0.5 flex-1 min-w-4 max-w-12',
+          idx < currentIndex ? 'bg-success' : 'bg-foreground/30',
         ]"
       />
     </template>

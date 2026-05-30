@@ -1,13 +1,13 @@
 <template>
   <span
     :class="[
-      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium',
+      'inline-flex items-center gap-1.5 border-2 border-foreground px-2.5 py-1 text-xs font-bold uppercase shadow-brutal-sm',
       classes[status] || classes.idle,
     ]"
     role="status"
     aria-live="polite"
   >
-    <span :class="['h-1.5 w-1.5 rounded-full', dotClasses[status] || dotClasses.idle, status === 'testing' && 'animate-pulse']" />
+    <span :class="['h-2 w-2 border border-foreground', dotClasses[status] || dotClasses.idle, status === 'testing' && 'animate-pulse']" />
     <span>{{ label || defaultLabels[status] || status }}</span>
   </span>
 </template>
@@ -23,18 +23,18 @@ const props = defineProps({
 })
 
 const classes = {
-  online: 'bg-success/15 text-success border-success/30',
-  offline: 'bg-destructive/15 text-destructive border-destructive/30',
-  testing: 'bg-primary/15 text-primary border-primary/30',
-  warning: 'bg-warning/15 text-warning border-warning/30',
-  idle: 'bg-muted text-muted-foreground border-border',
+  online: 'bg-success text-white',
+  offline: 'bg-destructive text-white',
+  testing: 'bg-primary text-foreground',
+  warning: 'bg-warning text-foreground',
+  idle: 'bg-muted text-muted-foreground',
 }
 
 const dotClasses = {
-  online: 'bg-success',
-  offline: 'bg-destructive',
-  testing: 'bg-primary',
-  warning: 'bg-warning',
+  online: 'bg-white',
+  offline: 'bg-white',
+  testing: 'bg-foreground',
+  warning: 'bg-foreground',
   idle: 'bg-muted-foreground/50',
 }
 

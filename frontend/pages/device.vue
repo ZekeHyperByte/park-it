@@ -9,8 +9,8 @@
 
     <!-- Overview (status cards) -->
     <div v-if="activeTab === 'overview'">
-      <div v-if="loadingGates" class="text-sm text-muted-foreground">Memuat gate…</div>
-      <div v-else-if="!gates.length" class="rounded-lg border border-border bg-surface p-6 text-sm text-muted-foreground">
+      <div v-if="loadingGates" class="text-sm font-medium text-muted-foreground">Memuat gate…</div>
+      <div v-else-if="!gates.length" class="border-2 border-foreground bg-surface p-6 text-sm font-medium text-muted-foreground shadow-brutal">
         Belum ada gate. Tambah dari tab Gates atau jalankan Setup Wizard.
       </div>
       <div v-else class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -27,11 +27,11 @@
 
       <!-- Peripheral health: printers + e-money readers at a glance -->
       <div v-if="!loadingGates && (printers.length || emoneyReaders.length)" class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div v-if="printers.length" class="rounded-lg border border-border bg-surface p-4">
-          <h3 class="mb-3 text-sm font-semibold text-foreground">Printer</h3>
+        <div v-if="printers.length" class="border-2 border-foreground bg-surface p-4 shadow-brutal">
+          <h3 class="mb-3 text-sm font-black uppercase tracking-wide text-foreground border-b-2 border-foreground pb-2">Printer</h3>
           <div class="space-y-2">
             <div v-for="p in printers" :key="p.id" class="flex items-center justify-between gap-2 text-sm">
-              <span class="truncate text-foreground">{{ p.name }}</span>
+              <span class="truncate font-medium text-foreground">{{ p.name }}</span>
               <div class="flex shrink-0 items-center gap-2">
                 <span v-if="p.paper_remaining != null" class="text-xs text-muted-foreground">kertas {{ p.paper_remaining }}</span>
                 <StatusPill :status="p.is_active ? 'online' : 'idle'" :label="p.is_active ? 'Aktif' : 'Nonaktif'" />
@@ -39,11 +39,11 @@
             </div>
           </div>
         </div>
-        <div v-if="emoneyReaders.length" class="rounded-lg border border-border bg-surface p-4">
-          <h3 class="mb-3 text-sm font-semibold text-foreground">E-Money Reader</h3>
+        <div v-if="emoneyReaders.length" class="border-2 border-foreground bg-surface p-4 shadow-brutal">
+          <h3 class="mb-3 text-sm font-black uppercase tracking-wide text-foreground border-b-2 border-foreground pb-2">E-Money Reader</h3>
           <div class="space-y-2">
             <div v-for="r in emoneyReaders" :key="r.id" class="flex items-center justify-between gap-2 text-sm">
-              <span class="truncate text-foreground">{{ r.name }}</span>
+              <span class="truncate font-medium text-foreground">{{ r.name }}</span>
               <StatusPill
                 :status="r.is_online ? 'online' : (r.is_active ? 'warning' : 'idle')"
                 :label="r.is_online ? 'Online' : (r.is_active ? 'Offline' : 'Nonaktif')"
@@ -59,7 +59,7 @@
       <DataTable :data="gates" :columns="gateColumns" :loading="loadingGates" @add="openGateModal()" @edit="openGateModal" @delete="confirmDeleteGate">
         <template #row-actions="{ row }">
           <button
-            class="rounded p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:opacity-40"
+            class="border-2 border-transparent p-1.5 text-muted-foreground transition-all hover:border-foreground hover:bg-primary hover:text-foreground hover:shadow-brutal-sm disabled:opacity-40"
             :title="testingGateId === row.id ? 'Menguji…' : 'Test koneksi'"
             :disabled="testingGateId === row.id"
             @click="testGate(row)"
@@ -67,14 +67,14 @@
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
           </button>
           <button
-            class="rounded p-1.5 text-muted-foreground transition-colors hover:bg-success/10 hover:text-success"
+            class="border-2 border-transparent p-1.5 text-muted-foreground transition-all hover:border-foreground hover:bg-success hover:text-white hover:shadow-brutal-sm"
             title="Buka gate"
             @click="openGateRemotely(row)"
           >
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 9.9-1" /></svg>
           </button>
           <button
-            class="rounded p-1.5 text-muted-foreground transition-colors hover:bg-warning/10 hover:text-warning"
+            class="border-2 border-transparent p-1.5 text-muted-foreground transition-all hover:border-foreground hover:bg-warning hover:text-foreground hover:shadow-brutal-sm"
             title="Uji buka/tutup (end-to-end)"
             @click="openGateTest(row)"
           >
@@ -107,9 +107,9 @@
     <!-- Serial Tools: detect ports + pin a stable /dev/parking-<role> udev symlink. -->
     <!-- Closes the post-setup gap where remapping a swapped USB device was wizard-only. -->
     <div v-if="activeTab === 'serial-tools'" class="max-w-2xl space-y-5">
-      <div class="space-y-4 rounded-lg border border-border bg-surface p-5">
+      <div class="space-y-4 border-2 border-foreground bg-surface p-5 shadow-brutal">
         <div class="space-y-1">
-          <h3 class="text-sm font-semibold text-foreground">Deteksi &amp; Pasang Perangkat Serial</h3>
+          <h3 class="text-sm font-black uppercase tracking-wide text-foreground">Deteksi &amp; Pasang Perangkat Serial</h3>
           <p class="text-xs text-muted-foreground">
             Gunakan saat mengganti atau memasang ulang perangkat USB/serial. Pilih peran, deteksi port, uji,
             lalu pasang sebagai <span class="font-mono">/dev/parking-&lt;peran&gt;</span> agar nama perangkat tetap walau dicabut-pasang.
@@ -118,10 +118,10 @@
         </div>
 
         <div class="space-y-2">
-          <label class="text-sm font-medium text-foreground">Peran perangkat</label>
+          <label class="text-sm font-bold uppercase tracking-wide text-foreground">Peran perangkat</label>
           <select
             v-model="serialRole"
-            class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm sm:w-72"
+            class="w-full border-2 border-foreground bg-background px-3 py-2 text-sm font-medium shadow-brutal-sm sm:w-72"
           >
             <option v-for="r in serialRoles" :key="r.value" :value="r.value">{{ r.label }}</option>
           </select>
@@ -138,7 +138,7 @@
           @write-udev="onUdevWritten"
         />
 
-        <p v-if="lastSymlink" class="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">
+        <p v-if="lastSymlink" class="border-2 border-foreground bg-success px-3 py-2 text-xs font-bold text-white shadow-brutal-sm">
           Terpasang: <span class="font-mono">{{ lastSymlink }}</span> — salin path ini ke field Device perangkat terkait.
         </p>
       </div>

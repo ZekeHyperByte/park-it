@@ -1,23 +1,23 @@
 <template>
   <div class="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6">
     <div class="w-full max-w-3xl">
-      <div class="rounded-xl border border-border bg-surface shadow-lg overflow-hidden">
+      <div class="border-4 border-foreground bg-surface shadow-brutal-lg overflow-hidden">
         <!-- Top bar -->
-        <header class="flex h-14 items-center justify-between border-b border-border px-6">
+        <header class="flex h-14 items-center justify-between border-b-4 border-foreground px-6">
           <div class="flex items-center gap-3">
-            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <div class="flex h-9 w-9 items-center justify-center border-2 border-foreground bg-primary text-foreground">
               <BrandIcon class="h-5 w-5" />
             </div>
             <div>
-              <h1 class="text-sm font-semibold text-foreground">E-Parking Setup</h1>
-              <p class="text-xs text-muted-foreground">Bantu kami menyiapkan sistem ini</p>
+              <h1 class="text-sm font-black uppercase tracking-wide text-foreground">E-Parking Setup</h1>
+              <p class="text-xs font-medium text-muted-foreground">Bantu kami menyiapkan sistem ini</p>
             </div>
           </div>
-          <div class="flex items-center gap-3 text-xs text-muted-foreground">
+          <div class="flex items-center gap-3 text-xs font-bold text-muted-foreground">
             <span>Langkah {{ currentIndex + 1 }} dari {{ steps.length }}</span>
             <button
               type="button"
-              class="rounded-full border border-border bg-background p-1.5 text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+              class="border-2 border-foreground bg-background p-1.5 text-muted-foreground hover:bg-surface-hover hover:text-foreground shadow-brutal-sm"
               aria-label="Bantuan"
               @click="$emit('help')"
             >
@@ -30,7 +30,7 @@
         </header>
 
         <!-- Stepper -->
-        <div class="border-b border-border bg-background/60 px-6 py-3">
+        <div class="border-b-2 border-foreground bg-background/60 px-6 py-3">
           <SetupStepper :steps="steps" :current-index="currentIndex" @navigate="(i) => $emit('navigate', i)" />
         </div>
 
@@ -44,7 +44,7 @@
         </main>
 
         <!-- Footer -->
-        <footer class="flex h-16 items-center justify-between border-t border-border px-6">
+        <footer class="flex h-16 items-center justify-between border-t-4 border-foreground px-6">
           <Button
             variant="ghost"
             :disabled="currentIndex === 0 || busy"
@@ -53,7 +53,7 @@
             ← Kembali
           </Button>
 
-          <div class="text-xs text-muted-foreground">
+          <div class="text-xs font-medium text-muted-foreground">
             <span v-if="autosavedLabel">{{ autosavedLabel }}</span>
           </div>
 
@@ -76,7 +76,7 @@
         </footer>
       </div>
 
-      <p class="mt-3 text-center text-xs text-muted-foreground">
+      <p class="mt-3 text-center text-xs font-medium text-muted-foreground">
         Konfigurasi tersimpan otomatis. Boleh tutup tab; lanjutkan dari langkah ini kapan saja.
       </p>
     </div>
