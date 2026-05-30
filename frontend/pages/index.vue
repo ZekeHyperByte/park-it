@@ -36,8 +36,9 @@
       </div>
     </div>
 
-    <!-- Hero tile: POS Kiosk -->
+    <!-- Hero tile: POS Kiosk (operators only) -->
     <NuxtLink
+      v-if="!authStore.isAdmin"
       to="/pos"
       class="group flex items-center gap-6 border-4 border-foreground bg-primary p-6 shadow-brutal-lg transition-all duration-100 hover:translate-x-[4px] hover:translate-y-[4px] hover:shadow-none"
     >
@@ -178,10 +179,8 @@ async function loadStatus() {
 }
 
 onMounted(async () => {
-  await Promise.all([
-    posSession.loadShiftSummary(),
-    websiteStore.loadAll(),
-    loadStatus(),
-  ])
+  const loads = [websiteStore.loadAll(), loadStatus()]
+  if (!authStore.isAdmin) loads.push(posSession.loadShiftSummary())
+  await Promise.all(loads)
 })
 </script>
