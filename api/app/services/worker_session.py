@@ -8,10 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.models.gate import Gate
 from api.app.models.operator_alert import OperatorAlert
-from api.app.models.shift import Shift
 from api.app.models.shift_assignment import ShiftAssignment
 from api.app.models.user import User
 from api.app.models.worker_session import WorkerSession
+from api.app.services.shift_utils import get_current_shift
 from api.app.utils.password import verify_password
 from shared.logging import get_logger
 
@@ -40,22 +40,6 @@ async def _get_worker_and_verify_pin(db: AsyncSession, worker_id: int, pin: str)
         logger.warning("worker_pin_mismatch", worker_id=worker_id)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid PIN")
     return worker
-
-
-async def _get_active_shift(db: AsyncSession) -> Shift | None:
-    """Find the shift whose time window contains the current time."""
-    now_time = _now().time().replace(tzinfo=None)
-    result = await db.execute(select(Shift).where(Shift.is_active == True))
-    shifts = result.scalars().all()
-    for shift in shifts:
-        if shift.start_time <= shift.end_time:
-            if shift.start_time <= now_time <= shift.end_time:
-                return shift
-        else:
-            # Overnight shift (e.g. 22:00 - 06:00)
-            if now_time >= shift.start_time or now_time <= shift.end_time:
-                return shift
-    return None
 
 
 async def _get_active_session(db: AsyncSession, gate_id: int) -> WorkerSession | None:
@@ -117,7 +101,7 @@ async def check_in(
             )
         shift_id = assignment.shift_id
     else:
-        active_shift = await _get_active_shift(db)
+        active_shift = await get_current_shift(db)
         if active_shift is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="No active shift for current time"
@@ -206,7 +190,7 @@ async def confirm_incoming(
     pending.status = "COMPLETED"
 
     # Determine new shift
-    active_shift = await _get_active_shift(db)
+    active_shift = await get_current_shift(db)
     shift_id = active_shift.id if active_shift else pending.shift_id
 
     # Create incoming session

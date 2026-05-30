@@ -10,7 +10,7 @@ from api.app.middleware.api_key import require_api_key
 from api.app.middleware.auth import require_admin, require_auth
 from api.app.models.parking_transaction import ParkingTransaction
 from api.app.models.pos import Pos
-from api.app.models.shift import Shift
+from api.app.services.shift_utils import get_current_shift
 from api.app.schemas.common import SuccessResponse
 from api.app.schemas.pos import (
     BoothHeartbeat,
@@ -80,19 +80,7 @@ async def get_shift_summary(
     today_start = datetime.combine(now.date(), time.min)
 
     # Resolve current shift by wall-clock time (handles overnight wrap)
-    shift_result = await db.execute(select(Shift).where(Shift.is_active == True))  # noqa: E712
-    shifts = list(shift_result.scalars().all())
-    current = now.time()
-    active_shift = None
-    for s in shifts:
-        if s.start_time <= s.end_time:
-            if s.start_time <= current < s.end_time:
-                active_shift = s
-                break
-        else:  # overnight
-            if current >= s.start_time or current < s.end_time:
-                active_shift = s
-                break
+    active_shift = await get_current_shift(db)
 
     # Aggregate today's completed cash transactions for current operator
     operator_id = current_user.get("sub")

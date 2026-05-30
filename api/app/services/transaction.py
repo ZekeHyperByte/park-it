@@ -11,6 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.models import ParkingTransaction, Shift, VehicleType
+from api.app.services.shift_utils import get_current_shift
+from api.app.services.snapshot_utils import enqueue_snapshots_for_gate
 from api.app.services.tariff import DEFAULT_TARIFF_CONFIG, TariffConfig, VehicleTypeRate, calculate_tariff
 from shared.logging import get_logger
 
@@ -60,41 +62,14 @@ async def create_entry_transaction(
 
     # Enqueue entry snapshot(s) for all cameras on this gate
     if gate_in_id:
-        try:
-            from api.app.models import Gate
-            from shared.redis import get_arq_redis
-
-            gate = await db.get(Gate, gate_in_id)
-            if gate:
-                cameras = gate.get_cameras()
-                if cameras:
-                    arq_redis = await get_arq_redis()
-                    for idx, cam in enumerate(cameras):
-                        cam_key = cam.get("label") or str(idx)
-                        await arq_redis.enqueue_job(
-                            "take_snapshot",
-                            gate_id=gate.code,
-                            camera_url=cam["url"],
-                            transaction_id=tx.id,
-                            snapshot_type="entry",
-                            camera_label=cam.get("label"),
-                            camera_username=cam.get("username"),
-                            camera_password=cam.get("password"),
-                            camera_auth_type=cam.get("auth_type", "none"),
-                            _job_id=f"snapshot:entry:{tx.id}:{cam_key}",
-                            _queue_name="arq:queue:snapshot",
-                        )
-                    logger.info(
-                        "entry_snapshot_enqueued",
-                        transaction_id=tx.id,
-                        gate_id=gate.code,
-                        count=len(cameras),
-                    )
-        except Exception as exc:
-            logger.warning(
-                "entry_snapshot_enqueue_failed",
+        from api.app.models import Gate
+        gate = await db.get(Gate, gate_in_id)
+        if gate:
+            await enqueue_snapshots_for_gate(
+                db=db,
+                gate_code=gate.code,
                 transaction_id=tx.id,
-                error=str(exc),
+                snapshot_type="entry",
             )
 
     logger.info(
@@ -148,30 +123,25 @@ async def find_active_transaction(
 
 
 async def get_vehicle_type_tariff_config(
-    db: AsyncSession,
-    vehicle_type_id: int | None,
-) -> TariffConfig:
-    """Build TariffConfig from database VehicleType or fallback to default.
-
-    Args:
-        db: Database session
-        vehicle_type_id: Vehicle type primary key
+    db: AsyncSession, vehicle_type_id: int | None
+) -> tuple[TariffConfig, str | None]:
+    """Build TariffConfig from database vehicle type rates.
 
     Returns:
-        TariffConfig for fee calculation
+        Tuple of (TariffConfig, vehicle_type_code) or (DEFAULT_TARIFF_CONFIG, None)
     """
     if vehicle_type_id is None:
-        return DEFAULT_TARIFF_CONFIG
+        return DEFAULT_TARIFF_CONFIG, None
 
     result = await db.execute(
         select(VehicleType).where(VehicleType.id == vehicle_type_id)
     )
     vt = result.scalar_one_or_none()
     if vt is None:
-        return DEFAULT_TARIFF_CONFIG
+        return DEFAULT_TARIFF_CONFIG, None
 
     # Build config from database rates
-    return TariffConfig(
+    config = TariffConfig(
         vehicle_types={
             vt.code: VehicleTypeRate(
                 hourly_rate=vt.hourly_rate or vt.base_tariff,
@@ -180,6 +150,7 @@ async def get_vehicle_type_tariff_config(
         },
         grace_period_minutes=15,
     )
+    return config, vt.code
 
 
 async def calculate_transaction_fee(
@@ -203,17 +174,11 @@ async def calculate_transaction_fee(
         exit_time = datetime.now(timezone.utc)
 
     effective_vt_id = vehicle_type_id_override if vehicle_type_id_override is not None else transaction.vehicle_type_id
-    config = await get_vehicle_type_tariff_config(db, effective_vt_id)
+    config, vt_code = await get_vehicle_type_tariff_config(db, effective_vt_id)
 
-    # Determine vehicle type code
-    vt_code = "MOBIL"  # default
-    if effective_vt_id:
-        result = await db.execute(
-            select(VehicleType.code).where(VehicleType.id == effective_vt_id)
-        )
-        code = result.scalar_one_or_none()
-        if code:
-            vt_code = code
+    # Default to MOBIL if no vehicle type found
+    if vt_code is None:
+        vt_code = "MOBIL"
 
     try:
         fee = calculate_tariff(
@@ -226,41 +191,6 @@ async def calculate_transaction_fee(
         fee = 0
 
     return fee
-
-
-async def get_current_shift(db: AsyncSession) -> Shift | None:
-    """Determine the current active shift based on current time.
-
-    Args:
-        db: Database session
-
-    Returns:
-        Current Shift or None
-    """
-    now = datetime.now(timezone.utc).time()
-
-    result = await db.execute(
-        select(Shift)
-        .where(Shift.is_active == True)  # noqa: E712
-        .order_by(Shift.start_time)
-    )
-    shifts = result.scalars().all()
-
-    for shift in shifts:
-        start = shift.start_time
-        end = shift.end_time
-
-        if start <= end:
-            # Normal range (e.g., 08:00 - 16:00)
-            if start <= now <= end:
-                return shift
-        else:
-            # Overnight range (e.g., 22:00 - 06:00)
-            if now >= start or now <= end:
-                return shift
-
-    # Fallback: return first active shift
-    return shifts[0] if shifts else None
 
 
 async def complete_exit_transaction(

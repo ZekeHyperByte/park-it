@@ -13,11 +13,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.models import Member
+from api.app.services.shift_utils import get_current_shift
+from api.app.services.snapshot_utils import enqueue_snapshots_for_gate
 from api.app.services.transaction import (
     calculate_transaction_fee,
     complete_exit_transaction,
     find_active_transaction,
-    get_current_shift,
 )
 from shared.events import DeductStatus
 from shared.logging import get_logger
@@ -87,42 +88,6 @@ async def _enqueue_print_receipt(db: AsyncSession, gate_id: str, transaction_dat
         logger.error("receipt_enqueue_failed", gate_id=gate_id, error=str(e))
 
 
-async def _enqueue_exit_snapshot(db: AsyncSession, gate_id: str, transaction_id: int) -> None:
-    """Fire-and-forget: enqueue exit snapshot for every camera on this gate."""
-    try:
-        from sqlalchemy import select
-
-        from api.app.models import Gate
-        from shared.redis import get_arq_redis
-
-        gate_result = await db.execute(select(Gate).where(Gate.code == gate_id))
-        gate = gate_result.scalar_one_or_none()
-        if gate is None:
-            return
-        cameras = gate.get_cameras()
-        if not cameras:
-            return
-        arq_redis = await get_arq_redis()
-        for idx, cam in enumerate(cameras):
-            cam_key = cam.get("label") or str(idx)
-            await arq_redis.enqueue_job(
-                "take_snapshot",
-                gate_id=gate_id,
-                camera_url=cam["url"],
-                transaction_id=transaction_id,
-                snapshot_type="exit",
-                camera_label=cam.get("label"),
-                camera_username=cam.get("username"),
-                camera_password=cam.get("password"),
-                camera_auth_type=cam.get("auth_type", "none"),
-                _job_id=f"snapshot:exit:{transaction_id}:{cam_key}",
-                _queue_name="arq:queue:snapshot",
-            )
-        logger.info("exit_snapshot_enqueued", gate_id=gate_id, transaction_id=transaction_id, count=len(cameras))
-    except Exception as e:
-        logger.warning("exit_snapshot_enqueue_failed", gate_id=gate_id, transaction_id=transaction_id, error=str(e))
-
-
 # ---------------------------------------------------------------------------
 # Cash Payment
 # ---------------------------------------------------------------------------
@@ -169,7 +134,7 @@ async def process_cash_payment(
         tx.vehicle_type_id = vehicle_type_id
         await db.flush()
 
-    await _enqueue_exit_snapshot(db, gate_id, tx.id)
+    await enqueue_snapshots_for_gate(db, gate_id, tx.id, "exit")
 
     fee = await calculate_transaction_fee(db, tx)
     shift = await get_current_shift(db)
@@ -263,7 +228,7 @@ async def process_rfid_payment(
     if tx is None:
         raise ValueError("No active transaction found for this card")
 
-    await _enqueue_exit_snapshot(db, gate_id, tx.id)
+    await enqueue_snapshots_for_gate(db, gate_id, tx.id, "exit")
 
     shift = await get_current_shift(db)
 
@@ -460,7 +425,7 @@ async def process_emoney_result(
         )
 
         await _clear_emoney_pending(gate_id)
-        await _enqueue_exit_snapshot(db, gate_id, tx.id)
+        await enqueue_snapshots_for_gate(db, gate_id, tx.id, "exit")
 
         # Attended exit: POS shows payment result, operator opens gate via booth_bridge.
         await _enqueue_print_receipt(
