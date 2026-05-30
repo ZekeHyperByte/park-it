@@ -215,6 +215,13 @@ async def gates_heartbeat_status(db: AsyncSession = Depends(get_db)) -> dict:
 
     now = datetime.now(UTC)
     out: list[dict] = []
+
+    # Batch fetch all IN gate heartbeats in one pipeline
+    in_gates = [g for g in gates if g.direction == "IN"]
+    in_heartbeat_keys = [f"gate:heartbeat:{g.code}" for g in in_gates]
+    in_heartbeat_values = await redis_client.client.mget(in_heartbeat_keys) if in_heartbeat_keys else []
+    in_heartbeat_map = dict(zip(in_heartbeat_keys, in_heartbeat_values))
+
     for g in gates:
         if g.direction == "OUT":
             pos = g.pos
@@ -233,7 +240,7 @@ async def gates_heartbeat_status(db: AsyncSession = Depends(get_db)) -> dict:
             })
             continue
 
-        raw = await redis_client.client.get(f"gate:heartbeat:{g.code}")
+        raw = in_heartbeat_map.get(f"gate:heartbeat:{g.code}")
         if raw:
             try:
                 payload = _json.loads(raw)

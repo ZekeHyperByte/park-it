@@ -55,7 +55,7 @@ class EmoneySettlement(Base, IntPKMixin, TimestampMixin):
     # Relationships
     transactions: Mapped[list["EmoneyTransaction"]] = relationship(
         "EmoneyTransaction",
-        lazy="selectin",
+        lazy="noload",
         back_populates="settlement",
     )
 

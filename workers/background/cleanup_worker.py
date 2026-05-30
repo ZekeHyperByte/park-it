@@ -12,16 +12,36 @@ PENDING_PAYMENT_TIMEOUT_MINUTES = 5
 
 
 async def cleanup_old_sessions(ctx) -> dict:
-    """Clean up old parking transaction sessions.
+    """Clean up old completed parking transactions.
 
-    Stub implementation — full logic in Week 5.
+    Deletes transactions older than SESSION_RETENTION_DAYS that are COMPLETED.
+    ACTIVE transactions are never deleted.
     """
-    cutoff = datetime.now() - timedelta(days=SESSION_RETENTION_DAYS)
+    from sqlalchemy import delete
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from api.app.models import ParkingTransaction
+    from api.database import AsyncSessionLocal
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=SESSION_RETENTION_DAYS)
     logger.info("cleanup_sessions_start", cutoff=cutoff.isoformat())
 
-    # TODO: Archive and delete old completed transactions
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                delete(ParkingTransaction).where(
+                    ParkingTransaction.status == "COMPLETED",
+                    ParkingTransaction.exit_time < cutoff,
+                )
+            )
+            await db.commit()
 
-    return {"status": "success", "message": "Old sessions cleaned (stub)"}
+            deleted_count = result.rowcount
+            logger.info("cleanup_sessions_complete", deleted=deleted_count)
+            return {"status": "success", "deleted": deleted_count}
+    except Exception as e:
+        logger.error("cleanup_sessions_error", error=str(e))
+        return {"status": "error", "message": str(e)}
 
 
 async def cleanup_old_snapshots(ctx) -> dict:
@@ -53,20 +73,16 @@ async def timeout_pending_payments(ctx) -> dict:
     This job resets them so the operator can retry with a different payment method.
     """
     from sqlalchemy import select
-    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from api.app.models import ParkingTransaction
-    from shared.config import get_settings
-
-    settings = get_settings()
-    engine = create_async_engine(settings.database_url)
-    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    from api.database import AsyncSessionLocal
 
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=PENDING_PAYMENT_TIMEOUT_MINUTES)
     logger.info("timeout_pending_start", cutoff=cutoff.isoformat())
 
     try:
-        async with async_session() as db:
+        async with AsyncSessionLocal() as db:
             # Find stuck PENDING transactions
             result = await db.execute(
                 select(ParkingTransaction).where(
@@ -96,5 +112,3 @@ async def timeout_pending_payments(ctx) -> dict:
     except Exception as e:
         logger.error("timeout_pending_error", error=str(e))
         return {"status": "error", "message": str(e)}
-    finally:
-        await engine.dispose()

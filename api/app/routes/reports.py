@@ -34,71 +34,52 @@ async def get_summary_report(
     current_user: dict = Depends(require_admin),
 ) -> SummaryReport:
     """Get parking summary report for date range."""
-    # Total transactions
-    total_stmt = select(func.count(ParkingTransaction.id)).where(
-        ParkingTransaction.entry_time >= date_from,
-        ParkingTransaction.entry_time < date_to,
-    )
-    total_result = await db.execute(total_stmt)
-    total_transactions = total_result.scalar() or 0
-
-    # Revenue by method
-    revenue_stmt = select(
-        ParkingTransaction.payment_method,
-        func.sum(ParkingTransaction.fee),
-        func.count(ParkingTransaction.id),
+    # Single query with conditional aggregation
+    stmt = select(
+        func.count(ParkingTransaction.id).label("total"),
+        func.sum(ParkingTransaction.fee).label("total_revenue"),
+        func.sum(func.case(
+            (ParkingTransaction.payment_method == "CASH", ParkingTransaction.fee),
+            else_=0,
+        )).label("cash_revenue"),
+        func.sum(func.case(
+            (ParkingTransaction.payment_method == "EMONEY", ParkingTransaction.fee),
+            else_=0,
+        )).label("emoney_revenue"),
+        func.sum(func.case(
+            (ParkingTransaction.payment_method == "RFID_MEMBER", ParkingTransaction.fee),
+            else_=0,
+        )).label("rfid_revenue"),
+        func.sum(func.case(
+            (ParkingTransaction.status == "ACTIVE", 1),
+            else_=0,
+        )).label("active_count"),
+        func.sum(func.case(
+            (ParkingTransaction.status == "COMPLETED", 1),
+            else_=0,
+        )).label("completed_count"),
     ).where(
         ParkingTransaction.entry_time >= date_from,
         ParkingTransaction.entry_time < date_to,
-    ).group_by(ParkingTransaction.payment_method)
-    revenue_result = await db.execute(revenue_stmt)
-
-    cash_revenue = 0
-    emoney_revenue = 0
-    rfid_revenue = 0
-    for method, fee_sum, _count in revenue_result.all():
-        if method == "CASH":
-            cash_revenue = fee_sum or 0
-        elif method == "EMONEY":
-            emoney_revenue = fee_sum or 0
-        elif method == "RFID_MEMBER":
-            rfid_revenue = fee_sum or 0
-
-    # Total revenue
-    total_revenue_stmt = select(func.sum(ParkingTransaction.fee)).where(
-        ParkingTransaction.entry_time >= date_from,
-        ParkingTransaction.entry_time < date_to,
     )
-    total_revenue_result = await db.execute(total_revenue_stmt)
-    total_revenue = total_revenue_result.scalar() or 0
 
-    # Status counts
-    active_stmt = select(func.count(ParkingTransaction.id)).where(
-        ParkingTransaction.entry_time >= date_from,
-        ParkingTransaction.entry_time < date_to,
-        ParkingTransaction.status == "ACTIVE",
-    )
-    active_result = await db.execute(active_stmt)
+    result = await db.execute(stmt)
+    row = result.one()
 
-    completed_stmt = select(func.count(ParkingTransaction.id)).where(
-        ParkingTransaction.entry_time >= date_from,
-        ParkingTransaction.entry_time < date_to,
-        ParkingTransaction.status == "COMPLETED",
-    )
-    completed_result = await db.execute(completed_stmt)
-
+    total_transactions = row.total or 0
+    total_revenue = row.total_revenue or 0
     avg_fee = total_revenue / total_transactions if total_transactions > 0 else 0
 
     return SummaryReport(
         total_transactions=total_transactions,
         total_revenue=total_revenue,
-        cash_revenue=cash_revenue,
-        emoney_revenue=emoney_revenue,
-        rfid_revenue=rfid_revenue,
+        cash_revenue=row.cash_revenue or 0,
+        emoney_revenue=row.emoney_revenue or 0,
+        rfid_revenue=row.rfid_revenue or 0,
         total_vehicles=total_transactions,
         average_fee=round(avg_fee, 2),
-        active_transactions=active_result.scalar() or 0,
-        completed_transactions=completed_result.scalar() or 0,
+        active_transactions=row.active_count or 0,
+        completed_transactions=row.completed_count or 0,
     )
 
 
