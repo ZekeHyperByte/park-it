@@ -46,15 +46,6 @@ export const usePosSessionStore = defineStore('pos-session', () => {
     }
   }
 
-  function addCashPayment(amount) {
-    cashCollected.value += amount
-    transactionCount.value++
-  }
-
-  function addTransaction() {
-    transactionCount.value++
-  }
-
   function reset() {
     cashCollected.value = 0
     transactionCount.value = 0
@@ -72,8 +63,6 @@ export const usePosSessionStore = defineStore('pos-session', () => {
     availableShifts,
     loadShiftSummary,
     fetchShifts,
-    addCashPayment,
-    addTransaction,
     reset,
   }
 })
