@@ -8,7 +8,7 @@
 
 | Requirement | Minimum |
 |------------|---------|
-| OS | Ubuntu 22.04 LTS |
+| OS | Ubuntu 24.04 LTS |
 | CPU | 4 cores |
 | RAM | 8 GB |
 | Disk | 50 GB SSD |
@@ -184,7 +184,7 @@ sudo systemctl stop apache2  # or whatever is using it
 ```bash
 cd /opt/parking-system-v2
 sudo -u parking git pull origin main
-sudo -u parking .venv/bin/pip install -e ".[dev]"
+sudo -u parking .venv/bin/pip install -e .
 sudo -u parking .venv/bin/alembic upgrade head
 cd frontend && sudo -u parking npm ci && NUXT_PUBLIC_API_BASE_URL="" npm run build
 sudo systemctl restart parking-api parking-worker-critical parking-worker-bg

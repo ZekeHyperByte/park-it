@@ -23,7 +23,7 @@ The server PC sits in the guard house/office, right next to one exit gate. That 
 
 | Requirement | Minimum |
 |------------|---------|
-| OS | Ubuntu 22.04 LTS |
+| OS | Ubuntu 24.04 LTS |
 | CPU | 4 cores |
 | RAM | 8 GB |
 | Disk | 50 GB SSD |
@@ -34,7 +34,7 @@ The server PC sits in the guard house/office, right next to one exit gate. That 
 
 | Requirement | Minimum |
 |------------|---------|
-| OS | Ubuntu 22.04 LTS |
+| OS | Ubuntu 24.04 LTS |
 | CPU | 2 cores |
 | RAM | 4 GB |
 | Disk | 20 GB SSD |
@@ -198,7 +198,7 @@ sudo journalctl -u booth-bridge-booth_01 -f
 ```bash
 cd /opt/parking-system-v2
 sudo -u parking git pull origin main
-sudo -u parking .venv/bin/pip install -e ".[dev]"
+sudo -u parking .venv/bin/pip install -e .
 sudo -u parking .venv/bin/alembic upgrade head
 cd frontend && sudo -u parking npm ci && NUXT_PUBLIC_API_BASE_URL="" npm run build
 

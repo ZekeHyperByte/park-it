@@ -62,8 +62,9 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-if ! grep -q "Ubuntu 22.04" /etc/os-release 2>/dev/null; then
-    warn "This script is designed for Ubuntu 22.04 LTS. Continuing anyway..."
+if ! grep -q "Ubuntu 24.04" /etc/os-release 2>/dev/null; then
+    warn "This script targets Ubuntu 24.04 LTS (ships python3.12 natively). Continuing anyway..."
+    warn "On 22.04 the python3.12 packages below are NOT in the default repos and install will fail."
     read -rp "Press Enter to continue or Ctrl+C to abort..."
 fi
 
@@ -419,7 +420,7 @@ EOF
 [Desktop Entry]
 Name=Parking POS
 Comment=E-Parking POS System
-Exec=/usr/bin/google-chrome --app=http://${SERVER_IP} --start-fullscreen --no-first-run --no-default-browser-check --kiosk --disable-infobars
+Exec=/usr/bin/google-chrome --app=http://${SERVER_IP}/pos --start-fullscreen --no-first-run --no-default-browser-check --kiosk --disable-infobars
 Icon=/usr/share/icons/hicolor/256x256/apps/google-chrome.png
 Type=Application
 Terminal=false
@@ -443,16 +444,16 @@ EOF
     if [[ "$AUTO_LOGIN" =~ ^[Yy]$ ]]; then
         if [[ -f /etc/gdm3/custom.conf ]]; then
             sed -i 's/^#*AutomaticLoginEnable=.*/AutomaticLoginEnable=true/' /etc/gdm3/custom.conf
-            sed -i 's/^#*AutomaticLogin=.*/AutomaticLogin=operator/' /etc/gdm3/custom.conf
-            ok "GDM auto-login configured for user 'operator'"
+            sed -i 's/^#*AutomaticLogin=.*/AutomaticLogin=parking/' /etc/gdm3/custom.conf
+            ok "GDM auto-login configured for user 'parking'"
         elif [[ -d /etc/lightdm ]]; then
             mkdir -p /etc/lightdm/lightdm.conf.d
             cat > /etc/lightdm/lightdm.conf.d/50-autologin.conf <<EOF
 [Seat:*]
-autologin-user=operator
+autologin-user=parking
 autologin-user-timeout=0
 EOF
-            ok "LightDM auto-login configured for user 'operator'"
+            ok "LightDM auto-login configured for user 'parking'"
         else
             warn "Unknown display manager. Auto-login not configured."
         fi

@@ -270,7 +270,7 @@ After=network.target
 Type=simple
 User=parking
 Group=parking
-SupplementaryGroups=dialout
+SupplementaryGroups=dialout input
 WorkingDirectory=${PROJECT_ROOT}
 Environment=PYTHONPATH=${PROJECT_ROOT}
 Environment=APP_ENV=production
@@ -290,15 +290,17 @@ systemctl enable "$(basename "$SERVICE_FILE")"
 systemctl start "$(basename "$SERVICE_FILE")"
 ok "Booth bridge service installed and started"
 
-# Create Chrome desktop shortcut (points to localhost)
-DESKTOP_FILE="/home/parking/Desktop/Parking-POS.desktop"
-mkdir -p "$(dirname "$DESKTOP_FILE")"
+# Combo gets TWO shortcuts: an admin dashboard (normal window, admin logs in)
+# and a booth POS (kiosk, auto-entry). Both target this PC's local server.
+DESKTOP_DIR="/home/parking/Desktop"
+mkdir -p "$DESKTOP_DIR"
 
-cat > "$DESKTOP_FILE" <<EOF
+# 1) Admin dashboard — normal window so admin can log in and navigate.
+cat > "$DESKTOP_DIR/Parking-Admin.desktop" <<EOF
 [Desktop Entry]
-Name=Parking POS
-Comment=E-Parking POS System
-Exec=/usr/bin/google-chrome --app=http://localhost --start-fullscreen --no-first-run --no-default-browser-check --kiosk --disable-infobars
+Name=Parking Admin
+Comment=E-Parking Admin Dashboard
+Exec=/usr/bin/google-chrome --app=http://localhost/ --no-first-run --no-default-browser-check --disable-infobars
 Icon=/usr/share/icons/hicolor/256x256/apps/google-chrome.png
 Type=Application
 Terminal=false
@@ -306,24 +308,37 @@ Categories=Application;
 StartupNotify=true
 EOF
 
-chmod +x "$DESKTOP_FILE"
-chown -R parking:parking "$(dirname "$DESKTOP_FILE")"
-ok "Desktop shortcut created"
+# 2) Booth POS — kiosk, deep-linked to /pos for auto-entry.
+cat > "$DESKTOP_DIR/Parking-POS.desktop" <<EOF
+[Desktop Entry]
+Name=Parking POS
+Comment=E-Parking POS (Booth)
+Exec=/usr/bin/google-chrome --app=http://localhost/pos --start-fullscreen --no-first-run --no-default-browser-check --kiosk --disable-infobars
+Icon=/usr/share/icons/hicolor/256x256/apps/google-chrome.png
+Type=Application
+Terminal=false
+Categories=Application;
+StartupNotify=true
+EOF
+
+chmod +x "$DESKTOP_DIR/Parking-Admin.desktop" "$DESKTOP_DIR/Parking-POS.desktop"
+chown -R parking:parking "$DESKTOP_DIR"
+ok "Desktop shortcuts created (Parking-Admin + Parking-POS)"
 
 # Auto-login (optional)
 if [[ "$AUTO_LOGIN" =~ ^[Yy]$ ]]; then
     if [[ -f /etc/gdm3/custom.conf ]]; then
         sed -i 's/^#*AutomaticLoginEnable=.*/AutomaticLoginEnable=true/' /etc/gdm3/custom.conf
-        sed -i 's/^#*AutomaticLogin=.*/AutomaticLogin=operator/' /etc/gdm3/custom.conf
-        ok "GDM auto-login configured"
+        sed -i 's/^#*AutomaticLogin=.*/AutomaticLogin=parking/' /etc/gdm3/custom.conf
+        ok "GDM auto-login configured for user 'parking'"
     elif [[ -d /etc/lightdm ]]; then
         mkdir -p /etc/lightdm/lightdm.conf.d
         cat > /etc/lightdm/lightdm.conf.d/50-autologin.conf <<EOF
 [Seat:*]
-autologin-user=operator
+autologin-user=parking
 autologin-user-timeout=0
 EOF
-        ok "LightDM auto-login configured"
+        ok "LightDM auto-login configured for user 'parking'"
     fi
 fi
 

@@ -47,8 +47,9 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-if ! grep -q "Ubuntu 22.04" /etc/os-release 2>/dev/null; then
-    warn "This script is designed for Ubuntu 22.04 LTS. Continuing anyway..."
+if ! grep -q "Ubuntu 24.04" /etc/os-release 2>/dev/null; then
+    warn "This script targets Ubuntu 24.04 LTS (ships python3.12 natively). Continuing anyway..."
+    warn "On 22.04 the python3.12 packages below are NOT in the default repos and install will fail."
     read -rp "Press Enter to continue or Ctrl+C to abort..."
 fi
 
@@ -180,7 +181,7 @@ fi
 
 # Install Python dependencies
 sudo -u parking .venv/bin/pip install --quiet --upgrade pip
-sudo -u parking .venv/bin/pip install --quiet -e ".[dev]"
+sudo -u parking .venv/bin/pip install --quiet -e .
 ok "Python dependencies installed"
 
 # ── 8. Environment file ───────────────────────────────────────────────────────
@@ -275,6 +276,25 @@ done
 # Create app data directories
 mkdir -p /var/lib/parking/{snapshots,settlements,logs}
 chown -R parking:parking /var/lib/parking
+
+# Admin dashboard shortcut (single shortcut for the server role). Harmless on a
+# headless box — it's just a .desktop file the admin double-clicks if a GUI exists.
+DESKTOP_DIR="/home/parking/Desktop"
+mkdir -p "$DESKTOP_DIR"
+cat > "$DESKTOP_DIR/Parking-Admin.desktop" <<EOF
+[Desktop Entry]
+Name=Parking Admin
+Comment=E-Parking Admin Dashboard
+Exec=/usr/bin/google-chrome --app=http://localhost/ --no-first-run --no-default-browser-check --disable-infobars
+Icon=/usr/share/icons/hicolor/256x256/apps/google-chrome.png
+Type=Application
+Terminal=false
+Categories=Application;
+StartupNotify=true
+EOF
+chmod +x "$DESKTOP_DIR/Parking-Admin.desktop"
+chown -R parking:parking "$DESKTOP_DIR"
+ok "Admin dashboard shortcut created"
 
 # ── 11b. Drop sudoers rule for setup wizard ────────────────────────────────────
 step "11b/12 — Sudoers Drop for Wizard"
