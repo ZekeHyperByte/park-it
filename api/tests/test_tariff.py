@@ -93,3 +93,59 @@ class TestCalculateTariff:
 
         fee = calculate_tariff(entry, exit_, "TRUCK", config)
         assert fee == 15000
+
+    def test_multi_day_cap_is_per_day(self):
+        """Daily cap scales per 24h block, not per whole stay (revenue leak)."""
+        entry = datetime(2026, 4, 25, 10, 0, 0)
+        exit_ = datetime(2026, 4, 28, 10, 0, 0)  # exactly 72h = 3 days
+
+        fee = calculate_tariff(entry, exit_, "MOBIL", DEFAULT_TARIFF_CONFIG)
+        assert fee == 150000  # 3 * 50000, not a single 50000 cap
+
+    def test_progressive_first_hour_base_tariff(self):
+        """Progressive: first hour = base_tariff, subsequent = hourly_rate."""
+        config = TariffConfig(
+            vehicle_types={
+                "MOBIL": VehicleTypeRate(
+                    hourly_rate=2000, daily_cap=0, base_tariff=5000, is_progressive=True
+                ),
+            }
+        )
+        entry = datetime(2026, 4, 25, 10, 0, 0)
+
+        assert calculate_tariff(entry, datetime(2026, 4, 25, 11, 0, 0), "MOBIL", config) == 5000
+        # 3 hours: 5000 + 2 * 2000
+        assert calculate_tariff(entry, datetime(2026, 4, 25, 13, 0, 0), "MOBIL", config) == 9000
+
+    def test_overnight_midnight_surcharge(self):
+        """Overnight surcharge added once per calendar-midnight crossed."""
+        config = TariffConfig(
+            vehicle_types={
+                "MOBIL": VehicleTypeRate(
+                    hourly_rate=5000,
+                    daily_cap=0,
+                    overnight_mode="midnight",
+                    overnight_tariff=10000,
+                ),
+            }
+        )
+        entry = datetime(2026, 4, 25, 23, 0, 0)
+        exit_ = datetime(2026, 4, 26, 1, 0, 0)  # 2h, crosses one midnight
+
+        fee = calculate_tariff(entry, exit_, "MOBIL", config)
+        assert fee == 20000  # 2 * 5000 + 1 * 10000
+
+    def test_lost_ticket_penalty_floor(self):
+        """Lost ticket charges at least the penalty, ignoring grace."""
+        config = TariffConfig(
+            vehicle_types={
+                "MOBIL": VehicleTypeRate(
+                    hourly_rate=5000, daily_cap=0, lost_ticket_penalty=50000
+                ),
+            }
+        )
+        entry = datetime(2026, 4, 25, 10, 0, 0)
+        exit_ = datetime(2026, 4, 25, 10, 5, 0)  # within grace, but ticket lost
+
+        fee = calculate_tariff(entry, exit_, "MOBIL", config, is_lost_ticket=True)
+        assert fee == 50000

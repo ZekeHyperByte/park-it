@@ -22,7 +22,7 @@ class ParkingTransaction(Base, IntPKMixin, TimestampMixin):
 
     # Barcode / ticket
     barcode: Mapped[str | None] = mapped_column(
-        String(50), unique=True, nullable=True, index=True
+        String(50), nullable=True, index=True
     )
     card_number: Mapped[str | None] = mapped_column(
         String(32), nullable=True, index=True
@@ -106,13 +106,21 @@ class ParkingTransaction(Base, IntPKMixin, TimestampMixin):
     shift: Mapped["Shift | None"] = relationship("Shift", lazy="noload")
     operator: Mapped["User | None"] = relationship("User", lazy="noload")
 
-    # Partial unique index: prevent duplicate active card
+    # Partial unique indexes: prevent duplicate *active* card / barcode while
+    # still allowing the same physical card or ticket to be reused across
+    # separate (completed) stays.
     __table_args__ = (
         Index(
             "uq_active_card",
             "card_number",
             unique=True,
             postgresql_where=(status == "ACTIVE") & (card_number.isnot(None)),
+        ),
+        Index(
+            "uq_active_barcode",
+            "barcode",
+            unique=True,
+            postgresql_where=(status == "ACTIVE") & (barcode.isnot(None)),
         ),
     )
 

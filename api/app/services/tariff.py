@@ -4,6 +4,22 @@ This module provides configurable tariff calculation. Rates are not hardcoded;
 they are passed as parameters, allowing the system to be configured at setup time
 or changed dynamically via the admin settings.
 
+Pricing model (per vehicle type):
+
+* ``grace_period_minutes`` — stays at or under this are free.
+* ``base_tariff`` — flat charge for the first hour ("jam pertama").
+* ``hourly_rate`` — charge for each *subsequent* started hour.
+* ``is_progressive`` — when ``True`` the first hour is ``base_tariff`` and every
+  hour after that is ``hourly_rate`` (progressive model). When ``False`` the fee
+  is a flat ``hourly_rate`` per started hour (``base_tariff`` is used only as a
+  fallback when ``hourly_rate`` is 0).
+* ``overnight_mode`` / ``overnight_tariff`` — ``"midnight"`` adds the surcharge
+  once per calendar-date boundary crossed; ``"24h"`` adds it once per full 24h
+  block; ``"none"`` disables it.
+* ``daily_cap`` — caps the time-based fee per 24h block (0 = no cap).
+* ``lost_ticket_penalty`` — when the ticket is lost the fee is at least this
+  amount (a floor, applied on top of / instead of the measured-time fee).
+
 Example configuration (stored in Setting model or config file):
     {
         "vehicle_types": {
@@ -11,9 +27,7 @@ Example configuration (stored in Setting model or config file):
             "MOBIL": {"hourly_rate": 5000, "daily_cap": 50000},
             "BUS":   {"hourly_rate": 10000, "daily_cap": 100000}
         },
-        "grace_period_minutes": 15,
-        "overnight_additional": 0,
-        "overnight_start_hour": 24
+        "grace_period_minutes": 15
     }
 """
 
@@ -21,13 +35,21 @@ from dataclasses import dataclass
 from datetime import datetime
 from math import ceil
 
+MINUTES_PER_HOUR = 60
+MINUTES_PER_DAY = 60 * 24
+
 
 @dataclass
 class VehicleTypeRate:
     """Rate configuration for a vehicle type."""
 
-    hourly_rate: int  # Rupiah per hour (or partial hour)
-    daily_cap: int  # Maximum charge per day
+    hourly_rate: int  # Rupiah per started hour (subsequent hours if progressive)
+    daily_cap: int  # Maximum time-based charge per 24h block (0 = no cap)
+    base_tariff: int = 0  # Flat charge for the first hour
+    overnight_mode: str = "none"  # "midnight" | "24h" | "none"
+    overnight_tariff: int = 0  # Surcharge per night
+    lost_ticket_penalty: int = 0  # Minimum fee floor when ticket is lost
+    is_progressive: bool = False  # base_tariff first hour + hourly_rate after
 
 
 @dataclass
@@ -36,8 +58,6 @@ class TariffConfig:
 
     vehicle_types: dict[str, VehicleTypeRate]
     grace_period_minutes: int = 15
-    overnight_additional: int = 0
-    overnight_start_hour: int = 24  # Hour at which overnight charge applies
 
 
 def calculate_tariff(
@@ -45,6 +65,8 @@ def calculate_tariff(
     exit_time: datetime,
     vehicle_type_code: str,
     config: TariffConfig,
+    *,
+    is_lost_ticket: bool = False,
 ) -> int:
     """Calculate parking fee based on entry/exit time and vehicle type.
 
@@ -53,9 +75,13 @@ def calculate_tariff(
         exit_time: When vehicle exited
         vehicle_type_code: Key in config.vehicle_types (e.g. "MOTOR", "MOBIL")
         config: Tariff configuration
+        is_lost_ticket: Apply the lost-ticket penalty floor and bypass grace
 
     Returns:
         Fee in Rupiah
+
+    Raises:
+        ValueError: If exit precedes entry or the vehicle type is unknown
     """
     if exit_time < entry_time:
         raise ValueError("exit_time must be after entry_time")
@@ -66,25 +92,38 @@ def calculate_tariff(
 
     duration_minutes = (exit_time - entry_time).total_seconds() / 60
 
-    # Grace period: no charge
-    if duration_minutes <= config.grace_period_minutes:
+    # Grace period: no charge (does not apply to lost tickets).
+    if not is_lost_ticket and duration_minutes <= config.grace_period_minutes:
         return 0
 
-    # Calculate hours (round up partial hours)
-    hours = ceil(duration_minutes / 60)
+    # Round up to whole started hours (minimum 1 once past grace).
+    hours = max(1, ceil(duration_minutes / MINUTES_PER_HOUR))
 
-    # Base fee
-    fee = hours * rate.hourly_rate
+    # Base time fee.
+    if rate.is_progressive:
+        first_hour = rate.base_tariff or rate.hourly_rate
+        fee = first_hour + max(0, hours - 1) * rate.hourly_rate
+    else:
+        per_hour = rate.hourly_rate or rate.base_tariff
+        fee = hours * per_hour
 
-    # Overnight additional (if applicable)
-    if config.overnight_additional > 0:
-        entry_hour = entry_time.hour
-        exit_hour = exit_time.hour
-        if exit_hour >= config.overnight_start_hour or entry_hour >= config.overnight_start_hour:
-            fee += config.overnight_additional
+    # Overnight surcharge.
+    if rate.overnight_mode != "none" and rate.overnight_tariff > 0:
+        if rate.overnight_mode == "24h":
+            nights = int(duration_minutes // MINUTES_PER_DAY)
+        else:  # "midnight": count calendar-date boundaries crossed
+            nights = max(0, (exit_time.date() - entry_time.date()).days)
+        fee += nights * rate.overnight_tariff
 
-    # Daily cap
-    fee = min(fee, rate.daily_cap)
+    # Per-day cap (applies per 24h block; 0 = no cap).
+    if rate.daily_cap > 0:
+        days = max(1, ceil(duration_minutes / MINUTES_PER_DAY))
+        fee = min(fee, days * rate.daily_cap)
+
+    # Lost-ticket penalty floor — applied after the cap so the denda is never
+    # eroded by the per-day cap.
+    if is_lost_ticket and rate.lost_ticket_penalty > 0:
+        fee = max(fee, rate.lost_ticket_penalty)
 
     return fee
 
@@ -97,6 +136,4 @@ DEFAULT_TARIFF_CONFIG = TariffConfig(
         "BUS": VehicleTypeRate(hourly_rate=10000, daily_cap=100000),
     },
     grace_period_minutes=15,
-    overnight_additional=0,
-    overnight_start_hour=24,
 )

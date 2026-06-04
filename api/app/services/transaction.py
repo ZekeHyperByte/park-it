@@ -118,8 +118,13 @@ async def find_active_transaction(
     if for_update:
         query = query.with_for_update()
 
+    # Lookups can be by non-unique columns (plate_number is not unique, and a
+    # vehicle may re-enter without exiting). Return the most recent active row
+    # instead of raising MultipleResultsFound and 500-ing the exit lane.
+    query = query.order_by(ParkingTransaction.entry_time.desc())
+
     result = await db.execute(query)
-    return result.scalar_one_or_none()
+    return result.scalars().first()
 
 
 async def get_vehicle_type_tariff_config(
@@ -140,12 +145,19 @@ async def get_vehicle_type_tariff_config(
     if vt is None:
         return DEFAULT_TARIFF_CONFIG, None
 
-    # Build config from database rates
+    # Build config from database rates. Pass every field through verbatim —
+    # 0 means "not configured" and is handled inside the tariff engine
+    # (daily_cap=0 → no cap; hourly_rate=0 → fall back to base_tariff).
     config = TariffConfig(
         vehicle_types={
             vt.code: VehicleTypeRate(
-                hourly_rate=vt.hourly_rate or vt.base_tariff,
-                daily_cap=vt.max_daily_cap or 999999,
+                hourly_rate=vt.hourly_rate,
+                daily_cap=vt.max_daily_cap,
+                base_tariff=vt.base_tariff,
+                overnight_mode=vt.overnight_mode,
+                overnight_tariff=vt.overnight_tariff,
+                lost_ticket_penalty=vt.lost_ticket_penalty,
+                is_progressive=vt.is_progressive,
             )
         },
         grace_period_minutes=15,
@@ -176,9 +188,27 @@ async def calculate_transaction_fee(
     effective_vt_id = vehicle_type_id_override if vehicle_type_id_override is not None else transaction.vehicle_type_id
     config, vt_code = await get_vehicle_type_tariff_config(db, effective_vt_id)
 
-    # Default to MOBIL if no vehicle type found
+    # Default to MOBIL if no vehicle type found — log it so a broken/missing
+    # vehicle_type FK is visible instead of silently charging car rates.
     if vt_code is None:
+        logger.warning(
+            "tariff_vehicle_type_missing",
+            transaction_id=transaction.id,
+            vehicle_type_id=effective_vt_id,
+        )
         vt_code = "MOBIL"
+
+    # Clock-skew guard: if the exit clock is behind the entry clock, clamp to a
+    # zero-duration stay (fee 0) and log it instead of letting calculate_tariff
+    # raise and silently fall through to a free exit.
+    if exit_time < transaction.entry_time:
+        logger.warning(
+            "tariff_negative_duration",
+            transaction_id=transaction.id,
+            entry_time=transaction.entry_time.isoformat(),
+            exit_time=exit_time.isoformat(),
+        )
+        exit_time = transaction.entry_time
 
     try:
         fee = calculate_tariff(
@@ -186,9 +216,18 @@ async def calculate_transaction_fee(
             exit_time=exit_time,
             vehicle_type_code=vt_code,
             config=config,
+            is_lost_ticket=transaction.is_lost_ticket,
         )
     except ValueError:
-        fee = 0
+        # Genuine misconfiguration (unknown vehicle code) — surface it rather
+        # than handing out a free exit. The caller turns this into an operator
+        # error so the stay can be re-priced or escalated.
+        logger.error(
+            "tariff_calculation_failed",
+            transaction_id=transaction.id,
+            vehicle_type_code=vt_code,
+        )
+        raise
 
     return fee
 

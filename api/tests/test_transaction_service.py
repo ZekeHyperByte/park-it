@@ -209,14 +209,17 @@ class TestCompleteExitTransaction:
 
 class TestGetVehicleTypeTariffConfig:
     async def test_from_database(self, db_session: AsyncSession, vehicle_type_motor: VehicleType):
-        config = await get_vehicle_type_tariff_config(db_session, vehicle_type_motor.id)
+        config, code = await get_vehicle_type_tariff_config(db_session, vehicle_type_motor.id)
+        assert code == "MOTOR"
         assert "MOTOR" in config.vehicle_types
         assert config.vehicle_types["MOTOR"].hourly_rate == 2000
 
     async def test_none_returns_default(self, db_session: AsyncSession):
-        config = await get_vehicle_type_tariff_config(db_session, None)
+        config, code = await get_vehicle_type_tariff_config(db_session, None)
         assert config == DEFAULT_TARIFF_CONFIG
+        assert code is None
 
     async def test_invalid_id_returns_default(self, db_session: AsyncSession):
-        config = await get_vehicle_type_tariff_config(db_session, 99999)
+        config, code = await get_vehicle_type_tariff_config(db_session, 99999)
         assert config == DEFAULT_TARIFF_CONFIG
+        assert code is None
