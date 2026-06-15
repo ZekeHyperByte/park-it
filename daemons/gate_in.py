@@ -455,14 +455,6 @@ class GateInDaemon(BaseDaemon):
                 await self._cmd_display_text(
                     command_data.get("line1", ""), command_data.get("line2", "")
                 )
-            elif command_type == "buzzer":
-                if command_data.get("success", "true").lower() != "true":
-                    await self._cmd_play_audio(11)
-            elif command_type == "print_ticket":
-                await self._cmd_print_ticket(
-                    command_data.get("barcode", ""),
-                    command_data.get("gate_name", self.config.get("name", "")),
-                )
             elif command_type == "print_ticket_then_open":
                 # Same ACK-and-report contract as open_gate (see above).
                 await self._cmd_print_ticket_then_open(

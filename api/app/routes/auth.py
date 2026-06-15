@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.middleware.auth import get_current_user
 from api.app.schemas.auth import LoginRequest
-from api.app.schemas.common import ErrorResponse, SuccessResponse
+from api.app.schemas.common import SuccessResponse
 from api.app.schemas.user import UserResponse
 from api.app.services.auth import authenticate_user, create_tokens, refresh_tokens, revoke_token
 from api.app.services.user import get_user_by_id
@@ -52,7 +52,6 @@ def _clear_auth_cookies(response: Response) -> None:
 @router.post(
     "/login",
     response_model=SuccessResponse,
-    responses={401: {"model": ErrorResponse}},
 )
 async def login(
     login_data: LoginRequest,

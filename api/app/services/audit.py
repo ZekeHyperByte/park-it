@@ -4,8 +4,6 @@ Provides helper functions for creating audit log entries.
 Designed to be called from routes and services without blocking the main flow.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession

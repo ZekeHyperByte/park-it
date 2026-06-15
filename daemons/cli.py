@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import signal
 import sys
 from pathlib import Path
 
@@ -122,34 +121,8 @@ async def _run_daemon(gate_code: str) -> None:
     else:
         raise RuntimeError(f"Unknown gate direction: {direction}")
 
-    # Signal handling
-    loop = asyncio.get_running_loop()
-    shutdown_event = asyncio.Event()
-
-    def _on_signal(sig: int) -> None:
-        logger.info("shutdown_signal_received", signal=signal.Signals(sig).name)
-        shutdown_event.set()
-
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, lambda s=sig: _on_signal(s))
-
-    # Run daemon
-    daemon_task = asyncio.create_task(daemon.run())
-    shutdown_task = asyncio.create_task(shutdown_event.wait())
-
-    done, pending = await asyncio.wait(
-        [daemon_task, shutdown_task],
-        return_when=asyncio.FIRST_COMPLETED,
-    )
-
-    # Cancel remaining and graceful stop
-    for task in pending:
-        task.cancel()
-    await asyncio.gather(*pending, return_exceptions=True)
-
-    if not daemon_task.done():
-        await daemon.stop()
-
+    # Daemon handles its own signal handling, task cancellation, Redis close
+    await daemon.run()
     logger.info("daemon_shutdown_complete", gate_id=gate_code)
 
 

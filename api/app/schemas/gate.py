@@ -2,59 +2,10 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 
-class PeripheralConfig(BaseModel):
-    """Base peripheral configuration."""
-
-    enabled: bool = False
-
-
-class RfidConfig(PeripheralConfig):
-    """RFID reader configuration."""
-
-    wiegand_channel: str = "W"  # W or X
-
-
-class PrinterConfig(PeripheralConfig):
-    """Printer configuration reference."""
-
-    printer_id: int | None = None
-    mode: str = "CONTROLLER_PASSTHROUGH"
-
-
-class AudioConfig(PeripheralConfig):
-    """Audio speaker configuration via Compass controller."""
-
-    welcome_track: int = 1
-    ticket_track: int = 2
-    timeout_track: int = 8
-    error_track: int = 11
-
-
-class EmoneyConfig(PeripheralConfig):
-    """E-money configuration for gate-in."""
-
-    minimum_balance: int = 10000
-
-
-class CameraConfig(PeripheralConfig):
-    """Camera configuration reference."""
-
-    camera_id: int | None = None
-
-
-class OmnikeyReaderConfig(PeripheralConfig):
-    """Omnikey 5427 CK HID keyboard reader at booth."""
-
-    device_path: str | None = None
-    device_name_match: str = "omnikey"
-
 
 class HardwareConfig(BaseModel):
     """Complete hardware configuration for a gate."""
 
-    gate_close_duration_ms: int = 5000
-    has_close_sensor: bool = False
-    relay_mode: str = "SINGLE"
     gate_open_timeout_s: int | None = 10
     sensor_stuck_s: int | None = 30
 
@@ -67,15 +18,15 @@ class HardwareConfig(BaseModel):
     lane_type: str = Field(default="MIXED", pattern="^(SINGLE|MIXED)$")
     default_vehicle_type_id: int | None = None
 
-    # Peripherals (all optional, enabled=false by default)
-    rfid: RfidConfig = Field(default_factory=RfidConfig)
-    ticket_printer: PrinterConfig = Field(default_factory=PrinterConfig)
-    emoney: EmoneyConfig = Field(default_factory=EmoneyConfig)
-    camera: CameraConfig = Field(default_factory=CameraConfig)
-    audio: AudioConfig = Field(default_factory=AudioConfig)
-    led: PeripheralConfig = Field(default_factory=PeripheralConfig)
-    omnikey_reader: OmnikeyReaderConfig = Field(default_factory=OmnikeyReaderConfig)
-    receipt_printer: PrinterConfig = Field(default_factory=PrinterConfig)
+    # Peripherals — each is a freeform dict with optional {"enabled": bool, ...}
+    rfid: dict = Field(default_factory=dict)
+    ticket_printer: dict = Field(default_factory=dict)
+    emoney: dict = Field(default_factory=dict)
+    camera: dict = Field(default_factory=dict)
+    audio: dict = Field(default_factory=dict)
+    led: dict = Field(default_factory=dict)
+    omnikey_reader: dict = Field(default_factory=dict)
+    receipt_printer: dict = Field(default_factory=dict)
 
 
 class GateBase(BaseModel):

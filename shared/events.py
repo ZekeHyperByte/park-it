@@ -14,21 +14,11 @@ from pydantic import BaseModel, Field
 # Enums
 # =============================================================================
 
-class PaymentMethod(StrEnum):
-    """Payment method types."""
-
-    CASH = "CASH"
-    RFID_MEMBER = "RFID_MEMBER"
-    EMONEY = "EMONEY"
-    PENDING = "PENDING"
-
-
 class GateMode(StrEnum):
     """Gate-in operational mode."""
 
     CASH = "CASH"
     RFID = "RFID"
-
 
 
 class DeductStatus(StrEnum):
@@ -42,24 +32,6 @@ class DeductStatus(StrEnum):
     INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE"
     TIMEOUT = "TIMEOUT"
     FAILED = "FAILED"
-
-
-class TransactionStatus(StrEnum):
-    """Parking transaction status."""
-
-    ACTIVE = "ACTIVE"
-    COMPLETED = "COMPLETED"
-    LOST_CONTACT = "LOST_CONTACT"
-
-
-class AlertType(StrEnum):
-    """Operator alert types."""
-
-    TIMEOUT = "TIMEOUT"
-    HARDWARE_FAILURE = "HARDWARE_FAILURE"
-    SENSOR_STUCK = "SENSOR_STUCK"
-    LOST_CONTACT = "LOST_CONTACT"
-    CORRECTION_FAILED = "CORRECTION_FAILED"
 
 
 # =============================================================================
@@ -79,12 +51,6 @@ class VehicleDetectedEvent(BaseEvent):
 
     event_type: Literal["vehicle_detected"] = "vehicle_detected"
     sensor: str
-
-
-class GateClosedEvent(BaseEvent):
-    """Gate has closed."""
-
-    event_type: Literal["gate_closed"] = "gate_closed"
 
 
 class RfidCardReadEvent(BaseEvent):
@@ -119,35 +85,11 @@ class GateOpenedEvent(BaseEvent):
     event_type: Literal["gate_opened"] = "gate_opened"
 
 
-
-class TimeoutAlertEvent(BaseEvent):
-    """Payment timeout alert."""
-
-    event_type: Literal["timeout_alert"] = "timeout_alert"
-    transaction_id: str | None
-    waiting_seconds: int
-
-
-class VehicleLeftEvent(BaseEvent):
-    """Vehicle left without payment."""
-
-    event_type: Literal["vehicle_left"] = "vehicle_left"
-    reason: str  # passed, abandoned
-
-
 class PlayAudioEvent(BaseEvent):
     """Request frontend to play audio locally (serial/booth gates only)."""
 
     event_type: Literal["play_audio"] = "play_audio"
     track: int
-
-
-class ReaderErrorEvent(BaseEvent):
-    """E-money reader error."""
-
-    event_type: Literal["reader_error"] = "reader_error"
-    error_code: str
-    message: str
 
 
 class HeartbeatEvent(BaseEvent):
@@ -160,16 +102,12 @@ class HeartbeatEvent(BaseEvent):
 # Union type for all events
 RedisEvent = (
     VehicleDetectedEvent
-    | GateClosedEvent
     | RfidCardReadEvent
     | TicketButtonPressedEvent
     | HelpButtonPressedEvent
     | VehiclePassedEvent
     | GateOpenedEvent
-    | TimeoutAlertEvent
-    | VehicleLeftEvent
     | PlayAudioEvent
-    | ReaderErrorEvent
     | HeartbeatEvent
 )
 
@@ -218,50 +156,12 @@ class DisplayTextCommand(BaseCommand):
     mode: str = "normal"
 
 
-class BuzzerCommand(BaseCommand):
-    """Trigger buzzer."""
-
-    command_type: Literal["buzzer"] = "buzzer"
-    success: bool = True
-
-
-class PrintTicketCommand(BaseCommand):
-    """Print entry ticket."""
-
-    command_type: Literal["print_ticket"] = "print_ticket"
-    barcode: str
-    gate_name: str
-    barcode_format: str = "CODE39"
-
-
 class PrintTicketThenOpenCommand(BaseCommand):
     """Print entry ticket then open gate (cash flow)."""
 
     command_type: Literal["print_ticket_then_open"] = "print_ticket_then_open"
     barcode: str
     gate_name: str
-
-
-class PrintReceiptCommand(BaseCommand):
-    """Print exit receipt."""
-
-    command_type: Literal["print_receipt"] = "print_receipt"
-    transaction_data: dict  # serialized transaction info
-
-
-
-class CashPaymentConfirmedCommand(BaseCommand):
-    """Cash payment confirmed by POS."""
-
-    command_type: Literal["cash_payment_confirmed"] = "cash_payment_confirmed"
-    transaction_id: str
-
-
-class EmoneyPaymentConfirmedCommand(BaseCommand):
-    """E-money payment confirmed by POS or booth bridge."""
-
-    command_type: Literal["emoney_payment_confirmed"] = "emoney_payment_confirmed"
-    transaction_id: str
 
 
 class ResetGateCommand(BaseCommand):
@@ -287,12 +187,7 @@ RedisCommand = (
     | CloseGateCommand
     | PlayAudioCommand
     | DisplayTextCommand
-    | BuzzerCommand
-    | PrintTicketCommand
     | PrintTicketThenOpenCommand
-    | PrintReceiptCommand
-    | CashPaymentConfirmedCommand
-    | EmoneyPaymentConfirmedCommand
     | ResetGateCommand
     | RejectCardCommand
 )

@@ -11,7 +11,6 @@ from api.app.schemas.payment import (
     CalculateFeeRequest,
     CalculateFeeResponse,
     CashPaymentRequest,
-    EmoneyBoothResultRequest,
     EmoneyDeductRequest,
     EmoneyResultRequest,
     PaymentResponse,
@@ -278,7 +277,7 @@ async def rfid_booth(
 @router.post("/emoney/booth-result", response_model=PaymentResponse)
 async def emoney_booth_result(
     request: Request,
-    result: EmoneyBoothResultRequest,
+    result: EmoneyResultRequest,
     db: AsyncSession = Depends(get_db),
     api_key: str = Depends(require_api_key),
 ) -> PaymentResponse:

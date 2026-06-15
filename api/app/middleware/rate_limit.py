@@ -4,8 +4,6 @@ Provides configurable rate limits per endpoint path pattern.
 Falls back to in-memory tracking when Redis is unavailable.
 """
 
-from __future__ import annotations
-
 import time
 from collections import defaultdict
 from typing import Callable

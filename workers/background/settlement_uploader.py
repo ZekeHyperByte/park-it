@@ -443,40 +443,4 @@ async def poll_settlement_responses(ctx: dict) -> dict:
     }
 
 
-# Backwards-compatible alias (some callers may import the old name).
-async def poll_for_response(
-    settlement_filename: str,
-    *,
-    host: str,
-    port: int = 22,
-    username: str,
-    key_path: str,
-    known_hosts: str | None = None,
-    remote_dir: str = "/",
-    max_attempts: int = 24,
-    interval_seconds: int = 300,
-) -> tuple[str | None, str | None]:
-    """Poll for .OK/.NOK with bounded retries. Returns (ext, content) or (None, None)."""
-    for attempt in range(max_attempts):
-        try:
-            ext, content = await fetch_response_file(
-                settlement_filename=settlement_filename,
-                host=host,
-                port=port,
-                username=username,
-                key_path=key_path,
-                known_hosts=known_hosts,
-                remote_dir=remote_dir,
-            )
-            if ext is not None:
-                return ext, content
-        except Exception as e:
-            logger.warning(
-                "settlement_poll_attempt_error",
-                attempt=attempt + 1,
-                error=str(e),
-            )
-        await asyncio.sleep(interval_seconds)
 
-    logger.warning("settlement_poll_timeout", settlement=settlement_filename)
-    return None, None

@@ -2,26 +2,13 @@
 
 import asyncio
 import json
+import urllib.request
 
 import websockets
 
 from shared.logging import get_logger
 
 logger = get_logger("booth_ws")
-
-# Soft imports for async HTTP clients
-try:
-    import aiohttp
-
-    HAS_AIOHTTP = True
-except ImportError:
-    HAS_AIOHTTP = False
-    try:
-        import httpx
-
-        HAS_HTTPX = True
-    except ImportError:
-        HAS_HTTPX = False
 
 
 class WebSocketServer:
@@ -93,7 +80,7 @@ class WebSocketServer:
         logger.info("ws_server_stopped")
 
     async def _call_api_booth_result(self, payload: dict) -> None:
-        """Call the API booth-result endpoint directly."""
+        """Call the API booth-result endpoint via urllib (stdlib, no extra deps)."""
         if not self._api_config:
             return
 
@@ -110,53 +97,26 @@ class WebSocketServer:
             "raw_response_hex": payload["raw_response_hex"],
         }
 
+        def _post():
+            data = json.dumps(api_payload).encode()
+            req = urllib.request.Request(
+                url,
+                data=data,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-API-Key": self._api_config["api_key"],
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return resp.status
+
         try:
-            if HAS_AIOHTTP:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                        url,
-                        headers={"X-API-Key": self._api_config["api_key"]},
-                        json=api_payload,
-                    ) as resp:
-                        if resp.status == 200:
-                            logger.info("booth_api_call_success", status=payload["status"])
-                        else:
-                            body = await resp.text()
-                            logger.error("booth_api_call_failed", status=resp.status, body=body)
-            elif HAS_HTTPX:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.post(
-                        url,
-                        headers={"X-API-Key": self._api_config["api_key"]},
-                        json=api_payload,
-                    )
-                    if resp.status_code == 200:
-                        logger.info("booth_api_call_success", status=payload["status"])
-                    else:
-                        logger.error("booth_api_call_failed", status=resp.status_code, body=resp.text)
+            status = await asyncio.to_thread(_post)
+            if status == 200:
+                logger.info("booth_api_call_success", status=payload["status"])
             else:
-                # Fallback to urllib.request in a thread
-                import urllib.request
-
-                def _post():
-                    data = json.dumps(api_payload).encode()
-                    req = urllib.request.Request(
-                        url,
-                        data=data,
-                        headers={
-                            "Content-Type": "application/json",
-                            "X-API-Key": self._api_config["api_key"],
-                        },
-                        method="POST",
-                    )
-                    with urllib.request.urlopen(req, timeout=10) as resp:
-                        return resp.status
-
-                status = await asyncio.to_thread(_post)
-                if status == 200:
-                    logger.info("booth_api_call_success", status=payload["status"])
-                else:
-                    logger.error("booth_api_call_failed", status=status)
+                logger.error("booth_api_call_failed", status=status)
         except Exception as e:
             logger.error("booth_api_call_exception", error=str(e))
 

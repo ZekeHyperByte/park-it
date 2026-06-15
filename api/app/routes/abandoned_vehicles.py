@@ -7,8 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.app.middleware.auth import require_operator
 from api.app.models.abandoned_vehicle_log import AbandonedVehicleLog
 from api.app.schemas.abandoned_vehicle import AbandonedVehicleLogListItem
-from api.app.utils.pagination import PaginatedList
-from api.app.utils.pagination import PaginationParams, paginated_list
+from api.app.utils.pagination import PaginatedList, PaginationParams, paginated_list
 from api.database import get_db
 from shared.logging import get_logger
 
