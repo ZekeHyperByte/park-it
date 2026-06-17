@@ -72,7 +72,7 @@ async def refresh_queue_depths() -> None:
 
         await redis_client.connect()
         redis = redis_client.client
-        for queue in ("arq:queue:critical", "arq:queue:snapshot", "arq:queue:background"):
+        for queue in ("arq:queue:critical", "arq:queue:background"):
             try:
                 depth = await redis.zcard(queue)
                 arq_queue_depth.labels(queue=queue).set(depth)

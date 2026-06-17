@@ -424,26 +424,21 @@ def _print_via_controller(escpos_data: bytes, config: dict[str, Any]) -> None:
 
     if protocol == "compass":
         from protocols.compass.protocol import CompassTransport, cmd_pr4
-
         transport = CompassTransport(host, port)
-        transport.connect(timeout=5.0)
-        try:
-            transport.send(cmd_pr4(escpos_data))
-        finally:
-            transport.close()
 
     elif protocol == "enet":
-        from protocols.enet.protocol import EnetTransport, cmd_pr4
-
+        from protocols.enet.protocol import cmd_pr4
+        from protocols.compass.protocol import CompassTransport as EnetTransport
         transport = EnetTransport(host, port)
-        transport.connect(timeout=5.0)
-        try:
-            transport.send(cmd_pr4(escpos_data))
-        finally:
-            transport.close()
 
     else:
         raise ValueError(f"Controller passthrough not supported for protocol: {protocol}")
+
+    transport.connect(timeout=5.0)
+    try:
+        transport.send(cmd_pr4(escpos_data))
+    finally:
+        transport.close()
 
 
 def _print_via_network(escpos_data: bytes, config: dict[str, Any]) -> None:

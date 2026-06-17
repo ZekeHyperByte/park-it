@@ -7,13 +7,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-class PaginationParams:
+class PaginationParams(BaseModel):
     """FastAPI dependency for pagination query params."""
 
-    def __init__(self, skip: int = 0, limit: int = 100, q: str | None = None):
-        self.skip = skip
-        self.limit = limit
-        self.q = q
+    skip: int = 0
+    limit: int = 100
+    q: str | None = None
 
 
 class PaginatedList(BaseModel):

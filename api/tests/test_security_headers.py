@@ -6,13 +6,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.app.middleware.security_headers import SecurityHeadersMiddleware
+from api.app.middleware.security_headers import create_security_headers_middleware
 
 
 @pytest.fixture
 def client():
     app = FastAPI()
-    app.add_middleware(SecurityHeadersMiddleware)
+    app.middleware("http")(create_security_headers_middleware())
 
     @app.get("/test")
     def test_endpoint():
@@ -54,7 +54,7 @@ class TestSecurityHeadersMiddleware:
 
     def test_hsts_when_enabled(self):
         app = FastAPI()
-        app.add_middleware(SecurityHeadersMiddleware, enable_hsts=True)
+        app.middleware("http")(create_security_headers_middleware(enable_hsts=True))
 
         @app.get("/test")
         def test_endpoint():
@@ -67,7 +67,7 @@ class TestSecurityHeadersMiddleware:
 
     def test_custom_csp(self):
         app = FastAPI()
-        app.add_middleware(SecurityHeadersMiddleware, csp="default-src 'none';")
+        app.middleware("http")(create_security_headers_middleware(csp="default-src 'none';"))
 
         @app.get("/test")
         def test_endpoint():

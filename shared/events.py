@@ -61,30 +61,6 @@ class RfidCardReadEvent(BaseEvent):
     channel: str  # W or X
 
 
-class TicketButtonPressedEvent(BaseEvent):
-    """Ticket button pressed."""
-
-    event_type: Literal["ticket_button_pressed"] = "ticket_button_pressed"
-
-
-class HelpButtonPressedEvent(BaseEvent):
-    """IN3 help button pressed — operator assistance requested."""
-
-    event_type: Literal["help_button_pressed"] = "help_button_pressed"
-
-
-class VehiclePassedEvent(BaseEvent):
-    """Vehicle has passed through gate."""
-
-    event_type: Literal["vehicle_passed"] = "vehicle_passed"
-
-
-class GateOpenedEvent(BaseEvent):
-    """Gate has opened."""
-
-    event_type: Literal["gate_opened"] = "gate_opened"
-
-
 class PlayAudioEvent(BaseEvent):
     """Request frontend to play audio locally (serial/booth gates only)."""
 
@@ -99,14 +75,9 @@ class HeartbeatEvent(BaseEvent):
     controller_ok: bool
 
 
-# Union type for all events
 RedisEvent = (
     VehicleDetectedEvent
     | RfidCardReadEvent
-    | TicketButtonPressedEvent
-    | HelpButtonPressedEvent
-    | VehiclePassedEvent
-    | GateOpenedEvent
     | PlayAudioEvent
     | HeartbeatEvent
 )

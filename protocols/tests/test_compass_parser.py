@@ -1,7 +1,7 @@
 """Tests for Compass controller parser."""
 
 
-from protocols.compass.parser import parse_rfid_card, parse_stat
+from protocols.compass.parser import parse_stat
 
 
 class TestParseStat:
@@ -58,30 +58,3 @@ class TestParseStat:
         result = parse_stat(b"\xa6STAT10\xa9")
         assert result["in1"] is True
 
-
-class TestParseRfidCard:
-    """Test RFID card parser."""
-
-    def test_no_card(self):
-        """No card in response."""
-        card, card_type = parse_rfid_card(b"\xa6STAT\xa9")
-        assert card is None
-        assert card_type is None
-
-    def test_rfid_card(self):
-        """RFID card detected."""
-        card, card_type = parse_rfid_card(b"\xa6STATW1234\xa9")
-        assert card == "4660"
-        assert card_type == "RFID"
-
-    def test_uhf_card(self):
-        """UHF card detected."""
-        card, card_type = parse_rfid_card(b"\xa6STATXABCD\xa9")
-        assert card == "43981"
-        assert card_type == "UHF"
-
-    def test_rfid_priority(self):
-        """RFID takes priority over UHF if both present."""
-        card, card_type = parse_rfid_card(b"\xa6STATW1234XABCD\xa9")
-        assert card == "4660"
-        assert card_type == "RFID"

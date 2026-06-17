@@ -120,17 +120,3 @@ def _extract_wiegand(text: str, channel: str) -> str | None:
         return None
 
 
-def parse_rfid_card(response: bytes) -> tuple[str | None, str | None]:
-    """Extract RFID/UHF card number from response.
-
-    Returns:
-        Tuple of (card_number, card_type) or (None, None)
-    """
-    parsed = parse_stat(response)
-
-    if parsed["wiegand_w"]:
-        return parsed["wiegand_w"], "RFID"
-    if parsed["wiegand_x"]:
-        return parsed["wiegand_x"], "UHF"
-
-    return None, None

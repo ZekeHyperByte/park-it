@@ -120,15 +120,9 @@ export function useTariffPresets() {
     }
   }
 
-  function formatIdr(value) {
-    if (value === null || value === undefined || Number.isNaN(value)) return 'Rp 0'
-    return 'Rp ' + Number(value).toLocaleString('id-ID')
-  }
-
   return {
     presets,
     findPreset,
     clonePreset,
-    formatIdr,
   }
 }

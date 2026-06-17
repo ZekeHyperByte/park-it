@@ -142,31 +142,8 @@ class RedisClient:
         return await self.client.expire(key, seconds)
 
     # ------------------------------------------------------------------
-    # JSON cache helpers
+    # Pattern scan helpers
     # ------------------------------------------------------------------
-
-    async def cache_get_json(self, key: str) -> Any | None:
-        """Get and deserialize JSON value from cache."""
-        import json
-
-        raw = await self.get(key)
-        if raw is None:
-            return None
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return None
-
-    async def cache_set_json(
-        self,
-        key: str,
-        value: Any,
-        ttl: int = 300,
-    ) -> bool:
-        """Serialize and store JSON value in cache with TTL."""
-        import json
-
-        return await self.set(key, json.dumps(value, default=str), ex=ttl)
 
     async def cache_delete_pattern(self, pattern: str) -> int:
         """Delete all keys matching a pattern."""

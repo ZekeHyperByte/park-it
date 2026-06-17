@@ -7,13 +7,7 @@ Complements nginx-level headers with application-level enforcement.
 from typing import Callable
 
 from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
 
-from shared.logging import get_logger
-
-logger = get_logger("security_headers")
-
-# Default Content Security Policy for the parking system
 DEFAULT_CSP = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline'; "
@@ -27,45 +21,24 @@ DEFAULT_CSP = (
 )
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Middleware that adds security headers to all responses.
+def create_security_headers_middleware(
+    *,
+    csp: str | None = None,
+    enable_hsts: bool = False,
+) -> Callable:
+    """Factory returning plain async middleware function."""
 
-    Headers added:
-        - X-Content-Type-Options: nosniff
-        - X-Frame-Options: DENY
-        - Content-Security-Policy: default CSP
-        - Referrer-Policy: strict-origin-when-cross-origin
-        - Permissions-Policy: restrict sensitive APIs
-        - Strict-Transport-Security: HSTS (when HTTPS is enabled)
-    """
+    _csp = csp or DEFAULT_CSP
+    _hsts_header = "max-age=31536000; includeSubDomains; preload"
 
-    def __init__(
-        self,
-        app,
-        csp: str | None = None,
-        enable_hsts: bool = False,
-    ):
-        super().__init__(app)
-        self.csp = csp or DEFAULT_CSP
-        self.enable_hsts = enable_hsts
-
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def _middleware(request: Request, call_next: Callable) -> Response:
         response = await call_next(request)
-
-        # Prevent MIME type sniffing
-        response.headers["X-Content-Type-Options"] = "nosniff"
-
-        # Prevent clickjacking
-        response.headers["X-Frame-Options"] = "DENY"
-
-        # Content Security Policy
-        response.headers["Content-Security-Policy"] = self.csp
-
-        # Referrer policy
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-
-        # Permissions policy (restrict sensitive browser APIs)
-        response.headers["Permissions-Policy"] = (
+        h = response.headers
+        h["X-Content-Type-Options"] = "nosniff"
+        h["X-Frame-Options"] = "DENY"
+        h["Content-Security-Policy"] = _csp
+        h["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        h["Permissions-Policy"] = (
             "accelerometer=(), "
             "camera=(), "
             "geolocation=(), "
@@ -75,11 +48,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "payment=(), "
             "usb=()"
         )
-
-        # HSTS (only when explicitly enabled / behind HTTPS)
-        if self.enable_hsts:
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=31536000; includeSubDomains; preload"
-            )
-
+        if enable_hsts:
+            h["Strict-Transport-Security"] = _hsts_header
         return response
+
+    return _middleware

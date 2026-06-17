@@ -49,7 +49,7 @@ async def enqueue_snapshots_for_gate(
                 camera_password=cam.get("password"),
                 camera_auth_type=cam.get("auth_type", "none"),
                 _job_id=f"snapshot:{snapshot_type}:{transaction_id}:{cam_key}",
-                _queue_name="arq:queue:snapshot",
+                _queue_name="arq:queue:critical",
             )
 
         logger.info(

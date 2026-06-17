@@ -46,8 +46,3 @@ class UserResponse(UserBase):
         return bool(v)
 
 
-class UserListResponse(BaseModel):
-    """List of users response."""
-
-    items: list[UserResponse]
-    total: int

@@ -17,13 +17,7 @@ from protocols.compass.parser import parse_stat
 from protocols.compass.protocol import (
     CompassTransport,
     SerialTransport,
-    cmd_ack_in1off,
-    cmd_ack_in1on,
-    cmd_ack_in2on,
-    cmd_ack_in3on,
-    cmd_ack_in4off,
-    cmd_ack_in4on,
-    cmd_ack_wiegand,
+    cmd_ack,
     cmd_close1,
     cmd_ds,
     cmd_dsu,
@@ -37,13 +31,9 @@ from protocols.compass.protocol import (
 )
 from shared.events import (
     BaseEvent,
-    GateOpenedEvent,
-    HelpButtonPressedEvent,
     PlayAudioEvent,
     RfidCardReadEvent,
-    TicketButtonPressedEvent,
     VehicleDetectedEvent,
-    VehiclePassedEvent,
 )
 from shared.logging import get_logger
 
@@ -289,20 +279,20 @@ class GateInDaemon(BaseDaemon):
 
         if "IN1ON" in text:
             self._in1_on = True
-            await self._send_controller_command(cmd_ack_in1on())
+            await self._send_controller_command(cmd_ack("IN1ON"))
             if self.state == STATE_IDLE:
                 await self._on_vehicle_detected()
 
         elif "IN1OFF" in text:
             self._in1_on = False
-            await self._send_controller_command(cmd_ack_in1off())
+            await self._send_controller_command(cmd_ack("IN1OFF"))
             if self.state == STATE_WAITING_INPUT:
                 await self._on_vehicle_backed_up()
             elif self.state == STATE_OPENING:
                 await self._on_vehicle_passed()
 
         elif "IN2ON" in text:
-            await self._send_controller_command(cmd_ack_in2on())
+            await self._send_controller_command(cmd_ack("IN2ON"))
             if not self._in1_on:
                 logger.info("in2_ignored_no_vehicle", gate_id=self.gate_id, state=self.state)
                 return
@@ -310,19 +300,19 @@ class GateInDaemon(BaseDaemon):
                 await self._on_ticket_button_pressed()
 
         elif "IN3ON" in text:
-            await self._send_controller_command(cmd_ack_in3on())
+            await self._send_controller_command(cmd_ack("IN3ON"))
             if self.state == STATE_WAITING_INPUT:
                 await self._on_help_button()
 
         elif "IN4ON" in text:
-            await self._send_controller_command(cmd_ack_in4on())
+            await self._send_controller_command(cmd_ack("IN4ON"))
             if self.state == STATE_WAITING_INPUT:
                 await self._on_reset()
             elif self.state == STATE_OPENING:
                 await self._on_vehicle_passed()
 
         elif "IN4OFF" in text:
-            await self._send_controller_command(cmd_ack_in4off())
+            await self._send_controller_command(cmd_ack("IN4OFF"))
             if self.state == STATE_OPENING:
                 await self._on_vehicle_passed()
 
@@ -336,7 +326,7 @@ class GateInDaemon(BaseDaemon):
                     w=parsed["wiegand_w"],
                     x=parsed["wiegand_x"],
                 )
-                await self._send_controller_command(cmd_ack_wiegand())
+                await self._send_controller_command(cmd_ack("W"))
                 if self.state == STATE_WAITING_INPUT and self.has_rfid:
                     if parsed["wiegand_w"]:
                         await self._on_rfid_card_read(parsed["wiegand_w"], "W")
@@ -376,7 +366,7 @@ class GateInDaemon(BaseDaemon):
         await self._cmd_play_audio(5)
         await self._display("Mohon Tunggu", "Petugas Membantu Anda")
         await self.publish_event(
-            HelpButtonPressedEvent(event_type="help_button_pressed", gate_id=self.gate_id)
+            BaseEvent(event_type="help_button_pressed", gate_id=self.gate_id)
         )
         await asyncio.sleep(10)
         await self._transition(STATE_IDLE)
@@ -386,7 +376,7 @@ class GateInDaemon(BaseDaemon):
         """Cash button pressed — notify API to create transaction and print."""
         await self._transition(STATE_PROCESSING)
         await self.publish_event(
-            TicketButtonPressedEvent(event_type="ticket_button_pressed", gate_id=self.gate_id)
+            BaseEvent(event_type="ticket_button_pressed", gate_id=self.gate_id)
         )
 
     async def _on_rfid_card_read(self, card_number: str, channel: str) -> None:
@@ -413,7 +403,7 @@ class GateInDaemon(BaseDaemon):
     async def _on_gate_opened(self) -> None:
         await self._transition(STATE_OPENING)
         await self.publish_event(
-            GateOpenedEvent(event_type="gate_opened", gate_id=self.gate_id)
+            BaseEvent(event_type="gate_opened", gate_id=self.gate_id)
         )
         self._spawn_tracked(self._vehicle_pass_timer(), name="vehicle_pass_timer")
 
@@ -425,7 +415,7 @@ class GateInDaemon(BaseDaemon):
     async def _on_vehicle_passed(self) -> None:
         await self._transition(STATE_IDLE)
         await self.publish_event(
-            VehiclePassedEvent(event_type="vehicle_passed", gate_id=self.gate_id)
+            BaseEvent(event_type="vehicle_passed", gate_id=self.gate_id)
         )
         await self._display()
         await self._relay_close()

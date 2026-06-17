@@ -112,33 +112,9 @@ def cmd_rss(
     return build_command(f"RSS{interval_100ms:02d}{flags}".encode())
 
 
-# RSS acknowledgement commands — stop repeated resend for each event type
-def cmd_ack_in1on() -> bytes:
-    return build_command(b"IN1ONOK")
-
-def cmd_ack_in1off() -> bytes:
-    return build_command(b"IN1OFFOK")
-
-def cmd_ack_in2on() -> bytes:
-    return build_command(b"IN2ONOK")
-
-def cmd_ack_in2off() -> bytes:
-    return build_command(b"IN2OFFOK")
-
-def cmd_ack_in3on() -> bytes:
-    return build_command(b"IN3ONOK")
-
-def cmd_ack_in3off() -> bytes:
-    return build_command(b"IN3OFFOK")
-
-def cmd_ack_in4on() -> bytes:
-    return build_command(b"IN4ONOK")
-
-def cmd_ack_in4off() -> bytes:
-    return build_command(b"IN4OFFOK")
-
-def cmd_ack_wiegand() -> bytes:
-    return build_command(b"WOK")
+def cmd_ack(signal: str) -> bytes:
+    """Build RSS acknowledgement command. E.g. cmd_ack('IN2ON') → IN2ONOK."""
+    return build_command(f"{signal}OK".encode())
 
 
 def cmd_pr3(data: bytes) -> bytes:

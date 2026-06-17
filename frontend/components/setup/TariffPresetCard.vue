@@ -32,7 +32,7 @@
 </template>
 
 <script setup>
-import { useTariffPresets } from '~/composables/useTariffPresets'
+import { useFormatters } from '~/composables/useFormatters'
 
 const props = defineProps({
   preset: { type: Object, required: true },
@@ -41,15 +41,15 @@ const props = defineProps({
 
 defineEmits(['apply'])
 
-const { formatIdr } = useTariffPresets()
+const { formatCurrency } = useFormatters()
 
 function formatItem(item) {
   if (item.rate_type === 'flat') {
-    return `${formatIdr(item.first_hour_rate)} flat`
+    return `${formatCurrency(item.first_hour_rate)} flat`
   }
   if (item.rate_type === 'progressive') {
-    return `${formatIdr(item.first_hour_rate)} jam 1 · ${formatIdr(item.per_hour_rate)}/jam (naik)`
+    return `${formatCurrency(item.first_hour_rate)} jam 1 · ${formatCurrency(item.per_hour_rate)}/jam (naik)`
   }
-  return `${formatIdr(item.first_hour_rate)} jam 1 · ${formatIdr(item.per_hour_rate)}/jam`
+  return `${formatCurrency(item.first_hour_rate)} jam 1 · ${formatCurrency(item.per_hour_rate)}/jam`
 }
 </script>

@@ -1,5 +1,6 @@
 """Redis caching layer for reference data (gates, vehicle types, members, settings)."""
 
+import json
 
 from shared.redis import redis_client
 
@@ -20,19 +21,25 @@ CACHE_KEYS = {
 async def _get_cached(key: str) -> list[dict] | None:
     """Generic cache getter."""
     await redis_client.connect()
-    return await redis_client.cache_get_json(key)
+    raw = await redis_client.client.get(key)
+    if raw is None:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return None
 
 
 async def _set_cached(key: str, data: list[dict], ttl: int = DEFAULT_TTL) -> None:
     """Generic cache setter."""
     await redis_client.connect()
-    await redis_client.cache_set_json(key, data, ttl=ttl)
+    await redis_client.client.set(key, json.dumps(data, default=str), ex=ttl)
 
 
 async def _invalidate(key: str) -> None:
     """Generic cache invalidator."""
     await redis_client.connect()
-    await redis_client.delete(key)
+    await redis_client.client.delete(key)
 
 
 # Gates (unified)
