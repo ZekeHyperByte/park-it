@@ -100,7 +100,9 @@ async def seeded_transactions(db_session: AsyncSession, sample_vehicle_type: Veh
         db_session.add(tx)
     await db_session.commit()
 
-    # Emoney transactions
+    # Emoney transactions. created_at must fall inside the report query window
+    # (defaults to now(), which is outside the 2026-04 range the tests ask for).
+    em_created = datetime(2026, 4, 25, 12, 0, 0, tzinfo=UTC)
     em_txs = [
         EmoneyTransaction(
             card_number="5715048100000048",
@@ -110,6 +112,7 @@ async def seeded_transactions(db_session: AsyncSession, sample_vehicle_type: Veh
             balance_after=95000,
             status="SUCCESS",
             raw_response_hex="EF0105...",
+            created_at=em_created,
         ),
         EmoneyTransaction(
             card_number="5715048100000049",
@@ -118,6 +121,7 @@ async def seeded_transactions(db_session: AsyncSession, sample_vehicle_type: Veh
             balance_before=50000,
             balance_after=47000,
             status="SUCCESS",
+            created_at=em_created,
         ),
         EmoneyTransaction(
             card_number="5715048100000050",
@@ -126,6 +130,7 @@ async def seeded_transactions(db_session: AsyncSession, sample_vehicle_type: Veh
             balance_before=0,
             balance_after=0,
             status="LOST_CONTACT",
+            created_at=em_created,
         ),
     ]
     for em in em_txs:

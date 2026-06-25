@@ -65,12 +65,14 @@ class TestListTransactions:
     async def test_list_empty(self, client: AsyncClient):
         response = await client.get("/api/transactions")
         assert response.status_code == 200
-        assert response.json() == []
+        body = response.json()
+        assert body["items"] == []
+        assert body["total"] == 0
 
     async def test_list_with_items(self, client: AsyncClient, sample_transaction: ParkingTransaction):
         response = await client.get("/api/transactions")
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["items"]
         assert len(data) == 1
         assert data[0]["barcode"] == "ABC123"
         assert data[0]["status"] == "COMPLETED"
@@ -78,35 +80,29 @@ class TestListTransactions:
     async def test_list_search(self, client: AsyncClient, sample_transaction: ParkingTransaction):
         response = await client.get("/api/transactions?q=ABC123")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
+        assert len(response.json()["items"]) == 1
 
         response = await client.get("/api/transactions?q=NONEXISTENT")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 0
+        assert len(response.json()["items"]) == 0
 
     async def test_list_filter_by_status(self, client: AsyncClient, sample_transaction: ParkingTransaction):
         response = await client.get("/api/transactions?status=COMPLETED")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
+        assert len(response.json()["items"]) == 1
 
         response = await client.get("/api/transactions?status=ACTIVE")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 0
+        assert len(response.json()["items"]) == 0
 
     async def test_list_filter_by_date(self, client: AsyncClient, sample_transaction: ParkingTransaction):
         response = await client.get("/api/transactions?date_from=2026-04-01&date_to=2026-05-01")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
+        assert len(response.json()["items"]) == 1
 
         response = await client.get("/api/transactions?date_from=2025-01-01&date_to=2025-02-01")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 0
+        assert len(response.json()["items"]) == 0
 
 
 class TestGetTransaction:
