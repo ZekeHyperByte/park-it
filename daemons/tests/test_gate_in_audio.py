@@ -104,8 +104,8 @@ class TestGateInAudio:
         await daemon._on_vehicle_passed()
 
         sent = [str(c.args[0]) for c in daemon._send_controller_command.call_args_list]
-        # DSU + TRIG2
-        assert any("TRIG2" in s for s in sent), "TRIG2 should be sent in DUAL mode"
+        # DUAL close path sends cmd_close1() (relay1 off, relay3 off, relay2 on 1s).
+        assert any("CLOSE1" in s for s in sent), "CLOSE1 should be sent in DUAL mode"
 
     @pytest.mark.asyncio
     async def test_vehicle_passed_no_close_single_relay(self):

@@ -16,10 +16,12 @@ class TestGenerateSettlementFile:
                 yield tmpdir
 
     @pytest.mark.asyncio
-    async def test_no_unsettled_transactions(self):
+    async def test_no_unsettled_transactions(self, db_session):
         """When no unsettled SUCCESS transactions exist, return empty result."""
         mock_ctx = {"redis": AsyncMock()}
-        result = await generate_settlement_file(mock_ctx)
+        # Inject an isolated session (the worker supports db= for tests) so this
+        # runs against a clean schema, not the global cross-loop engine.
+        result = await generate_settlement_file(mock_ctx, db=db_session)
         assert result["status"] == "success"
         assert result["files_generated"] == 0
         assert result["total_transactions"] == 0
