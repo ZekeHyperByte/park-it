@@ -71,3 +71,13 @@ def test_access_refresh_different():
 
     assert access_decoded["type"] == "access"
     assert refresh_decoded["type"] == "refresh"
+
+
+@pytest.mark.asyncio
+async def test_is_token_valid_rejects_refresh_token():
+    """A refresh token must not authenticate as an access token (type confusion)."""
+    from api.app.services.auth import is_token_valid
+
+    refresh = create_refresh_token({"sub": "1", "role": "admin"})
+    # Reject path returns before any Redis denylist lookup.
+    assert await is_token_valid(refresh) is None

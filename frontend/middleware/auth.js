@@ -13,6 +13,7 @@ const ADMIN_ONLY_PREFIXES = [
   '/setup',
   '/member',
   '/report',
+  '/personnel',   // user management — admin only
 ]
 
 const OPERATOR_HOME = '/pos'

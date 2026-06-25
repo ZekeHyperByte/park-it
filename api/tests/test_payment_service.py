@@ -1,6 +1,6 @@
 """Tests for payment service."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -76,6 +76,23 @@ class TestProcessCashPayment:
         assert result["transaction"].payment_method == "CASH"
         assert result["fee"] >= 0
         assert result["change_amount"] == 10000 - result["fee"]
+
+    async def test_rejects_underpayment(
+        self, db_session: AsyncSession, active_transaction: ParkingTransaction
+    ):
+        """Cash exit must not complete when paid_amount < fee."""
+        # Backdate entry 2h so the default (MOBIL) tariff yields a non-zero fee.
+        active_transaction.entry_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        await db_session.flush()
+        with pytest.raises(ValueError, match="Insufficient payment"):
+            await process_cash_payment(
+                db_session,
+                gate_id="gate-out-1",
+                gate_out_id=None,
+                barcode="T100",
+                paid_amount=1,
+            )
+        assert active_transaction.status == "ACTIVE"
 
     async def test_transaction_not_found(self, db_session: AsyncSession):
         with pytest.raises(ValueError, match="No active transaction found"):

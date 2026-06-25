@@ -143,6 +143,14 @@ class Settings(BaseSettings):
                 raise ValueError("JWT_SECRET must be changed from default in production")
             if self.db_password in ("parking_secret", ""):
                 raise ValueError("DB_PASSWORD must be changed from default in production")
+            # If settlement SFTP is configured, require host-key verification —
+            # an empty known_hosts disables it and leaves the money path open to MITM.
+            if self.settlement_sftp_host and not self.settlement_sftp_known_hosts:
+                raise ValueError(
+                    "SETTLEMENT_SFTP_KNOWN_HOSTS must be set in production when "
+                    "SETTLEMENT_SFTP_HOST is configured — empty disables host-key "
+                    "verification (MITM risk)"
+                )
             # Debug mode leaks tracebacks and exposes /api/docs — never in prod.
             self.debug = False
         return self

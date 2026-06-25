@@ -77,8 +77,10 @@ async def websocket_endpoint(websocket: WebSocket, gate_id: str) -> None:
             except json.JSONDecodeError:
                 pass
             if not handled:
-                # Echo back for ping/pong or unrecognized commands
-                await websocket.send_text(f'{{"type":"ack","data":{data}}}')
+                # Echo back for ping/pong or unrecognized commands.
+                # json.dumps escapes the raw client bytes so arbitrary input
+                # can't produce a malformed frame.
+                await websocket.send_text(json.dumps({"type": "ack", "data": data}))
     except WebSocketDisconnect:
         ws_manager.disconnect(gate_id, websocket)
         logger.info("ws_client_disconnected", gate_id=gate_id)

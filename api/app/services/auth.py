@@ -132,10 +132,17 @@ async def _is_token_revoked(jti: str) -> bool:
 
 
 async def is_token_valid(token: str) -> dict[str, Any] | None:
-    """Decode token and verify it is not revoked."""
+    """Decode an access token and verify it is not revoked.
+
+    Enforces ``type == "access"`` so a long-lived refresh token cannot be
+    replayed in the access_token cookie to authenticate API/WS requests.
+    """
     try:
         payload = decode_token(token)
     except Exception:
+        return None
+
+    if payload.get("type") != "access":
         return None
 
     jti = payload.get("jti")

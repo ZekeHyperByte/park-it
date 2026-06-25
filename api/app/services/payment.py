@@ -137,6 +137,13 @@ async def process_cash_payment(
     await enqueue_snapshots_for_gate(db, gate_id, tx.id, "exit")
 
     fee = await calculate_transaction_fee(db, tx)
+
+    # Trust boundary: never complete a cash exit for less than the fee.
+    # ponytail: no partial-payment feature exists; add a partial path here if
+    # one is ever introduced.
+    if paid_amount < fee:
+        raise ValueError(f"Insufficient payment: {paid_amount} < {fee}")
+
     shift = await get_current_shift(db)
 
     tx = await complete_exit_transaction(
