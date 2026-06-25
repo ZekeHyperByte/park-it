@@ -19,6 +19,7 @@ async def client(db_session: AsyncSession):
     app.dependency_overrides[get_db] = override_get_db
 
     from fastapi import Request
+
     from api.app.middleware.auth import require_operator
 
     async def mock_require_operator(request: Request):

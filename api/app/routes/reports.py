@@ -3,7 +3,7 @@
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Query, Response
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.middleware.auth import require_admin
@@ -38,23 +38,23 @@ async def get_summary_report(
     stmt = select(
         func.count(ParkingTransaction.id).label("total"),
         func.sum(ParkingTransaction.fee).label("total_revenue"),
-        func.sum(func.case(
+        func.sum(case(
             (ParkingTransaction.payment_method == "CASH", ParkingTransaction.fee),
             else_=0,
         )).label("cash_revenue"),
-        func.sum(func.case(
+        func.sum(case(
             (ParkingTransaction.payment_method == "EMONEY", ParkingTransaction.fee),
             else_=0,
         )).label("emoney_revenue"),
-        func.sum(func.case(
+        func.sum(case(
             (ParkingTransaction.payment_method == "RFID_MEMBER", ParkingTransaction.fee),
             else_=0,
         )).label("rfid_revenue"),
-        func.sum(func.case(
+        func.sum(case(
             (ParkingTransaction.status == "ACTIVE", 1),
             else_=0,
         )).label("active_count"),
-        func.sum(func.case(
+        func.sum(case(
             (ParkingTransaction.status == "COMPLETED", 1),
             else_=0,
         )).label("completed_count"),
@@ -176,19 +176,19 @@ async def get_shift_report(
         func.count(ParkingTransaction.id).label("total_transactions"),
         func.sum(ParkingTransaction.fee).label("total_revenue"),
         func.sum(
-            func.case((ParkingTransaction.payment_method == "CASH", ParkingTransaction.fee), else_=0)
+            case((ParkingTransaction.payment_method == "CASH", ParkingTransaction.fee), else_=0)
         ).label("cash_revenue"),
         func.sum(
-            func.case((ParkingTransaction.payment_method == "EMONEY", ParkingTransaction.fee), else_=0)
+            case((ParkingTransaction.payment_method == "EMONEY", ParkingTransaction.fee), else_=0)
         ).label("emoney_revenue"),
         func.sum(
-            func.case((ParkingTransaction.payment_method == "RFID_MEMBER", ParkingTransaction.fee), else_=0)
+            case((ParkingTransaction.payment_method == "RFID_MEMBER", ParkingTransaction.fee), else_=0)
         ).label("rfid_revenue"),
         func.sum(
-            func.case((ParkingTransaction.status == "ACTIVE", 1), else_=0)
+            case((ParkingTransaction.status == "ACTIVE", 1), else_=0)
         ).label("active_transactions"),
         func.sum(
-            func.case((ParkingTransaction.status == "COMPLETED", 1), else_=0)
+            case((ParkingTransaction.status == "COMPLETED", 1), else_=0)
         ).label("completed_transactions"),
     ).select_from(Shift).join(
         ParkingTransaction, ParkingTransaction.shift_id == Shift.id

@@ -4,16 +4,20 @@ This module handles the core database operations for parking transactions,
 including entry creation, active transaction lookup, and exit completion.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.app.models import ParkingTransaction, Shift, VehicleType
-from api.app.services.shift_utils import get_current_shift
+from api.app.models import ParkingTransaction, VehicleType
 from api.app.services.snapshot_utils import enqueue_snapshots_for_gate
-from api.app.services.tariff import DEFAULT_TARIFF_CONFIG, TariffConfig, VehicleTypeRate, calculate_tariff
+from api.app.services.tariff import (
+    DEFAULT_TARIFF_CONFIG,
+    TariffConfig,
+    VehicleTypeRate,
+    calculate_tariff,
+)
 from shared.logging import get_logger
 
 logger = get_logger("transaction_service")
@@ -51,7 +55,7 @@ async def create_entry_transaction(
         plate_number=plate_number,
         vehicle_type_id=vehicle_type_id,
         gate_in_id=gate_in_id,
-        entry_time=datetime.now(timezone.utc),
+        entry_time=datetime.now(UTC),
         payment_method=payment_method,
         member_id=member_id,
         status="ACTIVE",
@@ -183,7 +187,7 @@ async def calculate_transaction_fee(
         Fee in IDR
     """
     if exit_time is None:
-        exit_time = datetime.now(timezone.utc)
+        exit_time = datetime.now(UTC)
 
     effective_vt_id = vehicle_type_id_override if vehicle_type_id_override is not None else transaction.vehicle_type_id
     config, vt_code = await get_vehicle_type_tariff_config(db, effective_vt_id)
@@ -262,7 +266,7 @@ async def complete_exit_transaction(
     Returns:
         Updated ParkingTransaction
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     transaction.gate_out_id = gate_out_id
     transaction.exit_time = now

@@ -6,7 +6,6 @@ for safe daemon startup.
 
 from typing import Any
 
-
 REQUIRED_GATE_IN_FIELDS = ["controller_host", "controller_port", "gate_mode"]
 REQUIRED_GATE_OUT_FIELDS = ["controller_host", "controller_port"]
 REQUIRED_EMONEY_FIELDS = ["emoney_reader_serial_port", "emoney_reader_baudrate"]

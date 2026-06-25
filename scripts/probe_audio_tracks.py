@@ -13,8 +13,8 @@ the daemon translates it to the MT controller command.
 import asyncio
 import sys
 
-from shared.events import PlayAudioCommand
 from api.app.services.gate_command import publish_command
+from shared.events import PlayAudioCommand
 
 
 async def main() -> None:

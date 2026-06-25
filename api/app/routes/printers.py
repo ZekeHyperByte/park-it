@@ -1,6 +1,6 @@
 """Printer management routes — CRUD + paper counter operations."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -214,7 +214,7 @@ async def refill_paper(
 
     count = req.count if req.count is not None else printer.paper_capacity
     printer.paper_remaining = count
-    printer.last_refilled_at = datetime.now(timezone.utc)
+    printer.last_refilled_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(printer)

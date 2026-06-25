@@ -1,6 +1,6 @@
 """Shared shift utilities."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +19,7 @@ async def get_current_shift(db: AsyncSession) -> Shift | None:
     Returns:
         Current Shift or None if no active shifts
     """
-    now = datetime.now(timezone.utc).time()
+    now = datetime.now(UTC).time()
 
     result = await db.execute(
         select(Shift)

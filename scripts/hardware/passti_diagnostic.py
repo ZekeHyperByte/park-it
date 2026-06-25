@@ -7,8 +7,8 @@ Usage:
 import argparse
 import sys
 
-from protocols.passti.commands import cmd_init, cmd_check_balance
-from protocols.passti.frame import parse_response, build_frame, CMD_GET_READER_INFO
+from protocols.passti.commands import cmd_check_balance, cmd_init
+from protocols.passti.frame import CMD_GET_READER_INFO, build_frame, parse_response
 
 
 def diagnose_passti(serial_port: str, baudrate: int = 9600, init_key: str = "") -> dict:

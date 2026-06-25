@@ -50,6 +50,7 @@ from api.app.schemas.setup import (
 )
 from api.app.schemas.user import UserResponse
 from api.app.services.auth import create_tokens
+from api.app.services.gate_command import publish_command
 from api.app.services.setup import (
     constant_time_eq,
     create_session,
@@ -68,7 +69,6 @@ from api.app.services.setup import (
     setup_complete as setup_complete_q,
 )
 from api.app.utils.password import hash_password
-from api.app.services.gate_command import publish_command
 from api.database import get_db
 from shared.config import get_settings
 from shared.events import CloseGateCommand, OpenGateCommand
@@ -388,7 +388,7 @@ async def detect_serial(
     )
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=20.0)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
@@ -439,7 +439,7 @@ async def test_device(
     )
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10.0)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         return TestDeviceResponse(ok=False, error="probe timed out after 10s")
 

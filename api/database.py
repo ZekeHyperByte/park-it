@@ -3,7 +3,7 @@
 NOTE: This module is for api/ ONLY. Daemons must never import this.
 """
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 

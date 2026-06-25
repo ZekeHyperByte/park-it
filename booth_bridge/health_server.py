@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 
 from shared.logging import get_logger
 
@@ -75,7 +75,7 @@ class HealthServer:
                 request_line = await asyncio.wait_for(
                     reader.readuntil(b"\r\n"), timeout=2.0
                 )
-            except (asyncio.IncompleteReadError, asyncio.TimeoutError):
+            except (TimeoutError, asyncio.IncompleteReadError):
                 await self._write_response(writer, 400, "Bad Request", b"")
                 return
             # Drain remaining headers but bound the read so we don't sit on
@@ -84,7 +84,7 @@ class HealthServer:
                 await asyncio.wait_for(
                     reader.readuntil(b"\r\n\r\n"), timeout=1.0
                 )
-            except (asyncio.IncompleteReadError, asyncio.TimeoutError):
+            except (TimeoutError, asyncio.IncompleteReadError):
                 # Headers absent or truncated — still answer if request line OK.
                 pass
 

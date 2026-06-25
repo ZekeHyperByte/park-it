@@ -15,16 +15,15 @@ Create Date: 2026-05-20
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Union
 
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "a3f4b1d2e5c6"
-down_revision: Union[str, None] = "c8d9e0f1a2b3"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "c8d9e0f1a2b3"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

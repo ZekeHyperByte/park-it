@@ -3,13 +3,13 @@
 from datetime import datetime
 
 from protocols.passti.frame import (
+    CARD_TYPES,
     CMD_CANCEL_CORRECTION,
     CMD_CHECK_BALANCE,
     CMD_DEDUCT,
     CMD_DISPLAY_BUZZER,
     CMD_GET_LAST_TRANSACTION,
     CMD_INIT,
-    CARD_TYPES,
     _bcd_timeout,
     _to_bcd,
     build_frame,
@@ -127,7 +127,7 @@ def _parse_qr_deduct_response(body: bytes) -> dict:
     Layout: CardType(1)+MID(8)+TID(4)+DT(7)+QRType(1)+Amt(4)+OrderID(22)+TrxID(36)+RFULen(1)+RFU(n)
     """
     # Minimum fixed fields before RFU: 1+8+4+7+1+4+22+36+1 = 84 bytes
-    MIN_QR_LEN = 84
+    MIN_QR_LEN = 84  # noqa: N806 — named constant, not a regular local
     if len(body) < MIN_QR_LEN:
         return {"ok": False, "error": "Body too short for QR payment response"}
 

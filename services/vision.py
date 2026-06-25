@@ -243,7 +243,10 @@ class VisionService:
         plate_region = None
         for det in detections:
             if det["class_name"] in ("license_plate", "license-plate"):
-                plate_region = det["bbox"]
+                # ponytail: region-cropped OCR not wired yet — OCR runs on the
+                # full frame below. Kept so a plate-detecting model's box is
+                # available the day we crop to it.
+                plate_region = det["bbox"]  # noqa: F841
                 break
 
         # Run OCR
@@ -275,7 +278,7 @@ class VisionService:
             texts = []
             avg_conf = 0.0
             count = 0
-            for bbox, text, conf in result:
+            for _bbox, text, conf in result:
                 texts.append(text)
                 avg_conf += conf
                 count += 1

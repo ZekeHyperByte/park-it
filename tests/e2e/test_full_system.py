@@ -8,8 +8,8 @@ Validates that all major components work together:
 - Health checks
 """
 
-import pytest
 import httpx
+import pytest
 
 from api.app.main import app
 

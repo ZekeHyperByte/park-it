@@ -1,6 +1,8 @@
 """Tests for JWT utilities."""
 
 
+from datetime import UTC
+
 import pytest
 
 from api.app.utils.jwt import (
@@ -48,8 +50,8 @@ def test_token_expiry():
     exp = get_token_expiry(token)
 
     # Expiry should be in the future
-    from datetime import datetime, timezone
-    assert exp > datetime.now(timezone.utc)
+    from datetime import datetime
+    assert exp > datetime.now(UTC)
 
 
 def test_decode_invalid_token():

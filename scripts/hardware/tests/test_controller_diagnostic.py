@@ -1,8 +1,8 @@
 """Tests for controller diagnostic."""
 
 
-from scripts.hardware.controller_diagnostic import check_tcp_connect, run_full_diagnostic
 from protocols.compass.protocol import cmd_stat
+from scripts.hardware.controller_diagnostic import check_tcp_connect, run_full_diagnostic
 
 
 class TestTcpConnect:

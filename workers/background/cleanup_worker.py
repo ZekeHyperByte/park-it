@@ -1,6 +1,6 @@
 """Background cleanup worker jobs."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from shared.logging import get_logger
 
@@ -18,12 +18,11 @@ async def cleanup_old_sessions(ctx) -> dict:
     ACTIVE transactions are never deleted.
     """
     from sqlalchemy import delete
-    from sqlalchemy.ext.asyncio import AsyncSession
 
     from api.app.models import ParkingTransaction
     from api.database import AsyncSessionLocal
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=SESSION_RETENTION_DAYS)
+    cutoff = datetime.now(UTC) - timedelta(days=SESSION_RETENTION_DAYS)
     logger.info("cleanup_sessions_start", cutoff=cutoff.isoformat())
 
     try:
@@ -73,12 +72,11 @@ async def timeout_pending_payments(ctx) -> dict:
     This job resets them so the operator can retry with a different payment method.
     """
     from sqlalchemy import select
-    from sqlalchemy.ext.asyncio import AsyncSession
 
     from api.app.models import ParkingTransaction
     from api.database import AsyncSessionLocal
 
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=PENDING_PAYMENT_TIMEOUT_MINUTES)
+    cutoff = datetime.now(UTC) - timedelta(minutes=PENDING_PAYMENT_TIMEOUT_MINUTES)
     logger.info("timeout_pending_start", cutoff=cutoff.isoformat())
 
     try:

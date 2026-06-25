@@ -1,6 +1,6 @@
 """Tests for transaction routes."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -20,6 +20,7 @@ async def client(db_session: AsyncSession):
     app.dependency_overrides[get_db] = override_get_db
 
     from fastapi import Request
+
     from api.app.middleware.auth import require_operator
 
     async def mock_require_operator(request: Request):
@@ -48,7 +49,7 @@ async def sample_transaction(db_session: AsyncSession, sample_vehicle_type: Vehi
         barcode="ABC123",
         plate_number="B1234ABC",
         vehicle_type_id=sample_vehicle_type.id,
-        entry_time=datetime(2026, 4, 25, 10, 0, 0, tzinfo=timezone.utc),
+        entry_time=datetime(2026, 4, 25, 10, 0, 0, tzinfo=UTC),
         payment_method="CASH",
         fee=5000,
         paid_amount=10000,
@@ -64,12 +65,14 @@ class TestListTransactions:
     async def test_list_empty(self, client: AsyncClient):
         response = await client.get("/api/transactions")
         assert response.status_code == 200
-        assert response.json() == []
+        body = response.json()
+        assert body["items"] == []
+        assert body["total"] == 0
 
     async def test_list_with_items(self, client: AsyncClient, sample_transaction: ParkingTransaction):
         response = await client.get("/api/transactions")
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["items"]
         assert len(data) == 1
         assert data[0]["barcode"] == "ABC123"
         assert data[0]["status"] == "COMPLETED"
@@ -77,35 +80,29 @@ class TestListTransactions:
     async def test_list_search(self, client: AsyncClient, sample_transaction: ParkingTransaction):
         response = await client.get("/api/transactions?q=ABC123")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
+        assert len(response.json()["items"]) == 1
 
         response = await client.get("/api/transactions?q=NONEXISTENT")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 0
+        assert len(response.json()["items"]) == 0
 
     async def test_list_filter_by_status(self, client: AsyncClient, sample_transaction: ParkingTransaction):
         response = await client.get("/api/transactions?status=COMPLETED")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
+        assert len(response.json()["items"]) == 1
 
         response = await client.get("/api/transactions?status=ACTIVE")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 0
+        assert len(response.json()["items"]) == 0
 
     async def test_list_filter_by_date(self, client: AsyncClient, sample_transaction: ParkingTransaction):
         response = await client.get("/api/transactions?date_from=2026-04-01&date_to=2026-05-01")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
+        assert len(response.json()["items"]) == 1
 
         response = await client.get("/api/transactions?date_from=2025-01-01&date_to=2025-02-01")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 0
+        assert len(response.json()["items"]) == 0
 
 
 class TestGetTransaction:

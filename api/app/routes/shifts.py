@@ -23,7 +23,7 @@ async def list_active_shifts(
     current_user: dict = Depends(require_operator),
 ) -> list[ShiftResponse]:
     """List all shifts (operator-accessible, for dashboard display)."""
-    stmt = select(Shift).where(Shift.is_active == True).order_by(Shift.start_time)
+    stmt = select(Shift).where(Shift.is_active.is_(True)).order_by(Shift.start_time)
     result = await db.execute(stmt)
     shifts = result.scalars().all()
     return [ShiftResponse.model_validate(s) for s in shifts]

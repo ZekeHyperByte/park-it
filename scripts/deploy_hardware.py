@@ -12,7 +12,6 @@ import os
 import sys
 from pathlib import Path
 
-
 SYSTEMD_TEMPLATE = """\
 [Unit]
 Description=Parking Daemon -- {gate_type} {gate_id}

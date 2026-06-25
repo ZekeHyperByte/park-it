@@ -100,7 +100,7 @@ async def seed() -> None:
         )
         session.add_all([motor, mobil, bus])
         await session.flush()
-        print(f"  Created vehicle types: Motor, Mobil, Bus")
+        print("  Created vehicle types: Motor, Mobil, Bus")
 
         # Area parkir
         area = AreaParkir(
@@ -138,7 +138,7 @@ async def seed() -> None:
         )
         session.add_all([shift_pagi, shift_sore, shift_malam])
         await session.flush()
-        print(f"  Created shifts: Pagi, Sore, Malam")
+        print("  Created shifts: Pagi, Sore, Malam")
 
         # Member
         member = Member(

@@ -3,7 +3,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.middleware.auth import require_admin, require_operator

@@ -1,6 +1,6 @@
 """POS (booth) management routes."""
 
-from datetime import datetime, time, timezone
+from datetime import UTC, datetime, time
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
@@ -10,7 +10,6 @@ from api.app.middleware.api_key import require_api_key
 from api.app.middleware.auth import require_admin, require_auth
 from api.app.models.parking_transaction import ParkingTransaction
 from api.app.models.pos import Pos
-from api.app.services.shift_utils import get_current_shift
 from api.app.schemas.common import SuccessResponse
 from api.app.schemas.pos import (
     BoothHeartbeat,
@@ -19,6 +18,7 @@ from api.app.schemas.pos import (
     PosResponse,
     PosUpdate,
 )
+from api.app.services.shift_utils import get_current_shift
 from api.database import get_db
 from shared.logging import get_logger
 
@@ -54,7 +54,7 @@ async def get_pos_by_ip(
     # Fallback: try matching without port or handle localhost
     if pos is None and client_ip in ("127.0.0.1", "::1", "localhost"):
         # For local development, return the first active POS
-        result = await db.execute(select(Pos).where(Pos.is_active == True).limit(1))
+        result = await db.execute(select(Pos).where(Pos.is_active.is_(True)).limit(1))
         pos = result.scalar_one_or_none()
 
     if pos is None:
@@ -141,7 +141,7 @@ async def booth_heartbeat(
             detail=f"Unknown booth_code {payload.booth_code} — register it in the wizard first.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     pos.last_seen_at = now
     pos.last_status = {
         "rfid_connected": payload.rfid_connected,

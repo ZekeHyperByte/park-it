@@ -1,7 +1,11 @@
 """Tests for hardware deployment script."""
 
 
-from scripts.deploy_hardware import generate_systemd_service, validate_before_deploy, write_service_file
+from scripts.deploy_hardware import (
+    generate_systemd_service,
+    validate_before_deploy,
+    write_service_file,
+)
 
 
 class TestGenerateSystemdService:

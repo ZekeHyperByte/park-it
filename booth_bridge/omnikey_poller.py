@@ -19,7 +19,8 @@ from __future__ import annotations
 import asyncio
 import glob
 import time
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from shared.logging import get_logger
 
@@ -188,7 +189,7 @@ class OmnikeyPoller:
 
             queue: asyncio.Queue = asyncio.Queue()
 
-            def _on_readable():
+            def _on_readable(dev=dev, queue=queue):
                 try:
                     for ev in dev.read():
                         queue.put_nowait(ev)
@@ -211,7 +212,7 @@ class OmnikeyPoller:
 
                     try:
                         event = await asyncio.wait_for(queue.get(), timeout=timeout)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         if buffer:
                             await self._flush_buffer(buffer)
                             buffer = []

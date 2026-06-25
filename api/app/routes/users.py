@@ -34,7 +34,7 @@ async def list_workers(
 
     result = await db.execute(
         select(User)
-        .where(User.is_active == True)
+        .where(User.is_active.is_(True))
         .where(User.worker_pin.isnot(None))
         .order_by(User.full_name)
     )

@@ -10,13 +10,12 @@ Revises: f7999809b648
 Create Date: 2026-06-04
 """
 
-from typing import Union
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b8c9d0e1f2a3"
-down_revision: Union[str, None] = "f7999809b648"
+down_revision: str | None = "f7999809b648"
 branch_labels = None
 depends_on = None
 

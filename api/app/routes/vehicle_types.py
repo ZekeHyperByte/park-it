@@ -1,10 +1,9 @@
 """Vehicle type management routes (admin only)."""
 
 from api.app.cache.reference_data import (
-    get_cached_vehicle_types,
     invalidate_vehicle_types,
 )
-from api.app.middleware.auth import require_admin, require_auth
+from api.app.middleware.auth import require_admin
 from api.app.models.vehicle_type import VehicleType
 from api.app.routes.crud_factory import create_crud_router
 from api.app.schemas.vehicle_type import (

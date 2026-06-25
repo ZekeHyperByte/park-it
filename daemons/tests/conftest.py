@@ -10,7 +10,6 @@ import pytest_asyncio
 import redis.asyncio as aioredis
 
 
-
 class FakeRedis:
     """In-memory fake Redis for testing daemons without a real Redis server."""
 
@@ -46,7 +45,7 @@ class FakeRedis:
         block: int | None = 5000,
     ) -> list[tuple[str, list[tuple[str, dict[str, str]]]]]:
         result: list[tuple[str, list[tuple[str, dict[str, str]]]]] = []
-        for stream, last_id in streams.items():
+        for stream, _last_id in streams.items():
             key = f"{stream}:{groupname}"
             pending = self.streams.get(stream, [])
             entries: list[tuple[str, dict[str, str]]] = []

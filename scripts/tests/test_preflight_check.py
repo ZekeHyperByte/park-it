@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from scripts.preflight_check import (
     PreflightCheck,
     PreflightRunner,

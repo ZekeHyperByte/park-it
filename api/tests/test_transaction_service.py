@@ -1,18 +1,18 @@
 """Tests for transaction service."""
 
-from datetime import datetime, time, timezone
+from datetime import UTC, datetime, time
 
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.models import ParkingTransaction, Shift, VehicleType
+from api.app.services.shift_utils import get_current_shift
 from api.app.services.tariff import DEFAULT_TARIFF_CONFIG
 from api.app.services.transaction import (
     calculate_transaction_fee,
     complete_exit_transaction,
     create_entry_transaction,
     find_active_transaction,
-    get_current_shift,
     get_vehicle_type_tariff_config,
 )
 
@@ -125,11 +125,11 @@ class TestCalculateTransactionFee:
             payment_method="CASH",
         )
         # Immediate exit should be within grace period
-        fee = await calculate_transaction_fee(db_session, tx, exit_time=datetime.now(timezone.utc))
+        fee = await calculate_transaction_fee(db_session, tx, exit_time=datetime.now(UTC))
         assert fee == 0
 
     async def test_one_hour_fee(self, db_session: AsyncSession, vehicle_type_motor: VehicleType):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tx = ParkingTransaction(
             barcode="B004",
             vehicle_type_id=vehicle_type_motor.id,
@@ -145,7 +145,7 @@ class TestCalculateTransactionFee:
         assert fee == 2000  # Motor hourly rate
 
     async def test_unknown_vehicle_type_defaults(self, db_session: AsyncSession):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tx = ParkingTransaction(
             barcode="B005",
             payment_method="CASH",

@@ -4,7 +4,7 @@ Adds defense-in-depth security headers to all HTTP responses.
 Complements nginx-level headers with application-level enforcement.
 """
 
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request, Response
 

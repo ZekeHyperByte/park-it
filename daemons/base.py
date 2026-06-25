@@ -11,7 +11,7 @@ import json
 import signal
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import redis.asyncio as aioredis
@@ -106,7 +106,7 @@ class BaseDaemon(ABC):
             task.cancel()
 
         results = await asyncio.gather(*self._tasks, return_exceptions=True)
-        for task, result in zip(self._tasks, results):
+        for task, result in zip(self._tasks, results, strict=False):
             if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
                 logger.error(
                     "daemon_task_error",
@@ -155,7 +155,7 @@ class BaseDaemon(ABC):
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, 30.0)
 
-    async def _on_started(self) -> None:
+    async def _on_started(self) -> None:  # noqa: B027 — optional override hook, not abstract
         """Hook called after _running is set to True but before main tasks start.
 
         Subclasses can override this to start additional background tasks
@@ -248,7 +248,7 @@ class BaseDaemon(ABC):
                 if not messages:
                     continue
 
-                for stream_name, entries in messages:
+                for _stream_name, entries in messages:
                     for msg_id, fields in entries:
                         await self._process_command(msg_id, fields)
 
@@ -402,12 +402,12 @@ class BaseDaemon(ABC):
                     await self._redis.publish(f"parking.events.{self.gate_id}", state_payload)
                     # Liveness key — 60s TTL so a missed heartbeat (30s cadence)
                     # tolerates one drop, two drops = STALE.
-                    from datetime import datetime, timezone
+                    from datetime import datetime
                     status_payload = json.dumps({
                         "gate_id": self.gate_id,
                         "state": self.state,
                         "controller_ok": controller_ok,
-                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "ts": datetime.now(UTC).isoformat(),
                     })
                     await self._redis.set(
                         f"gate:heartbeat:{self.gate_id}",
@@ -418,7 +418,7 @@ class BaseDaemon(ABC):
                     self._shutdown_event.wait(),
                     timeout=30.0,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except asyncio.CancelledError:
                 logger.debug("heartbeat_cancelled", gate_id=self.gate_id)
@@ -437,7 +437,7 @@ class BaseDaemon(ABC):
             return
         data = {
             "state": self.state,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
             "state_data": json.dumps(self.state_data, default=str),
         }
         await self._redis.hset(self._state_key, mapping=data)

@@ -10,9 +10,8 @@ Usage:
     python scripts/emoney_diagnostic.py
 """
 
-import socket
-import time
 import sys
+import time
 
 from protocols.compass.protocol import CompassTransport, cmd_qr5
 from protocols.passti.commands import cmd_check_balance, cmd_init
@@ -87,7 +86,7 @@ def main():
             # Check if we see the QT wrapper
             if b"\xa6QT" in buffer:
                 break
-    except socket.timeout:
+    except TimeoutError:
         print("  (timeout)")
 
     print(f"\nTotal bytes received: {len(buffer)}")
@@ -104,7 +103,7 @@ def main():
                 hexdump(qt_data, "QT")
 
                 result = parse_response(qt_data)
-                print(f"\nParsed result:")
+                print("\nParsed result:")
                 for k, v in result.items():
                     if k == "body" and isinstance(v, bytes):
                         print(f"  {k}: {v.hex()}")
@@ -158,7 +157,7 @@ def main():
                 # Check if we have a complete response
                 if b"\xa6QT" in buffer and b"\xa9" in buffer[buffer.find(b"\xa6QT"):]:
                     break
-            except socket.timeout:
+            except TimeoutError:
                 print(f"  [{time.time() - start:.1f}s] (no data yet, keep listening...)")
                 continue
     except KeyboardInterrupt:
@@ -196,7 +195,7 @@ def main():
             print(f"  QT data: {len(qt_data)} bytes")
             hexdump(qt_data)
             result = parse_response(qt_data)
-            print(f"  Parse result:")
+            print("  Parse result:")
             for k, v in result.items():
                 if k == "body" and isinstance(v, bytes):
                     print(f"    {k}: {v.hex()}")
@@ -213,7 +212,7 @@ def main():
         print(f"  Potential frame: {len(potential_frame)} bytes")
         hexdump(potential_frame[:64])
         result = parse_response(potential_frame)
-        print(f"  Parse result:")
+        print("  Parse result:")
         for k, v in result.items():
             if k == "body" and isinstance(v, bytes):
                 print(f"    {k}: {v.hex()}")
@@ -232,7 +231,7 @@ def main():
             print(f"  Potential frame from STX: {len(potential_frame)} bytes")
             hexdump(potential_frame)
             result = parse_response(potential_frame)
-            print(f"  Parse result:")
+            print("  Parse result:")
             for k, v in result.items():
                 if k == "body" and isinstance(v, bytes):
                     print(f"    {k}: {v.hex()}")

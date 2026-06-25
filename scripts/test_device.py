@@ -75,7 +75,7 @@ def probe_tcp(host: str, port: int, timeout: float = 3.0) -> dict[str, Any]:
             pass
     except socket.gaierror as exc:
         return _result(False, error=f"dns lookup failed: {exc}")
-    except socket.timeout:
+    except TimeoutError:
         return _result(
             False,
             error=(

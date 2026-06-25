@@ -24,7 +24,7 @@ import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -325,7 +325,7 @@ async def check_booths(report: Report) -> None:
         report.add(c)
         return
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for b in booths:
         c = Check(f"booth {b['code']}", "Booths")
         last = b["last_seen_at"]
@@ -454,7 +454,7 @@ async def check_gates(report: Report, only: str | None) -> None:
             else:
                 reach.status = "FAIL"
                 reach.message = f"{dev} missing"
-                reach.fix = f"ls -l /dev/serial/by-id/; run scripts/detect-serial-devices.sh; replug USB"
+                reach.fix = "ls -l /dev/serial/by-id/; run scripts/detect-serial-devices.sh; replug USB"
         else:
             reach.status = "WARN"
             reach.message = "No controller_host/port nor controller_device set"
@@ -686,7 +686,7 @@ def run_interactive_fixes(report: Report, assume_yes: bool, allow_dangerous: boo
         try:
             r = subprocess.run(c.fix, shell=True, capture_output=True, text=True, timeout=60)
             if r.returncode == 0:
-                print(f"     ✅ ok (rc=0)")
+                print("     ✅ ok (rc=0)")
                 if r.stdout.strip():
                     print(f"     stdout: {r.stdout.strip()[:300]}")
             else:

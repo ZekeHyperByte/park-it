@@ -19,6 +19,7 @@ async def client(db_session: AsyncSession):
     app.dependency_overrides[get_db] = override_get_db
 
     from fastapi import Request
+
     from api.app.middleware.auth import require_admin
 
     async def mock_require_admin(request: Request):
@@ -26,10 +27,9 @@ async def client(db_session: AsyncSession):
 
     app.dependency_overrides[require_admin] = mock_require_admin
 
-    # Patch Redis cache to avoid cross-test cache pollution
+    # Stub cache invalidation (write hooks) so tests don't hit Redis.
     from unittest.mock import patch
-    with patch("api.app.routes.vehicle_types.get_cached_vehicle_types", return_value=None), \
-         patch("api.app.routes.vehicle_types.invalidate_vehicle_types"):
+    with patch("api.app.routes.vehicle_types.invalidate_vehicle_types"):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             yield ac
 
