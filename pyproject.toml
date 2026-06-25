@@ -30,7 +30,7 @@ dependencies = [
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
     # Validation / Settings
-    "pydantic>=2.9.0",
+    "pydantic[email]>=2.9.0",
     "pydantic-settings>=2.6.0",
     # Auth
     "PyJWT[crypto]>=2.9.0",
