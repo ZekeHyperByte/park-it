@@ -9,6 +9,17 @@ on:
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
+    # shared.config reads DB_*/REDIS_* (not DATABASE_URL); must match the
+    # postgres service creds below or alembic/tests fail to authenticate.
+    env:
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      DB_USER: parking
+      DB_PASSWORD: parking
+      DB_NAME: parking_test
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
+      JWT_SECRET: test-secret-key-for-ci-only-32bytes-long
     services:
       postgres:
         image: postgres:16
@@ -44,20 +55,10 @@ jobs:
       - name: Lint (ruff)
         run: ruff check .
 
-      - name: Run Alembic migrations
-        env:
-          DATABASE_URL: postgresql+asyncpg://parking:parking@localhost:5432/parking_test
-          REDIS_URL: redis://localhost:6379/0
-        run: |
-          alembic upgrade head
-
       - name: Run tests
-        env:
-          DATABASE_URL: postgresql+asyncpg://parking:parking@localhost:5432/parking_test
-          REDIS_URL: redis://localhost:6379/0
-          JWT_SECRET: test-secret-key-for-ci-only-32bytes-long
-        run: |
-          pytest -x -q --tb=short
+        # Tests build their schema via Base.metadata.create_all (conftest), not
+        # Alembic — migrations are smoke-tested separately in the migrations job.
+        run: pytest -x -q --tb=short
 
       - name: Check circular imports
         run: |
@@ -66,6 +67,43 @@ jobs:
       - name: Check route count
         run: |
           python -c "from api.app.main import app; routes=[r for r in app.routes if hasattr(r,'path')]; print('Routes:', len(routes))"
+
+  migrations:
+    runs-on: ubuntu-latest
+    # Smoke-test that Alembic migrations apply cleanly to an empty DB. Kept
+    # separate from backend-tests because that job manages its own schema via
+    # create_all/drop_all, which collides with Alembic's named constraints.
+    env:
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      DB_USER: parking
+      DB_PASSWORD: parking
+      DB_NAME: parking_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: parking
+          POSTGRES_PASSWORD: parking
+          POSTGRES_DB: parking_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Alembic upgrade head
+        run: alembic upgrade head
 
   frontend-tests:
     runs-on: ubuntu-latest
