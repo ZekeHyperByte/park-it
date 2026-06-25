@@ -1,7 +1,7 @@
 """JWT token utilities using PyJWT."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
@@ -13,7 +13,7 @@ settings = get_settings()
 
 def _now() -> datetime:
     """Return current UTC time."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def create_access_token(data: dict[str, Any]) -> str:
@@ -59,4 +59,4 @@ def get_token_expiry(token: str) -> datetime:
     exp = payload.get("exp")
     if exp is None:
         raise ValueError("Token has no expiry")
-    return datetime.fromtimestamp(exp, tz=timezone.utc)
+    return datetime.fromtimestamp(exp, tz=UTC)

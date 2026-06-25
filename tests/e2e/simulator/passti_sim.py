@@ -112,9 +112,7 @@ class PasstiSimulator:
             return self._build_cancel_response()
         elif cmd == 0x05:  # GetLastTransaction
             return self._build_deduct_response()
-        elif cmd == 0x01:  # INIT
-            return self._build_init_response()
-        elif cmd == 0x0C:  # GetReaderInfo
+        elif cmd == 0x01 or cmd == 0x0C:  # INIT
             return self._build_init_response()
         else:
             return self._build_error_response(0x01, 0x10, 0x01)

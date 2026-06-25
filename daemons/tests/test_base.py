@@ -76,7 +76,7 @@ class TestBaseDaemonLifecycle:
     async def test_consumer_group_created(self, test_daemon: TestableDaemon) -> None:
         """Consumer group is created on run."""
         await test_daemon.run()
-        key = f"parking.commands.gate-in-1:daemon-gate-in-1"
+        key = "parking.commands.gate-in-1:daemon-gate-in-1"
         assert key in test_daemon._fake_redis.groups
 
     @pytest.mark.asyncio
@@ -181,7 +181,7 @@ class TestCommandConsumption:
             streams={"parking.commands.gate-in-1": ">"},
         )
         assert len(messages) == 1
-        for stream_name, entries in messages:
+        for _stream_name, entries in messages:
             for msg_id, fields in entries:
                 ack = await test_daemon.handle_command(fields)
                 assert ack is True
@@ -205,8 +205,8 @@ class TestCommandConsumption:
             consumername="test",
             streams={"parking.commands.gate-in-1": ">"},
         )
-        for stream_name, entries in messages:
-            for msg_id, fields in entries:
+        for _stream_name, entries in messages:
+            for _msg_id, fields in entries:
                 ack = await test_daemon.handle_command(fields)
                 assert ack is False
                 # Do NOT call xack
@@ -225,8 +225,8 @@ class TestCommandConsumption:
             consumername="test",
             streams={"parking.commands.gate-in-1": ">"},
         )
-        for stream_name, entries in messages:
-            for msg_id, fields in entries:
+        for _stream_name, entries in messages:
+            for _msg_id, fields in entries:
                 await test_daemon.handle_command(fields)
                 assert any(fields["trace_id"] in str(cmd) for cmd in test_daemon.commands_handled)
 

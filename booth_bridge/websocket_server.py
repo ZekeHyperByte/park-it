@@ -167,7 +167,6 @@ class WebSocketServer:
         """Process a command from the POS frontend."""
         cmd = json.loads(message)
         action = cmd.get("action")
-        peripheral = cmd.get("peripheral")
 
         if action == "open_gate":
             # Bridge owns the hardware path. Frontend may only request "open this
@@ -308,8 +307,9 @@ class WebSocketServer:
             return {"status": True, "message": "Printed"}
 
         elif action == "running_text":
-            text = cmd.get("text", "")
-            # Format and send to running text display
+            # ponytail: LED running-text display not wired to hardware yet —
+            # accept and ack so the POS UI flow works; implement when the
+            # display board is on site.
             return {"status": True, "message": "Display updated"}
 
         return {"status": False, "error": f"Unknown action: {action}"}

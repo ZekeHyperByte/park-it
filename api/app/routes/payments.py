@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.middleware.api_key import require_api_key
 from api.app.middleware.auth import require_operator
+from api.app.middleware.metrics import payment_attempts_total, payment_success_total
 from api.app.schemas.payment import (
     CalculateFeeRequest,
     CalculateFeeResponse,
@@ -30,7 +31,6 @@ from api.database import get_db
 from shared.events import DeductStatus
 from shared.logging import get_logger
 from shared.redis import redis_client
-from api.app.middleware.metrics import payment_attempts_total, payment_success_total
 
 logger = get_logger("payment_routes")
 

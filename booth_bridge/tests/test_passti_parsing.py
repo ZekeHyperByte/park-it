@@ -1,6 +1,7 @@
 """Tests for PASSTI response parsing in booth bridge."""
 
 import json
+
 import pytest
 
 from booth_bridge.websocket_server import WebSocketServer

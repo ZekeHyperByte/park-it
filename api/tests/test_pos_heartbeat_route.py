@@ -1,6 +1,6 @@
 """Tests for POST /api/pos/heartbeat — booth → server liveness."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -71,7 +71,7 @@ class TestBoothHeartbeat:
             "last_card_at": 12345.6,
             "bridge_version": "2.0.0",
         }
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         resp = await client.post(
             "/api/pos/heartbeat",
             json=payload,

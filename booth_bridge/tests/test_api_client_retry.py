@@ -31,9 +31,9 @@ def test_post_does_not_retry_timeouts() -> None:
     # Either form must be classified as NOT retryable for POST: the request
     # may have reached the server and been processed.
     assert _is_retryable_post(TimeoutError()) is False
-    assert _is_retryable_post(socket.timeout()) is False
+    assert _is_retryable_post(TimeoutError()) is False
     assert _is_retryable_post(_FakeURLError(TimeoutError())) is False
-    assert _is_retryable_post(_FakeURLError(socket.timeout())) is False
+    assert _is_retryable_post(_FakeURLError(TimeoutError())) is False
 
 
 def test_post_does_not_retry_after_send_errors() -> None:
@@ -56,7 +56,7 @@ def test_get_retries_any_transient_socket_error() -> None:
     assert _is_retryable_get(ConnectionRefusedError()) is True
     assert _is_retryable_get(ConnectionResetError()) is True
     assert _is_retryable_get(TimeoutError()) is True
-    assert _is_retryable_get(socket.timeout()) is True
+    assert _is_retryable_get(TimeoutError()) is True
     assert _is_retryable_get(socket.gaierror()) is True
     assert _is_retryable_get(_FakeURLError(TimeoutError())) is True
 

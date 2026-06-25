@@ -6,6 +6,10 @@ Commands are wrapped with \xa6 prefix and \xa9 suffix.
 
 import asyncio
 import socket
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import serial
 
 
 def build_command(cmd: bytes) -> bytes:
@@ -180,7 +184,7 @@ class CompassTransport:
         self._sock.sendall(command)
         try:
             return self._sock.recv(1024)
-        except socket.timeout:
+        except TimeoutError:
             return b""
 
     async def recv_async(self, timeout: float = 0.5) -> bytes:
@@ -201,7 +205,7 @@ class CompassTransport:
         loop = asyncio.get_event_loop()
         try:
             data = await loop.run_in_executor(None, self._sock.recv, 1024)
-        except socket.timeout:
+        except TimeoutError:
             return b""
         except OSError:
             self.close()
@@ -234,7 +238,7 @@ class SerialTransport:
     def __init__(self, device: str, baudrate: int = 9600) -> None:
         self.device = device
         self.baudrate = baudrate
-        self._ser: "serial.Serial | None" = None
+        self._ser: serial.Serial | None = None
 
     def connect(self, timeout: float = 5.0) -> None:
         import serial as _serial

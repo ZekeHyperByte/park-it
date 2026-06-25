@@ -1,7 +1,6 @@
 """Tests for the Redis Pub/Sub event consumer."""
 
 import asyncio
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

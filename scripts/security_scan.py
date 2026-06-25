@@ -183,11 +183,7 @@ class SecurityScanner:
         statuses = [r["status"] for r in self.results]
         if "FAIL" in statuses:
             overall = "FAIL"
-        elif "WARN" in statuses:
-            overall = "WARN"
-        elif "ERROR" in statuses:
-            overall = "WARN"
-        elif "NOT_INSTALLED" in statuses:
+        elif "WARN" in statuses or "ERROR" in statuses or "NOT_INSTALLED" in statuses:
             overall = "WARN"
         else:
             overall = "PASS"

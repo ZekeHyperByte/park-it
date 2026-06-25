@@ -15,10 +15,9 @@ Configuration is read from shared.config.Settings; see the
 
 from __future__ import annotations
 
-import asyncio
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -136,9 +135,8 @@ async def _sftp_session(
         client_keys=[key_path] if key_path else None,
         known_hosts=known_hosts if known_hosts else None,
         connect_timeout=connect_timeout,
-    ) as conn:
-        async with conn.start_sftp_client() as sftp:
-            yield sftp
+    ) as conn, conn.start_sftp_client() as sftp:
+        yield sftp
 
 
 async def upload_settlement_file(
@@ -270,10 +268,9 @@ async def upload_settlement_job(ctx: dict, settlement_id: int) -> dict:
 
     Marks status UPLOADED on success; raises on failure so ARQ retries.
     """
-    from shared.config import get_settings
-
     from api.app.models.emoney_settlement import EmoneySettlement
     from api.database import AsyncSessionLocal
+    from shared.config import get_settings
 
     settings = get_settings()
 
@@ -317,7 +314,7 @@ async def upload_settlement_job(ctx: dict, settlement_id: int) -> dict:
             raise
 
         settlement.status = "UPLOADED"
-        settlement.uploaded_at = datetime.now(timezone.utc)
+        settlement.uploaded_at = datetime.now(UTC)
         await db.commit()
 
         logger.info("settlement_upload_job_done", settlement_id=settlement_id)
@@ -332,18 +329,17 @@ async def poll_settlement_responses(ctx: dict) -> dict:
     """
     from sqlalchemy import select
 
-    from shared.config import get_settings
-
     from api.app.models.emoney_settlement import EmoneySettlement
     from api.app.models.emoney_transaction import EmoneyTransaction
     from api.database import AsyncSessionLocal
+    from shared.config import get_settings
 
     settings = get_settings()
     if not settings.settlement_sftp_host:
         logger.info("settlement_poll_no_host_configured")
         return {"status": "skipped", "reason": "no_sftp_host"}
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    cutoff = datetime.now(UTC) - timedelta(days=7)
     processed = 0
     acked_ok = 0
     acked_nok = 0
@@ -398,7 +394,7 @@ async def poll_settlement_responses(ctx: dict) -> dict:
                 )
             )
             ok_count = nok_count = 0
-            now_utc = datetime.now(timezone.utc)
+            now_utc = datetime.now(UTC)
             for tx in tx_rows.scalars():
                 payload_key = (tx.settlement_payload_hex or "").upper()
                 code = status_by_payload.get(payload_key)

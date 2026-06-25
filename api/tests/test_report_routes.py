@@ -1,6 +1,6 @@
 """Tests for report routes."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -21,6 +21,7 @@ async def client(db_session: AsyncSession):
     app.dependency_overrides[get_db] = override_get_db
 
     from fastapi import Request
+
     from api.app.middleware.auth import require_admin
 
     async def mock_require_admin(request: Request):
@@ -51,7 +52,7 @@ async def seeded_transactions(db_session: AsyncSession, sample_vehicle_type: Veh
             barcode="CASH01",
             plate_number="B1111AA",
             vehicle_type_id=sample_vehicle_type.id,
-            entry_time=datetime(2026, 4, 25, 10, 0, 0, tzinfo=timezone.utc),
+            entry_time=datetime(2026, 4, 25, 10, 0, 0, tzinfo=UTC),
             payment_method="CASH",
             fee=5000,
             paid_amount=5000,
@@ -61,7 +62,7 @@ async def seeded_transactions(db_session: AsyncSession, sample_vehicle_type: Veh
             barcode="CASH02",
             plate_number="B2222BB",
             vehicle_type_id=sample_vehicle_type.id,
-            entry_time=datetime(2026, 4, 25, 11, 0, 0, tzinfo=timezone.utc),
+            entry_time=datetime(2026, 4, 25, 11, 0, 0, tzinfo=UTC),
             payment_method="CASH",
             fee=3000,
             paid_amount=3000,
@@ -71,7 +72,7 @@ async def seeded_transactions(db_session: AsyncSession, sample_vehicle_type: Veh
             barcode="EMONEY01",
             plate_number="B3333CC",
             vehicle_type_id=sample_vehicle_type.id,
-            entry_time=datetime(2026, 4, 25, 12, 0, 0, tzinfo=timezone.utc),
+            entry_time=datetime(2026, 4, 25, 12, 0, 0, tzinfo=UTC),
             payment_method="EMONEY",
             fee=5000,
             paid_amount=5000,
@@ -81,7 +82,7 @@ async def seeded_transactions(db_session: AsyncSession, sample_vehicle_type: Veh
             barcode="RFID01",
             plate_number="B4444DD",
             vehicle_type_id=sample_vehicle_type.id,
-            entry_time=datetime(2026, 4, 25, 13, 0, 0, tzinfo=timezone.utc),
+            entry_time=datetime(2026, 4, 25, 13, 0, 0, tzinfo=UTC),
             payment_method="RFID_MEMBER",
             fee=0,
             paid_amount=0,
@@ -91,7 +92,7 @@ async def seeded_transactions(db_session: AsyncSession, sample_vehicle_type: Veh
             barcode="ACTIVE01",
             plate_number="B5555EE",
             vehicle_type_id=sample_vehicle_type.id,
-            entry_time=datetime(2026, 4, 25, 14, 0, 0, tzinfo=timezone.utc),
+            entry_time=datetime(2026, 4, 25, 14, 0, 0, tzinfo=UTC),
             status="ACTIVE",
         ),
     ]

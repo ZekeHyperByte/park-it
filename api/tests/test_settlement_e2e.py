@@ -1,15 +1,15 @@
 """End-to-end settlement worker tests against Multibank v1.3 §I."""
 
 import os
-import pytest
 import tempfile
 from unittest.mock import patch
 
+import pytest
 from sqlalchemy import select
 
 from api.app.models.emoney_reader import EmoneyReader
-from api.app.models.emoney_transaction import EmoneyTransaction
 from api.app.models.emoney_settlement import EmoneySettlement
+from api.app.models.emoney_transaction import EmoneyTransaction
 from workers.background import settlement_worker
 from workers.background.settlement_worker import generate_settlement_file
 
@@ -92,7 +92,7 @@ class TestSettlementGeneration:
         assert settlement.file_path is not None
         assert os.path.exists(settlement.file_path)
 
-        with open(settlement.file_path, "r") as f:
+        with open(settlement.file_path) as f:
             content = f.read()
 
         lines = content.strip().split("\n")

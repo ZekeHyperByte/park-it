@@ -100,7 +100,6 @@ def create_app() -> FastAPI:
         printers,
         reports,
         settlements,
-        settings as settings_routes,
         setup,
         shift_assignments,
         shifts,
@@ -110,6 +109,9 @@ def create_app() -> FastAPI:
         users,
         vehicle_types,
         worker_sessions,
+    )
+    from api.app.routes import (
+        settings as settings_routes,
     )
     from api.app.websocket import handlers as ws_handlers
 

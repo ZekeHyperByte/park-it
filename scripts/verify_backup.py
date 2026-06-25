@@ -14,7 +14,7 @@ import argparse
 import gzip
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from shared.logging import configure_logging, get_logger
@@ -48,8 +48,8 @@ def check_backup_exists(backup_path: Path) -> tuple[bool, str]:
 
 def check_backup_age(backup_path: Path, max_age_hours: int = 25) -> tuple[bool, str]:
     """Check if backup is recent enough."""
-    mtime = datetime.fromtimestamp(backup_path.stat().st_mtime, tz=timezone.utc)
-    age = datetime.now(timezone.utc) - mtime
+    mtime = datetime.fromtimestamp(backup_path.stat().st_mtime, tz=UTC)
+    age = datetime.now(UTC) - mtime
     if age > timedelta(hours=max_age_hours):
         return False, f"Backup is {age.total_seconds() / 3600:.1f} hours old"
     return True, f"Backup is {age.total_seconds() / 3600:.1f} hours old"
@@ -129,12 +129,11 @@ def dry_run_restore(backup_path: Path, db_url: str | None = None) -> tuple[bool,
         with tempfile.NamedTemporaryFile(suffix=".sql", delete=False) as tmp:
             tmp_path = tmp.name
 
-        with gzip.open(backup_path, "rb") as src:
-            with open(tmp_path, "wb") as dst:
-                dst.write(src.read(1024 * 1024))  # First 1MB for syntax check
+        with gzip.open(backup_path, "rb") as src, open(tmp_path, "wb") as dst:
+            dst.write(src.read(1024 * 1024))  # First 1MB for syntax check
 
         # Check for basic SQL syntax
-        with open(tmp_path, "r") as f:
+        with open(tmp_path) as f:
             content = f.read(1024 * 1024)
             if ";" in content and ("CREATE" in content or "INSERT" in content or "COPY" in content):
                 os.unlink(tmp_path)

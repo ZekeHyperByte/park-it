@@ -167,8 +167,9 @@ class TrayIndicator:
 
 
 def main():
-    indicator = TrayIndicator()
+    indicator = TrayIndicator()  # noqa: F841 — keep ref alive for the GTK main loop
     Gtk.main()
+    del indicator
 
 
 if __name__ == "__main__":

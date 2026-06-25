@@ -24,8 +24,8 @@ from api.app.models.shift_assignment import ShiftAssignment
 from api.app.models.site_config import SiteConfig
 from api.app.models.snapshot import Snapshot
 from api.app.models.user import User
-from api.app.models.worker_session import WorkerSession
 from api.app.models.vehicle_type import VehicleType
+from api.app.models.worker_session import WorkerSession
 
 __all__ = [
     "AbandonedVehicleLog",

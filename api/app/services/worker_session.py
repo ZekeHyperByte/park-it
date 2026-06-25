@@ -1,6 +1,6 @@
 """Worker session service — handover state machine and check-in logic."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, select
@@ -19,7 +19,7 @@ logger = get_logger("worker_session_service")
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _today() -> date:
@@ -77,7 +77,9 @@ async def check_in(
     if gate is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gate not found")
 
-    worker = await _get_worker_and_verify_pin(db, worker_id, pin)
+    # Verifies the PIN as a side effect (raises on mismatch); the worker row
+    # itself isn't needed here since worker_id is already known.
+    await _get_worker_and_verify_pin(db, worker_id, pin)
 
     existing = await _get_active_session(db, gate_id)
     if existing is not None and existing.status == "ACTIVE":

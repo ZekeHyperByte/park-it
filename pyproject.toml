@@ -68,10 +68,31 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Vendored skill tooling + generated graph output — not our code to lint.
+extend-exclude = [".agents", "graphify-out"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
-ignore = ["E501"]
+ignore = [
+    "E501",   # line length — handled by formatter, long strings/URLs are fine
+    "B008",   # function-call-in-default — FastAPI Depends()/Header()/Query() idiom
+    "B904",   # raise-without-from — codebase re-raises HTTPException without chaining
+    "SIM105", # try/except/pass is clearer than contextlib.suppress for one-liners
+]
+
+[tool.ruff.lint.per-file-ignores]
+# SQLAlchemy relationships use string forward-refs resolved by the registry at
+# runtime; the bare class names in Mapped[...] annotations are not real undefs.
+"api/app/models/*.py" = ["F821"]
+# Deferred/conditional imports after sys.path or env setup are deliberate here.
+"api/app/services/setup.py" = ["E402"]
+"scripts/*.py" = ["E402"]
+# Hyphenated CLI script name is referenced by desktop shortcuts; don't rename.
+"scripts/tray-indicator.py" = ["E402", "N999"]
+"daemons/cli.py" = ["E402"]
+# Test code: throwaway locals, blind asserts, and nested with are acceptable.
+"**/tests/**" = ["F841", "B017", "SIM117", "SIM222", "E741", "N806"]
+"tests/**" = ["F841", "B017", "SIM117", "SIM222", "E741", "N806"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

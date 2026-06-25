@@ -85,8 +85,9 @@ async def _check_paper_available(gate_id: str) -> tuple[bool, int | None]:
 
     try:
         from sqlalchemy import select
-        from api.database import AsyncSessionLocal as async_session_factory
+
         from api.app.models.printer import Printer
+        from api.database import AsyncSessionLocal as async_session_factory  # noqa: N813
 
         async with async_session_factory() as db:
             result = await db.execute(
@@ -121,8 +122,8 @@ async def _decrement_paper_counter(printer_id: int) -> None:
         return
 
     try:
-        from api.database import AsyncSessionLocal as async_session_factory
         from api.app.models.printer import Printer
+        from api.database import AsyncSessionLocal as async_session_factory  # noqa: N813
 
         async with async_session_factory() as db:
             from sqlalchemy import select
@@ -218,9 +219,10 @@ async def _get_print_config(gate_id: str, gate_type: str = "OUT") -> dict[str, A
     """
     try:
         from sqlalchemy import select
-        from api.database import AsyncSessionLocal as async_session_factory
+
         from api.app.models.gate import Gate
         from api.app.models.printer import Printer
+        from api.database import AsyncSessionLocal as async_session_factory  # noqa: N813
 
         async with async_session_factory() as db:
             printer_result = await db.execute(
@@ -427,8 +429,8 @@ def _print_via_controller(escpos_data: bytes, config: dict[str, Any]) -> None:
         transport = CompassTransport(host, port)
 
     elif protocol == "enet":
-        from protocols.enet.protocol import cmd_pr4
         from protocols.compass.protocol import CompassTransport as EnetTransport
+        from protocols.enet.protocol import cmd_pr4
         transport = EnetTransport(host, port)
 
     else:

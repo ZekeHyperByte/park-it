@@ -7,7 +7,7 @@ import hmac
 import secrets
 import shlex
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -154,7 +154,7 @@ async def create_session(db: AsyncSession) -> SetupSession:
         session_token=token,
         current_step="welcome",
         data={},
-        expires_at=datetime.now(timezone.utc)
+        expires_at=datetime.now(UTC)
         + timedelta(seconds=settings.setup_session_ttl_seconds),
     )
     db.add(session)
@@ -170,7 +170,7 @@ async def get_session_by_token(db: AsyncSession, token: str) -> SetupSession | N
     session = result.scalar_one_or_none()
     if session is None:
         return None
-    if session.expires_at < datetime.now(timezone.utc):
+    if session.expires_at < datetime.now(UTC):
         await db.delete(session)
         await db.commit()
         return None
@@ -237,7 +237,7 @@ async def run_script_json(script: str, *args: str, timeout: float = 30.0) -> tup
     )
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         return False, "", f"script timed out after {timeout:.0f}s"
     return (

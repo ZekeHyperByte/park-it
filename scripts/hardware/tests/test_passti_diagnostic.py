@@ -1,8 +1,8 @@
 """Tests for PASSTI diagnostic."""
 
 
+from protocols.passti.commands import cmd_check_balance, cmd_init
 from scripts.hardware.passti_diagnostic import diagnose_passti
-from protocols.passti.commands import cmd_init, cmd_check_balance
 
 
 class TestDiagnosePassti:

@@ -10,7 +10,9 @@ Protocol details from v1:
 - Input formats: IN1ON/IN10, IN2ON/INP21/INP21, IN3ON/IN31, IN4ON/IN41
 """
 
-from protocols.compass.protocol import CompassTransport as EnetTransport  # noqa: F401 — ponytail: shared TCP transport
+from protocols.compass.protocol import (
+    CompassTransport as EnetTransport,  # noqa: F401 — ponytail: shared TCP transport
+)
 
 
 def build_command(cmd: bytes) -> bytes:

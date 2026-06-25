@@ -1,6 +1,6 @@
 """Tests for transaction routes."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -20,6 +20,7 @@ async def client(db_session: AsyncSession):
     app.dependency_overrides[get_db] = override_get_db
 
     from fastapi import Request
+
     from api.app.middleware.auth import require_operator
 
     async def mock_require_operator(request: Request):
@@ -48,7 +49,7 @@ async def sample_transaction(db_session: AsyncSession, sample_vehicle_type: Vehi
         barcode="ABC123",
         plate_number="B1234ABC",
         vehicle_type_id=sample_vehicle_type.id,
-        entry_time=datetime(2026, 4, 25, 10, 0, 0, tzinfo=timezone.utc),
+        entry_time=datetime(2026, 4, 25, 10, 0, 0, tzinfo=UTC),
         payment_method="CASH",
         fee=5000,
         paid_amount=10000,

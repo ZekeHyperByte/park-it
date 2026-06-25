@@ -2,10 +2,10 @@
 
 
 from scripts.check_deployment import (
-    check_python_version,
     check_disk_space,
-    check_memory,
     check_ffmpeg,
+    check_memory,
+    check_python_version,
     run_all_checks,
 )
 

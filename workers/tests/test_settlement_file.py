@@ -1,7 +1,8 @@
 """Tests for settlement file generation per Multibank v1.3 §I."""
 
-import pytest
 from datetime import datetime
+
+import pytest
 
 from workers.background.settlement_file import (
     build_settlement_content,

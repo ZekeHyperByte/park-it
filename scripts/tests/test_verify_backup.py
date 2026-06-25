@@ -6,7 +6,6 @@ import gzip
 import tempfile
 from pathlib import Path
 
-
 from scripts.verify_backup import (
     check_backup_contents,
     check_backup_exists,

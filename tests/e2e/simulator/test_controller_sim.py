@@ -1,5 +1,6 @@
-import pytest
 import asyncio
+
+import pytest
 
 from tests.e2e.simulator.controller_sim import CompassControllerSimulator
 

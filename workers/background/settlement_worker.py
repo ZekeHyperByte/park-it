@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import or_, select
 
 from shared.logging import get_logger
-from workers.background.settlement_file import generate_filename, build_settlement_content
+from workers.background.settlement_file import build_settlement_content, generate_filename
 
 logger = get_logger("settlement_worker")
 
@@ -41,10 +41,10 @@ async def generate_settlement_file(ctx, db=None) -> dict:
     """
     logger.info("generate_settlement_job_start")
 
-    from api.database import AsyncSessionLocal
-    from api.app.models.emoney_transaction import EmoneyTransaction
     from api.app.models.emoney_reader import EmoneyReader
     from api.app.models.emoney_settlement import EmoneySettlement
+    from api.app.models.emoney_transaction import EmoneyTransaction
+    from api.database import AsyncSessionLocal
 
     # Lease lock: prevent duplicate settlement runs (e.g. two workers, manual + cron).
     # Lock keyed by operational day in Jakarta TZ. 1h TTL safely outlives the job.

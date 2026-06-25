@@ -26,7 +26,7 @@ def check_tcp_connect(host: str, port: int, timeout: float = 5.0) -> dict:
             "port": port,
             "latency_ms": round(latency_ms, 2),
         }
-    except socket.timeout:
+    except TimeoutError:
         return {"status": "timeout", "host": host, "port": port, "error": "Connection timed out"}
     except ConnectionRefusedError:
         return {"status": "refused", "host": host, "port": port, "error": "Connection refused"}

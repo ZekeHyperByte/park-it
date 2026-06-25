@@ -220,7 +220,7 @@ async def gates_heartbeat_status(db: AsyncSession = Depends(get_db)) -> dict:
     in_gates = [g for g in gates if g.direction == "IN"]
     in_heartbeat_keys = [f"gate:heartbeat:{g.code}" for g in in_gates]
     in_heartbeat_values = await redis_client.client.mget(in_heartbeat_keys) if in_heartbeat_keys else []
-    in_heartbeat_map = dict(zip(in_heartbeat_keys, in_heartbeat_values))
+    in_heartbeat_map = dict(zip(in_heartbeat_keys, in_heartbeat_values, strict=False))
 
     for g in gates:
         if g.direction == "OUT":
